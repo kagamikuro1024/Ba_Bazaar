@@ -24,6 +24,7 @@ RUN corepack enable
 ENV NODE_ENV=production
 
 COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/apps/api/prisma /app/apps/api/prisma
 COPY --from=build /app/packages/shared /app/packages/shared
