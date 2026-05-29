@@ -6,6 +6,7 @@
   }
 
   handle {
+    try_files {path} /index.html
     reverse_proxy web:3000
   }
 }
