@@ -23,6 +23,7 @@ FROM caddy:2-alpine AS runtime
 
 WORKDIR /srv
 COPY --from=build /app/apps/web/dist /srv
+COPY apps/web/Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 3000
-CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":3000"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
