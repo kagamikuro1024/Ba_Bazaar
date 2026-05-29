@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  BA_MANAGER
+  PM_PO
+  BA
+  ADMIN
+}
+
+enum BALevel {
+  JUNIOR
+  MIDDLE
+  SENIOR
+  LEAD
+}
+
+enum BAStatus {
+  ACTIVE
+  ON_LEAVE
+  RESIGNED
+}
+
+enum SkillTagGroup {
+  DOMAIN
+  ANALYSIS_SKILL
+}
+
+enum SkillTagStatus {
+  ACTIVE
+  RETIRED
+  PENDING_APPROVAL
+}
+
+enum BookingPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PrivateNoteVisibility {
+  MANAGER_ONLY
+}
+
+enum AuditResult {
+  SUCCESS
+  DENIED
+  FAILED
+}
+
+model User {
+  id                   String         @id @default(uuid()) @db.Uuid
+  full_name            String
+  email                String         @unique
+  role                 UserRole
+  avatar_url           String?
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
+
+  ba_profile           BAProfile?
+  requested_bookings   Booking[]      @relation("BookingRequester")
+  managed_bookings     Booking[]      @relation("BookingManager")
+  assigned_skill_tags  BASkillTag[]   @relation("SkillAssignedBy")
+  created_notes        PrivateNote[]  @relation("NoteCreatedBy")
+  masked_notes         PrivateNote[]  @relation("NoteMaskedBy")
+  notifications        Notification[]
+  audit_logs           AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+model BAProfile {
+  id                 String        @id @default(uuid()) @db.Uuid
+  user_id            String?       @unique @db.Uuid
+  full_name          String
+  email              String        @unique
+  phone              String?
+  level              BALevel
+  joined_date        DateTime      @db.Date
+  avatar_url         String?
+  status             BAStatus      @default(ACTIVE)
+  status_reason      String?
+  status_changed_at  DateTime?
+  created_at         DateTime      @default(now())
+  updated_at         DateTime      @updatedAt
+  version            Int           @default(1)
+
+  user               User?         @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  skill_tags         BASkillTag[]
+  bookings           Booking[]
+  private_notes      PrivateNote[]
+
+  @@index([status])
+  @@index([level])
+  @@map("ba_profiles")
+}
+
+model SkillTag {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String
+  group       SkillTagGroup
+  status      SkillTagStatus  @default(ACTIVE)
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+
+  ba_profiles BASkillTag[]
+
+  @@unique([name, group])
+  @@index([group, status])
+  @@map("skill_tags")
+}
+
+model BASkillTag {
+  id           String    @id @default(uuid()) @db.Uuid
+  ba_id        String    @db.Uuid
+  tag_id       String    @db.Uuid
+  assigned_by  String    @db.Uuid
+  assigned_at  DateTime  @default(now())
+
+  ba           BAProfile @relation(fields: [ba_id], references: [id], onDelete: Cascade)
+  tag          SkillTag  @relation(fields: [tag_id], references: [id], onDelete: Restrict)
+  assigner     User      @relation("SkillAssignedBy", fields: [assigned_by], references: [id], onDelete: Restrict)
+
+  @@unique([ba_id, tag_id])
+  @@index([ba_id])
+  @@index([tag_id])
+  @@map("ba_skill_tags")
+}
+
+model Project {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  color        String
+  description  String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  bookings     Booking[]
+
+  @@index([name])
+  @@map("projects")
+}
+
+model Booking {
+  id                String          @id @default(uuid()) @db.Uuid
+  ba_id             String          @db.Uuid
+  project_id        String          @db.Uuid
+  requester_id      String          @db.Uuid
+  manager_id        String?         @db.Uuid
+
+  title             String
+  description       String
+  start_date        DateTime        @db.Date
+  end_date          DateTime        @db.Date
+  capacity_percent  Int
+  priority          BookingPriority @default(MEDIUM)
+  status            BookingStatus   @default(PENDING)
+
+  reject_reason     String?
+  cancel_reason     String?
+  manager_comment   String?
+  approved_at       DateTime?
+  rejected_at       DateTime?
+  cancelled_at      DateTime?
+  created_at        DateTime        @default(now())
+  updated_at        DateTime        @updatedAt
+
+  ba                BAProfile       @relation(fields: [ba_id], references: [id], onDelete: Restrict)
+  project           Project         @relation(fields: [project_id], references: [id], onDelete: Restrict)
+  requester         User            @relation("BookingRequester", fields: [requester_id], references: [id], onDelete: Restrict)
+  manager           User?           @relation("BookingManager", fields: [manager_id], references: [id], onDelete: SetNull)
+
+  @@index([ba_id])
+  @@index([project_id])
+  @@index([requester_id])
+  @@index([manager_id])
+  @@index([status])
+  @@index([start_date, end_date])
+  @@index([ba_id, start_date, end_date])
+  @@map("bookings")
+}
+
+model PrivateNote {
+  id            String                 @id @default(uuid()) @db.Uuid
+  ba_id         String                 @db.Uuid
+  content       String
+  created_by    String                 @db.Uuid
+  created_at    DateTime               @default(now())
+  visibility    PrivateNoteVisibility  @default(MANAGER_ONLY)
+  masked_at     DateTime?
+  masked_by     String?                @db.Uuid
+  mask_reason   String?
+
+  ba            BAProfile              @relation(fields: [ba_id], references: [id], onDelete: Cascade)
+  creator       User                   @relation("NoteCreatedBy", fields: [created_by], references: [id], onDelete: Restrict)
+  masker        User?                  @relation("NoteMaskedBy", fields: [masked_by], references: [id], onDelete: SetNull)
+
+  @@index([ba_id])
+  @@index([created_by])
+  @@map("private_notes")
+}
+
+model Notification {
+  id                   String    @id @default(uuid()) @db.Uuid
+  recipient_id         String    @db.Uuid
+  type                 String
+  title                String
+  message              String
+  related_entity_type  String?
+  related_entity_id    String?   @db.Uuid
+  read_at              DateTime?
+  created_at           DateTime  @default(now())
+
+  recipient            User      @relation(fields: [recipient_id], references: [id], onDelete: Cascade)
+
+  @@index([recipient_id])
+  @@index([read_at])
+  @@index([related_entity_type, related_entity_id])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id           String       @id @default(uuid()) @db.Uuid
+  actor_id     String       @db.Uuid
+  action       String
+  target_type  String
+  target_id    String       @db.Uuid
+  old_value    Json?
+  new_value    Json?
+  result       AuditResult
+  created_at   DateTime     @default(now())
+
+  actor        User         @relation("AuditActor", fields: [actor_id], references: [id], onDelete: Restrict)
+
+  @@index([actor_id])
+  @@index([target_type, target_id])
+  @@index([action])
+  @@index([result])
+  @@map("audit_logs")
+}

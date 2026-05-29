@@ -1,0 +1,465 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
+import { BAStatus, BookingPriority, BookingStatus, User, UserRole } from '@prisma/client';
+import { canApproveCapacity, getRangeCapacity } from '../domain/capacity';
+import {
+  optionalString,
+  requireCapacityPercent,
+  requireDate,
+  requireString
+} from '../common/parse';
+import { canApproveBooking, canCreateBookingRequest, canCreateDirectBooking } from '../auth/rbac';
+import { PrismaService } from '../prisma/prisma.service';
+
+type BookingInput = {
+  ba_id?: string;
+  project_id?: string;
+  title?: string;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  capacity_percent?: number;
+  priority?: BookingPriority;
+  manager_comment?: string;
+};
+
+@Injectable()
+export class BookingsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async list(currentUser: User, query: Record<string, string | undefined>) {
+    const where = {
+      ...(currentUser.role === UserRole.BA ? { ba: { user_id: currentUser.id } } : {}),
+      ...(query.ba_id ? { ba_id: query.ba_id } : {}),
+      ...(query.project_id ? { project_id: query.project_id } : {}),
+      ...(query.status ? { status: query.status as BookingStatus } : {})
+    };
+
+    return this.prisma.booking.findMany({
+      where,
+      include: this.includeRelations(),
+      orderBy: [{ start_date: 'asc' }, { created_at: 'asc' }]
+    });
+  }
+
+  async getById(currentUser: User, id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: this.includeRelations()
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    this.ensureCanRead(currentUser, booking);
+    return booking;
+  }
+
+  async createRequest(currentUser: User, input: BookingInput) {
+    if (!canCreateBookingRequest(currentUser.role)) {
+      throw new ForbiddenException('PM/PO or Manager role required to create request');
+    }
+
+    const normalized = await this.normalizeBookingInput(input);
+    const warning = await this.getSubmitWarning(
+      normalized.ba_id,
+      normalized.start_date,
+      normalized.end_date,
+      normalized.capacity_percent
+    );
+
+    const booking = await this.prisma.booking.create({
+      data: {
+        ...normalized,
+        requester_id: currentUser.id,
+        status: BookingStatus.PENDING
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'CREATE_BOOKING_REQUEST', 'Booking', booking.id, null, booking);
+    await this.notifyManagers('BOOKING_REQUEST_CREATED', 'New booking request', booking);
+
+    return {
+      booking,
+      warning
+    };
+  }
+
+  async createDirect(currentUser: User, input: BookingInput) {
+    if (!canCreateDirectBooking(currentUser.role)) {
+      throw new ForbiddenException('Manager role required to create direct booking');
+    }
+
+    const normalized = await this.normalizeBookingInput(input);
+    const existing = await this.getBaBookings(normalized.ba_id);
+    const approval = canApproveCapacity(
+      existing,
+      normalized.start_date,
+      normalized.end_date,
+      normalized.capacity_percent
+    );
+
+    if (!approval.allowed) {
+      throw new BadRequestException(
+        `Cannot approve booking because capacity exceeds 100% on ${approval.blocking_day}`
+      );
+    }
+
+    const booking = await this.prisma.booking.create({
+      data: {
+        ...normalized,
+        requester_id: currentUser.id,
+        manager_id: currentUser.id,
+        status: BookingStatus.APPROVED,
+        approved_at: new Date(),
+        manager_comment: optionalString(input.manager_comment)
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'CREATE_DIRECT_BOOKING', 'Booking', booking.id, null, booking);
+    await this.notifyAssignedBA(booking, 'BOOKING_APPROVED', 'Booking assigned');
+    return booking;
+  }
+
+  async update(currentUser: User, id: string, input: BookingInput) {
+    const booking = await this.getById(currentUser, id);
+    const manager = canApproveBooking(currentUser.role);
+    const requesterOwns = booking.requester_id === currentUser.id;
+
+    if (!manager && !(requesterOwns && booking.status === BookingStatus.REJECTED)) {
+      throw new ForbiddenException('Only Manager or requester resubmitting rejected request can update');
+    }
+
+    const data = {
+      title: input.title,
+      description: input.description,
+      start_date: input.start_date ? requireDate(input.start_date, 'start_date') : undefined,
+      end_date: input.end_date ? requireDate(input.end_date, 'end_date') : undefined,
+      capacity_percent:
+        input.capacity_percent !== undefined
+          ? requireCapacityPercent(input.capacity_percent)
+          : undefined,
+      priority: input.priority,
+      status: requesterOwns && booking.status === BookingStatus.REJECTED ? BookingStatus.PENDING : undefined,
+      reject_reason:
+        requesterOwns && booking.status === BookingStatus.REJECTED ? null : undefined,
+      rejected_at:
+        requesterOwns && booking.status === BookingStatus.REJECTED ? null : undefined
+    };
+
+    if (data.start_date && data.end_date && data.end_date < data.start_date) {
+      throw new BadRequestException('end_date must be greater than or equal to start_date');
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data,
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'UPDATE_BOOKING', 'Booking', id, booking, updated);
+    return updated;
+  }
+
+  async approve(currentUser: User, id: string) {
+    if (!canApproveBooking(currentUser.role)) {
+      throw new ForbiddenException('Manager role required to approve booking');
+    }
+
+    const booking = await this.getExisting(id);
+    const existing = await this.getBaBookings(booking.ba_id);
+    const approval = canApproveCapacity(
+      existing,
+      booking.start_date,
+      booking.end_date,
+      booking.capacity_percent,
+      booking.id
+    );
+
+    if (!approval.allowed) {
+      throw new BadRequestException(
+        `Cannot approve booking because capacity exceeds 100% on ${approval.blocking_day}`
+      );
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: BookingStatus.APPROVED,
+        manager_id: currentUser.id,
+        approved_at: new Date(),
+        reject_reason: null,
+        rejected_at: null
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'APPROVE_BOOKING', 'Booking', id, booking, updated);
+    await this.notifyRequester(updated, 'BOOKING_APPROVED', 'Booking approved');
+    await this.notifyAssignedBA(updated, 'BOOKING_APPROVED', 'Booking approved');
+    return updated;
+  }
+
+  async reject(currentUser: User, id: string, reason?: string) {
+    if (!canApproveBooking(currentUser.role)) {
+      throw new ForbiddenException('Manager role required to reject booking');
+    }
+
+    const rejectReason = requireString(reason, 'reject_reason');
+    const booking = await this.getExisting(id);
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: BookingStatus.REJECTED,
+        manager_id: currentUser.id,
+        reject_reason: rejectReason,
+        rejected_at: new Date()
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'REJECT_BOOKING', 'Booking', id, booking, {
+      id,
+      reject_reason: rejectReason
+    });
+    await this.notifyRequester(updated, 'BOOKING_REJECTED', 'Booking rejected');
+    return updated;
+  }
+
+  async cancel(currentUser: User, id: string, reason?: string) {
+    const cancelReason = requireString(reason, 'cancel_reason');
+    const booking = await this.getById(currentUser, id);
+
+    if (currentUser.role === UserRole.BA) {
+      throw new ForbiddenException('BA cannot cancel bookings');
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancel_reason: cancelReason,
+        cancelled_at: new Date()
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'CANCEL_BOOKING', 'Booking', id, booking, {
+      id,
+      cancel_reason: cancelReason
+    });
+    await this.notifyRequester(updated, 'BOOKING_CANCELLED', 'Booking cancelled');
+    await this.notifyAssignedBA(updated, 'BOOKING_CANCELLED', 'Booking cancelled');
+    return updated;
+  }
+
+  async myRequests(currentUser: User, status?: BookingStatus) {
+    if (currentUser.role !== UserRole.PM_PO && !canApproveBooking(currentUser.role)) {
+      throw new ForbiddenException('PM/PO or Manager role required');
+    }
+
+    return this.prisma.booking.findMany({
+      where: {
+        requester_id: currentUser.id,
+        ...(status ? { status } : {})
+      },
+      include: this.includeRelations(),
+      orderBy: { created_at: 'desc' }
+    });
+  }
+
+  async mySchedule(currentUser: User) {
+    const ba = await this.prisma.bAProfile.findFirst({ where: { user_id: currentUser.id } });
+    if (!ba) {
+      if (canApproveBooking(currentUser.role)) {
+        return [];
+      }
+      throw new ForbiddenException('BA profile not found for current user');
+    }
+
+    return this.prisma.booking.findMany({
+      where: {
+        ba_id: ba.id,
+        status: { in: [BookingStatus.APPROVED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED] }
+      },
+      include: this.includeRelations(),
+      orderBy: { start_date: 'asc' }
+    });
+  }
+
+  private async normalizeBookingInput(input: BookingInput) {
+    const baId = requireString(input.ba_id, 'ba_id');
+    const ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
+    if (!ba || ba.status !== BAStatus.ACTIVE) {
+      throw new BadRequestException('Only active BA can be booked');
+    }
+
+    const startDate = requireDate(input.start_date, 'start_date');
+    const endDate = requireDate(input.end_date, 'end_date');
+    if (endDate < startDate) {
+      throw new BadRequestException('end_date must be greater than or equal to start_date');
+    }
+
+    return {
+      ba_id: baId,
+      project_id: requireString(input.project_id, 'project_id'),
+      title: requireString(input.title, 'title'),
+      description: requireString(input.description, 'description'),
+      start_date: startDate,
+      end_date: endDate,
+      capacity_percent: requireCapacityPercent(input.capacity_percent),
+      priority: input.priority ?? BookingPriority.MEDIUM
+    };
+  }
+
+  private async getSubmitWarning(
+    baId: string,
+    startDate: Date,
+    endDate: Date,
+    capacityPercent: number
+  ) {
+    const existing = await this.getBaBookings(baId);
+    const capacity = getRangeCapacity(existing, startDate, endDate);
+    const warningDay = capacity.daily.find(
+      (day) => day.approved_capacity + day.pending_capacity + capacityPercent > 100
+    );
+
+    if (!warningDay) {
+      return null;
+    }
+
+    return {
+      type: 'OVERBOOK_RISK',
+      message: 'BA has overbook risk in selected date range.',
+      date: warningDay.date,
+      approved_capacity: warningDay.approved_capacity,
+      pending_capacity: warningDay.pending_capacity,
+      requested_capacity: capacityPercent,
+      risk_capacity: warningDay.approved_capacity + warningDay.pending_capacity + capacityPercent
+    };
+  }
+
+  private async getBaBookings(baId: string) {
+    return this.prisma.booking.findMany({ where: { ba_id: baId } });
+  }
+
+  private async getExisting(id: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+    return booking;
+  }
+
+  private ensureCanRead(currentUser: User, booking: Awaited<ReturnType<typeof this.getExisting>>) {
+    if (canApproveBooking(currentUser.role)) {
+      return;
+    }
+
+    if (booking.requester_id === currentUser.id) {
+      return;
+    }
+
+    if (currentUser.role === UserRole.BA) {
+      return;
+    }
+
+    throw new ForbiddenException('Cannot read this booking');
+  }
+
+  private includeRelations() {
+    return {
+      ba: { include: { skill_tags: { include: { tag: true } } } },
+      project: true,
+      requester: true,
+      manager: true
+    } as const;
+  }
+
+  private async notifyManagers(type: string, title: string, booking: { id: string; title: string }) {
+    const managers = await this.prisma.user.findMany({
+      where: { role: { in: [UserRole.BA_MANAGER, UserRole.ADMIN] } }
+    });
+
+    if (managers.length === 0) {
+      return;
+    }
+
+    await this.prisma.notification.createMany({
+      data: managers.map((manager) => ({
+        recipient_id: manager.id,
+        type,
+        title,
+        message: booking.title,
+        related_entity_type: 'Booking',
+        related_entity_id: booking.id
+      }))
+    });
+  }
+
+  private async notifyRequester(
+    booking: { id: string; title: string; requester_id: string },
+    type: string,
+    title: string
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        recipient_id: booking.requester_id,
+        type,
+        title,
+        message: booking.title,
+        related_entity_type: 'Booking',
+        related_entity_id: booking.id
+      }
+    });
+  }
+
+  private async notifyAssignedBA(
+    booking: { id: string; title: string; ba: { user_id: string | null } },
+    type: string,
+    title: string
+  ) {
+    if (!booking.ba.user_id) {
+      return;
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        recipient_id: booking.ba.user_id,
+        type,
+        title,
+        message: booking.title,
+        related_entity_type: 'Booking',
+        related_entity_id: booking.id
+      }
+    });
+  }
+
+  private async audit(
+    user: User,
+    action: string,
+    targetType: string,
+    targetId: string,
+    oldValue: unknown,
+    newValue: unknown
+  ) {
+    await this.prisma.auditLog.create({
+      data: {
+        actor_id: user.id,
+        action,
+        target_type: targetType,
+        target_id: targetId,
+        old_value: oldValue === null ? undefined : JSON.parse(JSON.stringify(oldValue)),
+        new_value: newValue === null ? undefined : JSON.parse(JSON.stringify(newValue)),
+        result: 'SUCCESS'
+      }
+    });
+  }
+}
