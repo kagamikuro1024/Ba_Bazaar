@@ -1,5 +1,8 @@
+import { type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LayoutShell } from './components/LayoutShell';
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
+import { getMockRole, type UserRole } from './lib/api';
 import { BADirectoryPage } from './pages/BADirectoryPage';
 import { BAProfilePage } from './pages/BAProfilePage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -18,13 +21,46 @@ export function App() {
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/my-schedule" element={<MySchedulePage />} />
         <Route path="/my-requests" element={<MyRequestsPage />} />
-        <Route path="/manager/inbox" element={<ManagerInboxPage />} />
+        <Route
+          path="/manager/inbox"
+          element={
+            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
+              <ManagerInboxPage />
+            </RequireRole>
+          }
+        />
         <Route path="/crm/ba" element={<BADirectoryPage />} />
         <Route path="/crm/ba/:id" element={<BAProfilePage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/reports"
+          element={
+            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
+              <ReportsPage />
+            </RequireRole>
+          }
+        />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </LayoutShell>
   );
+}
+
+function RequireRole({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
+  const role = getMockRole();
+
+  if (!roles.includes(role)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Access denied</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-slate-600">
+          Current mock role does not have permission to view this page.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return <>{children}</>;
 }

@@ -40,6 +40,12 @@ export function ReportsPage() {
           </Button>
         </div>
       </div>
+      {report.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading report...</CardContent></Card>
+      ) : null}
+      {report.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>
+      ) : null}
       <Card>
         <CardContent className="p-5">
           <p className="text-sm text-slate-500">Average utilization</p>
@@ -72,6 +78,9 @@ export function ReportsPage() {
               ))}
             </tbody>
           </table>
+          {report.data?.rows.length === 0 ? (
+            <div className="p-5 text-sm text-slate-600">No utilization rows for this month.</div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

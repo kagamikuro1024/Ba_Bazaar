@@ -35,6 +35,12 @@ export function ManagerInboxPage() {
           {(approve.error ?? reject.error)?.message}
         </div>
       ) : null}
+      {pending.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading pending requests...</CardContent></Card>
+      ) : null}
+      {pending.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load manager inbox. Check API connection and retry.</CardContent></Card>
+      ) : null}
       <div className="grid gap-4">
         {(pending.data ?? []).map((booking) => (
           <Card key={booking.id}>

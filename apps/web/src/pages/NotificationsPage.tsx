@@ -21,6 +21,12 @@ export function NotificationsPage() {
         <h2 className="text-2xl font-bold text-slate-950">Notifications</h2>
         <p className="text-sm text-slate-600">In-app booking and approval updates.</p>
       </div>
+      {notifications.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading notifications...</CardContent></Card>
+      ) : null}
+      {notifications.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load notifications. Check API connection and retry.</CardContent></Card>
+      ) : null}
       <div className="grid gap-3">
         {(notifications.data ?? []).map((item) => (
           <Card key={item.id} className={item.read_at ? 'opacity-70' : ''}>
@@ -38,6 +44,9 @@ export function NotificationsPage() {
             </CardContent>
           </Card>
         ))}
+        {notifications.data?.length === 0 ? (
+          <Card><CardContent className="p-5 text-sm text-slate-600">No notifications yet.</CardContent></Card>
+        ) : null}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { ProjectsService } from './projects.service';
@@ -6,7 +6,9 @@ import { ProjectsService } from './projects.service';
 @Controller('api/projects')
 export class ProjectsController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(ProjectsService)
     private readonly projectsService: ProjectsService
   ) {}
 

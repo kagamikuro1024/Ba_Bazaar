@@ -32,6 +32,17 @@ type RequestDraft = {
   direct: boolean;
 };
 
+type RangeCheck = {
+  has_overbook_risk_after_request: boolean;
+  daily: Array<{
+    date: string;
+    approved_capacity: number;
+    pending_capacity: number;
+    requested_capacity: number;
+    risk_after_request: number;
+  }>;
+};
+
 const initialWeek = new Date('2026-06-01T00:00:00.000Z');
 
 export function TimelinePage() {
@@ -43,6 +54,8 @@ export function TimelinePage() {
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const canCreateBooking = role !== 'BA';
 
   const days = useMemo(() => {
     if (viewMode === 'month') {
@@ -84,6 +97,17 @@ export function TimelinePage() {
 
   return (
     <div className="grid gap-5">
+      {successMessage ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+          {successMessage}
+        </div>
+      ) : null}
+      {bas.isLoading || bookings.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading timeline...</CardContent></Card>
+      ) : null}
+      {bas.error || bookings.error || projects.error || summary.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
+      ) : null}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="overflow-hidden">
           <CardHeader className="border-b border-slate-200">
@@ -166,6 +190,7 @@ export function TimelinePage() {
                       days={days}
                       bookings={baBookings}
                       capacity={capacity?.risk_capacity ?? 0}
+                      canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
                         setDraft({
                           ba_id: ba.id,
@@ -224,6 +249,7 @@ export function TimelinePage() {
         onClose={() => setDraft(null)}
         onDone={() => {
           setDraft(null);
+          setSuccessMessage('Booking request submitted.');
           void queryClient.invalidateQueries();
         }}
       />
@@ -244,6 +270,7 @@ function TimelineRow({
   days,
   bookings,
   capacity,
+  canCreateBooking,
   onEmptyClick,
   onBookingClick
 }: {
@@ -251,6 +278,7 @@ function TimelineRow({
   days: Date[];
   bookings: Booking[];
   capacity: number;
+  canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
@@ -264,10 +292,18 @@ function TimelineRow({
       {days.map((day) => (
         <button
           key={`${ba.id}-${day.toISOString()}`}
-          className="min-h-[72px] border-b border-r bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)] p-1 text-left text-xs text-slate-400 hover:bg-blue-50"
-          onClick={() => onEmptyClick(day)}
+          className={cn(
+            'group min-h-[72px] border-b border-r bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)] p-1 text-left text-xs text-slate-400',
+            canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
+          )}
+          onClick={() => {
+            if (canCreateBooking) onEmptyClick(day);
+          }}
+          aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
         >
-          <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
+          {canCreateBooking ? (
+            <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
+          ) : null}
         </button>
       ))}
       <div
@@ -386,9 +422,25 @@ function CreateBookingModal({
     capacity_percent: 50,
     priority: 'MEDIUM' as BookingPriority
   });
+  const [localError, setLocalError] = useState('');
   useEffect(() => {
     setRange(draft);
+    setLocalError('');
   }, [draft]);
+  const capacityCheck = useQuery({
+    queryKey: [
+      'capacity-range-check',
+      range?.ba_id,
+      range?.start_date,
+      range?.end_date,
+      form.capacity_percent
+    ],
+    queryFn: () =>
+      apiFetch<RangeCheck>(
+        `/api/capacity/range-check?ba_id=${encodeURIComponent(range?.ba_id ?? '')}&start_date=${range?.start_date}&end_date=${range?.end_date}&capacity_percent=${form.capacity_percent}`
+      ),
+    enabled: Boolean(range?.ba_id && range.start_date && range.end_date)
+  });
   const mutation = useMutation({
     mutationFn: () =>
       apiFetch(range?.direct ? '/api/bookings/direct' : '/api/bookings/request', {
@@ -409,6 +461,11 @@ function CreateBookingModal({
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
+          if (range.end_date < range.start_date) {
+            setLocalError('End date must be greater than or equal to start date.');
+            return;
+          }
+          setLocalError('');
           mutation.mutate();
         }}
       >
@@ -511,6 +568,16 @@ function CreateBookingModal({
             />
             Create direct approved booking
           </label>
+        ) : null}
+        {capacityCheck.data?.has_overbook_risk_after_request ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Overbook risk: selected range may exceed 100% capacity when pending requests are included.
+          </div>
+        ) : null}
+        {localError ? (
+          <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+            {localError}
+          </div>
         ) : null}
         {mutation.error ? (
           <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">

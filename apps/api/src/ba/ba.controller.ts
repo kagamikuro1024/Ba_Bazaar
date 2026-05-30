@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { BAService } from './ba.service';
@@ -6,7 +17,9 @@ import { BAService } from './ba.service';
 @Controller('api')
 export class BAController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(BAService)
     private readonly baService: BAService
   ) {}
 

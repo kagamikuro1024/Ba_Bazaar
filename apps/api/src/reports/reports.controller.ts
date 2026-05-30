@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Query, Req } from '@nestjs/common';
+import { Controller, Get, Header, Inject, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { ReportsService } from './reports.service';
@@ -6,7 +6,9 @@ import { ReportsService } from './reports.service';
 @Controller('api/reports')
 export class ReportsController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(ReportsService)
     private readonly reportsService: ReportsService
   ) {}
 

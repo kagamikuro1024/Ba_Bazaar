@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { CapacityService } from './capacity.service';
@@ -6,7 +6,9 @@ import { CapacityService } from './capacity.service';
 @Controller('api/capacity')
 export class CapacityController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(CapacityService)
     private readonly capacityService: CapacityService
   ) {}
 

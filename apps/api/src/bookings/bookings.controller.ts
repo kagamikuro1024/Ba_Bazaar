@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { BookingStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
@@ -7,7 +7,9 @@ import { BookingsService } from './bookings.service';
 @Controller('api/bookings')
 export class BookingsController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(BookingsService)
     private readonly bookingsService: BookingsService
   ) {}
 

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { User } from '@prisma/client';
 import { canExportReports } from '../auth/rbac';
 import { calculateBookedWorkingDays } from '../domain/capacity';
@@ -7,10 +7,11 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async utilization(currentUser: User, month = '2026-06') {
     if (!canExportReports(currentUser.role)) {
+      await this.auditDenied(currentUser, 'EXPORT_REPORT', 'Permission', currentUser.id);
       throw new ForbiddenException('Manager role required for reports');
     }
 
@@ -119,5 +120,19 @@ export class ReportsService {
 
   private csvCell(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  private async auditDenied(user: User, action: string, targetType: string, targetId: string) {
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actor_id: user.id,
+          action,
+          target_type: targetType,
+          target_id: targetId,
+          result: 'DENIED'
+        }
+      })
+      .catch(() => undefined);
   }
 }

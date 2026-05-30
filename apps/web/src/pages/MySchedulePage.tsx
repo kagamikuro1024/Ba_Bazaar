@@ -16,6 +16,12 @@ export function MySchedulePage() {
         <h2 className="text-2xl font-bold text-slate-950">My Schedule</h2>
         <p className="text-sm text-slate-600">Approved, in-progress, and completed assignments.</p>
       </div>
+      {schedule.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading schedule...</CardContent></Card>
+      ) : null}
+      {schedule.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load schedule. Check API connection and retry.</CardContent></Card>
+      ) : null}
       <div className="grid gap-4">
         {(schedule.data ?? []).map((booking) => (
           <Card key={booking.id}>
@@ -34,6 +40,9 @@ export function MySchedulePage() {
             </CardContent>
           </Card>
         ))}
+        {schedule.data?.length === 0 ? (
+          <Card><CardContent className="p-5 text-sm text-slate-600">No assigned bookings yet.</CardContent></Card>
+        ) : null}
       </div>
     </div>
   );

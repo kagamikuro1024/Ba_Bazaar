@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -31,7 +32,7 @@ type CreateBAInput = {
 
 @Injectable()
 export class BAService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: DirectoryQuery) {
     const tagFilters = (query.tags ?? '')
@@ -289,7 +290,11 @@ export class BAService {
   }
 
   async listNotes(currentUser: User, baId: string) {
-    this.ensureManager(currentUser);
+    if (!isManagerRole(currentUser.role)) {
+      await this.auditDenied(currentUser, 'READ_PRIVATE_NOTES', 'BAProfile', baId);
+      throw new ForbiddenException('Manager or Admin role required');
+    }
+
     return this.prisma.privateNote.findMany({
       where: { ba_id: baId },
       include: { creator: true },
@@ -298,7 +303,11 @@ export class BAService {
   }
 
   async appendNote(currentUser: User, baId: string, input: { content?: string }) {
-    this.ensureManager(currentUser);
+    if (!isManagerRole(currentUser.role)) {
+      await this.auditDenied(currentUser, 'APPEND_PRIVATE_NOTE', 'BAProfile', baId);
+      throw new ForbiddenException('Manager or Admin role required');
+    }
+
     const content = requireString(input.content, 'content');
     if (content.length > 5000) {
       throw new BadRequestException('content must be 5000 characters or less');
@@ -352,5 +361,19 @@ export class BAService {
         result: 'SUCCESS'
       }
     });
+  }
+
+  private async auditDenied(user: User, action: string, targetType: string, targetId: string) {
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actor_id: user.id,
+          action,
+          target_type: targetType,
+          target_id: targetId,
+          result: 'DENIED'
+        }
+      })
+      .catch(() => undefined);
   }
 }

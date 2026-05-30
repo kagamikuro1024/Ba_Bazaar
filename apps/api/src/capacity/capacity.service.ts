@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { BAStatus, User, UserRole } from '@prisma/client';
 import { getRangeCapacity } from '../domain/capacity';
 import { parseDateOnly, toDateKey } from '../domain/date';
@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class CapacityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async summary(currentUser: User, start = '2026-06-01', end = '2026-06-30') {
     const startDate = parseDateOnly(start);

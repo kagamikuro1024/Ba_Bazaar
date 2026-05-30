@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -29,7 +30,7 @@ type BookingInput = {
 
 @Injectable()
 export class BookingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: Record<string, string | undefined>) {
     const where = {
@@ -62,6 +63,12 @@ export class BookingsService {
 
   async createRequest(currentUser: User, input: BookingInput) {
     if (!canCreateBookingRequest(currentUser.role)) {
+      await this.auditDenied(
+        currentUser,
+        'CREATE_BOOKING_REQUEST',
+        'Permission',
+        currentUser.id
+      );
       throw new ForbiddenException('PM/PO or Manager role required to create request');
     }
 
@@ -93,6 +100,7 @@ export class BookingsService {
 
   async createDirect(currentUser: User, input: BookingInput) {
     if (!canCreateDirectBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'CREATE_DIRECT_BOOKING', 'Permission', currentUser.id);
       throw new ForbiddenException('Manager role required to create direct booking');
     }
 
@@ -134,12 +142,14 @@ export class BookingsService {
     const requesterOwns = booking.requester_id === currentUser.id;
 
     if (!manager && !(requesterOwns && booking.status === BookingStatus.REJECTED)) {
+      await this.auditDenied(currentUser, 'UPDATE_BOOKING', 'Booking', id);
       throw new ForbiddenException('Only Manager or requester resubmitting rejected request can update');
     }
 
     const data = {
       title: input.title,
       description: input.description,
+      project_id: input.project_id ? requireString(input.project_id, 'project_id') : undefined,
       start_date: input.start_date ? requireDate(input.start_date, 'start_date') : undefined,
       end_date: input.end_date ? requireDate(input.end_date, 'end_date') : undefined,
       capacity_percent:
@@ -158,6 +168,27 @@ export class BookingsService {
       throw new BadRequestException('end_date must be greater than or equal to start_date');
     }
 
+    const nextStartDate = data.start_date ?? booking.start_date;
+    const nextEndDate = data.end_date ?? booking.end_date;
+    const nextCapacity = data.capacity_percent ?? booking.capacity_percent;
+
+    if (manager && isOfficialBooking(booking.status)) {
+      const existing = await this.getBaBookings(booking.ba_id);
+      const approval = canApproveCapacity(
+        existing,
+        nextStartDate,
+        nextEndDate,
+        nextCapacity,
+        booking.id
+      );
+
+      if (!approval.allowed) {
+        throw new BadRequestException(
+          `Cannot update booking because capacity exceeds 100% on ${approval.blocking_day}`
+        );
+      }
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
       data,
@@ -170,6 +201,7 @@ export class BookingsService {
 
   async approve(currentUser: User, id: string) {
     if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'APPROVE_BOOKING', 'Booking', id);
       throw new ForbiddenException('Manager role required to approve booking');
     }
 
@@ -209,6 +241,7 @@ export class BookingsService {
 
   async reject(currentUser: User, id: string, reason?: string) {
     if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'REJECT_BOOKING', 'Booking', id);
       throw new ForbiddenException('Manager role required to reject booking');
     }
 
@@ -237,8 +270,9 @@ export class BookingsService {
     const cancelReason = requireString(reason, 'cancel_reason');
     const booking = await this.getById(currentUser, id);
 
-    if (currentUser.role === UserRole.BA) {
-      throw new ForbiddenException('BA cannot cancel bookings');
+    if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'CANCEL_BOOKING', 'Booking', id);
+      throw new ForbiddenException('Manager role required to cancel bookings');
     }
 
     const updated = await this.prisma.booking.update({
@@ -358,7 +392,10 @@ export class BookingsService {
     return booking;
   }
 
-  private ensureCanRead(currentUser: User, booking: Awaited<ReturnType<typeof this.getExisting>>) {
+  private ensureCanRead(
+    currentUser: User,
+    booking: { requester_id: string; ba?: { user_id: string | null } }
+  ) {
     if (canApproveBooking(currentUser.role)) {
       return;
     }
@@ -367,7 +404,7 @@ export class BookingsService {
       return;
     }
 
-    if (currentUser.role === UserRole.BA) {
+    if (currentUser.role === UserRole.BA && booking.ba?.user_id === currentUser.id) {
       return;
     }
 
@@ -462,4 +499,22 @@ export class BookingsService {
       }
     });
   }
+
+  private async auditDenied(user: User, action: string, targetType: string, targetId: string) {
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actor_id: user.id,
+          action,
+          target_type: targetType,
+          target_id: targetId,
+          result: 'DENIED'
+        }
+      })
+      .catch(() => undefined);
+  }
+}
+
+function isOfficialBooking(status: BookingStatus) {
+  return status === BookingStatus.APPROVED || status === BookingStatus.IN_PROGRESS;
 }

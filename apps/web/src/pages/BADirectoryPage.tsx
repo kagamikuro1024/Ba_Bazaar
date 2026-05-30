@@ -84,6 +84,13 @@ export function BADirectoryPage() {
         void queryClient.invalidateQueries({ queryKey: ['ba-directory'] });
       }} /> : null}
 
+      {bas.isLoading ? (
+        <Card><CardContent className="p-5 text-sm text-slate-600">Loading BA directory...</CardContent></Card>
+      ) : null}
+      {bas.error ? (
+        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load BA directory. Check API connection and retry.</CardContent></Card>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
         {(bas.data ?? []).map((ba) => (
           <Link key={ba.id} to={`/crm/ba/${ba.id}`}>
@@ -107,6 +114,9 @@ export function BADirectoryPage() {
             </Card>
           </Link>
         ))}
+        {bas.data?.length === 0 ? (
+          <Card><CardContent className="p-5 text-sm text-slate-600">No BA profiles match the current filters.</CardContent></Card>
+        ) : null}
       </div>
     </div>
   );

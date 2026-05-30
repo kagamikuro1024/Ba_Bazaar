@@ -19,15 +19,20 @@ type LayoutShellProps = {
   children: ReactNode;
 };
 
-const navigation = [
-  { to: '/', label: 'Dashboard', icon: Home },
-  { to: '/timeline', label: 'Timeline', icon: CalendarDays },
-  { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList },
-  { to: '/my-requests', label: 'My Requests', icon: FolderKanban },
-  { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox },
-  { to: '/crm/ba', label: 'BA Directory', icon: Users },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/notifications', label: 'Notifications', icon: Bell }
+const navigation: Array<{
+  to: string;
+  label: string;
+  icon: typeof Home;
+  roles: UserRole[];
+}> = [
+  { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+  { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+  { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
+  { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
+  { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
+  { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
+  { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
 ];
 
 export function LayoutShell({ children }: LayoutShellProps) {
@@ -93,7 +98,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
       <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)]">
         <Card className="h-fit p-2">
           <nav className="grid gap-1" aria-label="Main navigation">
-            {navigation.map((item) => {
+            {navigation.filter((item) => item.roles.includes(role)).map((item) => {
               const Icon = item.icon;
 
               return (

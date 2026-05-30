@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from './notifications.service';
@@ -6,7 +6,9 @@ import { NotificationsService } from './notifications.service';
 @Controller('api/notifications')
 export class NotificationsController {
   constructor(
+    @Inject(AuthService)
     private readonly authService: AuthService,
+    @Inject(NotificationsService)
     private readonly notificationsService: NotificationsService
   ) {}
 
