@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addDays,
@@ -44,6 +44,21 @@ type RangeCheck = {
 };
 
 const initialWeek = new Date('2026-06-01T00:00:00.000Z');
+const baInfoColumnWidth = 260;
+const mobileDayMinWidth = 70;
+const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === 'undefined' ? false : window.innerWidth < 1024
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
 
 export function TimelinePage() {
   const queryClient = useQueryClient();
@@ -55,7 +70,16 @@ export function TimelinePage() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [compactMobileInfo, setCompactMobileInfo] = useState(false);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role !== 'BA';
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (!isMobile) {
+      setCompactMobileInfo(false);
+    }
+  }, [isMobile]);
 
   const days = useMemo(() => {
     if (viewMode === 'month') {
@@ -94,6 +118,13 @@ export function TimelinePage() {
 
   const move = (direction: number) =>
     setAnchorDate((current) => addDays(current, direction * (viewMode === 'week' ? 7 : 30)));
+
+  function handleTimelineScroll() {
+    if (!isMobile) return;
+    const nextScrollLeft = timelineScrollRef.current?.scrollLeft ?? 0;
+    const nextCompact = nextScrollLeft > mobileCompactScrollThreshold;
+    setCompactMobileInfo((current) => (current === nextCompact ? current : nextCompact));
+  }
 
   return (
     <div className="grid gap-5">
@@ -161,35 +192,73 @@ export function TimelinePage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
+          <CardContent className="relative p-0">
+            <div ref={timelineScrollRef} className="overflow-x-auto" onScroll={handleTimelineScroll}>
               <div
-                className="grid min-w-[980px]"
-                style={{ gridTemplateColumns: `260px repeat(${days.length}, minmax(92px, 1fr))` }}
+                className={cn('grid', !isMobile && 'min-w-[980px]')}
+                style={{
+                  gridTemplateColumns: isMobile
+                    ? `repeat(${days.length}, minmax(${mobileDayMinWidth}px, 1fr))`
+                    : `${baInfoColumnWidth}px repeat(${days.length}, minmax(92px, 1fr))`
+                }}
               >
-                <div className="sticky left-0 z-20 border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
-                  BA
-                </div>
-                {days.map((day) => (
-                  <div
-                    key={day.toISOString()}
-                    className="border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600"
-                  >
-                    <div>{format(day, 'EEE')}</div>
-                    <div>{format(day, 'dd/MM')}</div>
-                  </div>
-                ))}
-                {visibleBas.map((ba) => {
+                {!isMobile && (
+                  <>
+                    <div className="h-14 border-b border-r bg-white" aria-hidden="true" />
+                    {days.map((day) => (
+                      <div
+                        key={day.toISOString()}
+                        className="grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600"
+                      >
+                        <div>
+                          <div>{format(day, 'EEE')}</div>
+                          <div>{format(day, 'dd/MM')}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {isMobile &&
+                  days.map((day) => (
+                    <div
+                      key={day.toISOString()}
+                      className="grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600"
+                    >
+                      <div>
+                        <div>{format(day, 'EEE')}</div>
+                        <div>{format(day, 'dd/MM')}</div>
+                      </div>
+                    </div>
+                  ))}
+                {visibleBas.map((ba, index) => {
                   const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
-                  const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+                  const isAlternateRow = index % 2 === 1;
 
-                  return (
+                  return isMobile ? (
+                    <MobileTimelineRow
+                      key={ba.id}
+                      ba={ba}
+                      days={days}
+                      bookings={baBookings}
+                      isAlternateRow={isAlternateRow}
+                      canCreateBooking={canCreateBooking}
+                      onEmptyClick={(date) =>
+                        setDraft({
+                          ba_id: ba.id,
+                          start_date: format(date, 'yyyy-MM-dd'),
+                          end_date: format(date, 'yyyy-MM-dd'),
+                          direct: false
+                        })
+                      }
+                      onBookingClick={setSelectedBooking}
+                    />
+                  ) : (
                     <TimelineRow
                       key={ba.id}
                       ba={ba}
                       days={days}
                       bookings={baBookings}
-                      capacity={capacity?.risk_capacity ?? 0}
+                      isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
                         setDraft({
@@ -205,6 +274,63 @@ export function TimelinePage() {
                 })}
               </div>
             </div>
+            {isMobile ? (
+              <div className="pointer-events-none absolute left-0 top-12 z-20">
+                {visibleBas.map((ba, index) => {
+                  const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+
+                  return (
+                    <div
+                      key={ba.id}
+                      className="pointer-events-auto absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
+                      style={{ top: index * 120, width: baInfoColumnWidth }}
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <MobileBAIdentity ba={ba} compact={compactMobileInfo} />
+                      <span
+                        className={cn(
+                          'shrink-0 overflow-hidden text-xs font-bold transition-all duration-200 ease-out',
+                          capacityColor(capacity?.risk_capacity ?? 0),
+                          compactMobileInfo
+                            ? 'max-w-0 -translate-x-2 opacity-0'
+                            : 'max-w-12 translate-x-0 opacity-100'
+                        )}
+                      >
+                        {capacity?.risk_capacity ?? 0}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
+                <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
+                  BA
+                </div>
+                {visibleBas.map((ba, index) => {
+                  const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+                  const isAlternateRow = index % 2 === 1;
+
+                  return (
+                    <div
+                      key={ba.id}
+                      className={cn(
+                        'pointer-events-auto flex h-[72px] w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                        isAlternateRow ? 'bg-sky-50' : 'bg-white'
+                      )}
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <BAIdentity ba={ba} />
+                      <span className={cn('text-sm font-bold', capacityColor(capacity?.risk_capacity ?? 0))}>
+                        {capacity?.risk_capacity ?? 0}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -269,7 +395,7 @@ function TimelineRow({
   ba,
   days,
   bookings,
-  capacity,
+  isAlternateRow,
   canCreateBooking,
   onEmptyClick,
   onBookingClick
@@ -277,23 +403,29 @@ function TimelineRow({
   ba: BAProfile;
   days: Date[];
   bookings: Booking[];
-  capacity: number;
+  isAlternateRow: boolean;
   canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
   return (
     <>
-      <div className="sticky left-0 z-10 flex items-center justify-between border-b border-r bg-white p-3">
-        <BAIdentity ba={ba} />
-        <span className={cn('text-sm font-bold', capacityColor(capacity))}>{capacity}%</span>
-      </div>
+      <div
+        className={cn(
+          'h-[72px] border-b border-r',
+          isAlternateRow ? 'bg-sky-50' : 'bg-white'
+        )}
+        aria-hidden="true"
+      />
       <div className="relative col-span-full hidden" />
       {days.map((day) => (
         <button
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
-            'group min-h-[72px] border-b border-r bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)] p-1 text-left text-xs text-slate-400',
+            'group min-h-[72px] border-b border-r p-1 text-left text-xs text-slate-400',
+            isAlternateRow
+              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
+              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           onClick={() => {
@@ -343,6 +475,121 @@ function TimelineRow({
         })}
       </div>
     </>
+  );
+}
+
+function MobileTimelineRow({
+  ba,
+  days,
+  bookings,
+  isAlternateRow,
+  canCreateBooking,
+  onEmptyClick,
+  onBookingClick
+}: {
+  ba: BAProfile;
+  days: Date[];
+  bookings: Booking[];
+  isAlternateRow: boolean;
+  canCreateBooking: boolean;
+  onEmptyClick: (date: Date) => void;
+  onBookingClick: (booking: Booking) => void;
+}) {
+  return (
+    <>
+      {days.map((day) => (
+        <button
+          key={`${ba.id}-${day.toISOString()}`}
+          className={cn(
+            'group min-h-[120px] border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
+            isAlternateRow
+              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
+              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
+            canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
+          )}
+          onClick={() => {
+            if (canCreateBooking) onEmptyClick(day);
+          }}
+          aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
+        >
+          {canCreateBooking ? (
+            <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
+          ) : null}
+        </button>
+      ))}
+      <div
+        className="pointer-events-none relative -mt-[120px] grid min-h-[120px]"
+        style={{ gridColumn: `1 / span ${days.length}` }}
+      >
+        {bookings.map((booking, index) => {
+          const first = days[0];
+          const last = days[days.length - 1];
+          const start = parseISO(booking.start_date) < first ? first : parseISO(booking.start_date);
+          const end = parseISO(booking.end_date) > last ? last : parseISO(booking.end_date);
+          if (end < first || start > last) return null;
+          const left = Math.max(0, differenceInCalendarDays(start, first));
+          const span = differenceInCalendarDays(end, start) + 1;
+          const pending = booking.status === 'PENDING';
+
+          return (
+            <button
+              key={booking.id}
+              className={cn(
+                'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                pending
+                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
+                  : 'bg-blue-600 text-white'
+              )}
+              style={{
+                left: `${(left / days.length) * 100}%`,
+                width: `calc(${(span / days.length) * 100}% - 8px)`,
+                top: `${58 + (index % 2) * 30}px`
+              }}
+              onClick={() => onBookingClick(booking)}
+              aria-label={`${booking.status} booking ${booking.title}`}
+            >
+              {booking.project.name} · {booking.capacity_percent}%
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) {
+  const initials = ba.full_name
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('');
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-xs">
+      <span
+        className={cn(
+          'block shrink-0 overflow-hidden transition-all duration-200 ease-out',
+          compact ? 'w-0 -translate-x-2 opacity-0' : 'w-7 translate-x-0 opacity-100'
+        )}
+      >
+        {ba.avatar_url ? (
+          <img src={ba.avatar_url} alt="" className="h-7 w-7 rounded-full" />
+        ) : (
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
+            {initials}
+          </span>
+        )}
+      </span>
+      <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
+      <span
+        className={cn(
+          'shrink-0 overflow-hidden text-slate-500 transition-all duration-200 ease-out',
+          compact ? 'max-w-0 translate-x-2 opacity-0' : 'max-w-20 translate-x-0 opacity-100'
+        )}
+      >
+        - {ba.level}
+      </span>
+    </div>
   );
 }
 
