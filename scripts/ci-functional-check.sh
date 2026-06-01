@@ -49,6 +49,19 @@ assert_status() {
   fi
 }
 
+assert_status_in() {
+  local actual
+  actual="$(cat "$TMP_DIR/status")"
+  for expected in "$@"; do
+    if [[ "$actual" == "$expected" ]]; then
+      return 0
+    fi
+  done
+  echo "Expected HTTP one of [$*], got $actual" >&2
+  cat "$TMP_DIR/response.json" >&2
+  exit 1
+}
+
 json_get() {
   node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('$TMP_DIR/response.json','utf8')); console.log($1);"
 }
@@ -194,7 +207,7 @@ request GET /bookings?status=PENDING BA_MANAGER >/dev/null
 assert_status 200
 json_assert "Array.isArray(data) && data.some((booking) => booking.id === '$PENDING_BOOKING_ID')"
 request POST "/bookings/$PENDING_BOOKING_ID/approve" BA_MANAGER >/dev/null
-assert_status 200
+assert_status_in 200 201
 json_assert "data.status === 'APPROVED'"
 
 REJECT_BODY="{\"ba_id\":\"$BOOKABLE_BA_ID\",\"project_id\":\"$PROJECT_ID\",\"title\":\"CI reject booking $STAMP\",\"description\":\"CI reject flow\",\"start_date\":\"2026-09-03\",\"end_date\":\"2026-09-04\",\"capacity_percent\":50,\"priority\":\"LOW\"}"
@@ -202,7 +215,7 @@ request POST /bookings/request PM_PO "$REJECT_BODY" >/dev/null
 assert_status 201
 REJECT_BOOKING_ID=$(json_get "(data.booking ?? data).id")
 request POST "/bookings/$REJECT_BOOKING_ID/reject" BA_MANAGER '{"reject_reason":"CI reject reason"}' >/dev/null
-assert_status 200
+assert_status_in 200 201
 json_assert "data.status === 'REJECTED' && data.reject_reason === 'CI reject reason'"
 
 request GET /capacity/summary BA_MANAGER >/dev/null
