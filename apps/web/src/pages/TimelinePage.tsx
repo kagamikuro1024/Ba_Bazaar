@@ -51,7 +51,9 @@ const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
 const mobileDayMinWidth = 70;
 const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
-const bookingLaneHeight = 30;
+const bookingLaneHeight = 36;
+const desktopBarBaseTop = 16;
+const mobileBarBaseTop = 58;
 
 function dayCellBackground(isAlternateRow: boolean) {
   return isAlternateRow
@@ -107,6 +109,17 @@ function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout
   }
 
   return layouts;
+}
+
+function computeRowMinHeight(
+  days: Date[],
+  bookings: Booking[],
+  barBaseTop: number,
+  minHeight: number
+) {
+  const layouts = computeBookingLayouts(days, bookings);
+  const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
+  return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
 }
 
 function useIsMobile() {
@@ -176,6 +189,19 @@ export function TimelinePage() {
   const visibleBas = (bas.data ?? []).filter((ba) => !baFilter || ba.id === baFilter);
   const visibleBookings = (bookings.data ?? []).filter(
     (booking) => !projectFilter || booking.project_id === projectFilter
+  );
+  const rowData = useMemo(
+    () =>
+      visibleBas.map((ba) => {
+        const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+        return {
+          ba,
+          bookings: baBookings,
+          desktopRowMinHeight: computeRowMinHeight(days, baBookings, desktopBarBaseTop, 72),
+          mobileRowMinHeight: computeRowMinHeight(days, baBookings, mobileBarBaseTop, 120)
+        };
+      }),
+    [days, visibleBas, visibleBookings]
   );
 
   const move = (direction: number) =>
@@ -300,8 +326,7 @@ export function TimelinePage() {
                       </div>
                     </div>
                   ))}
-                {visibleBas.map((ba, index) => {
-                  const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+                {rowData.map(({ ba, bookings: baBookings, desktopRowMinHeight, mobileRowMinHeight }, index) => {
                   const isAlternateRow = index % 2 === 1;
 
                   return isMobile ? (
@@ -310,6 +335,7 @@ export function TimelinePage() {
                       ba={ba}
                       days={days}
                       bookings={baBookings}
+                      rowMinHeight={mobileRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
@@ -328,6 +354,7 @@ export function TimelinePage() {
                       ba={ba}
                       days={days}
                       bookings={baBookings}
+                      rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
@@ -346,14 +373,18 @@ export function TimelinePage() {
             </div>
             {isMobile ? (
               <div className="pointer-events-none absolute left-0 top-12 z-20">
-                {visibleBas.map((ba, index) => {
+                {(() => {
+                  let topOffset = 0;
+                  return rowData.map(({ ba, mobileRowMinHeight }) => {
                   const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+                  const rowTop = topOffset;
+                  topOffset += mobileRowMinHeight;
 
                   return (
                     <div
                       key={ba.id}
                       className="pointer-events-auto absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
-                      style={{ top: index * 120, width: baInfoColumnWidth }}
+                      style={{ top: rowTop, width: baInfoColumnWidth }}
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -371,14 +402,15 @@ export function TimelinePage() {
                       </span>
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             ) : (
               <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
                 <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
                   BA
                 </div>
-                {visibleBas.map((ba, index) => {
+                {rowData.map(({ ba, desktopRowMinHeight }, index) => {
                   const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
                   const isAlternateRow = index % 2 === 1;
 
@@ -386,9 +418,10 @@ export function TimelinePage() {
                     <div
                       key={ba.id}
                       className={cn(
-                        'pointer-events-auto flex h-[72px] w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                        'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
                         isAlternateRow ? 'bg-sky-50' : 'bg-white'
                       )}
+                      style={{ height: desktopRowMinHeight }}
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -465,6 +498,7 @@ function TimelineRow({
   ba,
   days,
   bookings,
+  rowMinHeight,
   isAlternateRow,
   canCreateBooking,
   onEmptyClick,
@@ -473,23 +507,22 @@ function TimelineRow({
   ba: BAProfile;
   days: Date[];
   bookings: Booking[];
+  rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
   const layouts = computeBookingLayouts(days, bookings);
-  const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
-  const barBaseTop = 16;
-  const rowMinHeight = Math.max(72, barBaseTop + laneCount * bookingLaneHeight + 10);
 
   return (
     <>
       <div
         className={cn(
-          'h-[72px] border-b border-r',
+          'border-b border-r',
           isAlternateRow ? 'bg-sky-50' : 'bg-white'
         )}
+        style={{ height: rowMinHeight }}
         aria-hidden="true"
       />
       <div className="relative col-span-full hidden" />
@@ -532,7 +565,7 @@ function TimelineRow({
                 style={{
                   left: `${(left / days.length) * 100}%`,
                   width: `calc(${(span / days.length) * 100}% - 8px)`,
-                  top: `${barBaseTop + lane * bookingLaneHeight}px`
+                  top: `${desktopBarBaseTop + lane * bookingLaneHeight}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
@@ -551,6 +584,7 @@ function MobileTimelineRow({
   ba,
   days,
   bookings,
+  rowMinHeight,
   isAlternateRow,
   canCreateBooking,
   onEmptyClick,
@@ -559,15 +593,13 @@ function MobileTimelineRow({
   ba: BAProfile;
   days: Date[];
   bookings: Booking[];
+  rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
   const layouts = computeBookingLayouts(days, bookings);
-  const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
-  const barBaseTop = 58;
-  const rowMinHeight = Math.max(120, barBaseTop + laneCount * bookingLaneHeight + 10);
 
   return (
     <>
@@ -610,7 +642,7 @@ function MobileTimelineRow({
                 style={{
                   left: `${(left / days.length) * 100}%`,
                   width: `calc(${(span / days.length) * 100}% - 8px)`,
-                  top: `${barBaseTop + lane * bookingLaneHeight}px`
+                  top: `${mobileBarBaseTop + lane * bookingLaneHeight}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
