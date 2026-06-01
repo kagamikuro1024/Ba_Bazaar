@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
@@ -16,14 +16,19 @@ export function BADirectoryPage() {
   const [status, setStatus] = useState('');
   const [tag, setTag] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const visibleStatuses = useMemo(
+    () => (role === 'BA_MANAGER' || role === 'ADMIN' ? ['ACTIVE', 'ON_LEAVE', 'RESIGNED'] : ['ACTIVE']),
+    [role]
+  );
+  const safeStatus = status && visibleStatuses.includes(status) ? status : '';
   const query = new URLSearchParams();
   if (search) query.set('search', search);
   if (level) query.set('level', level);
-  if (status) query.set('status', status);
+  if (safeStatus) query.set('status', safeStatus);
   if (tag) query.set('tags', tag);
 
   const bas = useQuery({
-    queryKey: ['ba-directory', role, search, level, status, tag],
+    queryKey: ['ba-directory', role, search, level, safeStatus, tag],
     queryFn: () => apiFetch<BAProfile[]>(`/api/ba?${query.toString()}`)
   });
   const tags = useQuery({
@@ -66,7 +71,7 @@ export function BADirectoryPage() {
           </select>
           <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border px-3 text-sm">
             <option value="">All status</option>
-            {['ACTIVE', 'ON_LEAVE', 'RESIGNED'].map((item) => (
+            {visibleStatuses.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>

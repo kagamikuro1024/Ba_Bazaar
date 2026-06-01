@@ -35,6 +35,7 @@ export class BAService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: DirectoryQuery) {
+    const search = query.search?.trim();
     const tagFilters = (query.tags ?? '')
       .split(',')
       .map((tag) => tag.trim())
@@ -48,14 +49,16 @@ export class BAService {
       ...(currentUser.role === UserRole.PM_PO || query.bookable === 'true'
         ? { status: BAStatus.ACTIVE }
         : {}),
-      ...(currentUser.role === UserRole.BA ? { user_id: currentUser.id } : {}),
+      ...(currentUser.role === UserRole.BA
+        ? { user_id: currentUser.id, status: { not: BAStatus.RESIGNED } }
+        : {}),
       ...(query.status && isManagerRole(currentUser.role) ? { status: query.status } : {}),
       ...(query.level ? { level: query.level } : {}),
-      ...(query.search
+      ...(search
         ? {
             OR: [
-              { full_name: { contains: query.search, mode: 'insensitive' as const } },
-              { email: { contains: query.search, mode: 'insensitive' as const } }
+              { full_name: { contains: search, mode: 'insensitive' as const } },
+              { email: { contains: search, mode: 'insensitive' as const } }
             ]
           }
         : {}),
@@ -142,6 +145,14 @@ export class BAService {
       throw new ForbiddenException('BA can only view own profile');
     }
 
+    if (currentUser.role === UserRole.BA && ba.status === BAStatus.RESIGNED) {
+      throw new ForbiddenException('Resigned BA profile is not available for self-view');
+    }
+
+    if (!isManagerRole(currentUser.role)) {
+      return this.toPublicProfile(ba);
+    }
+
     return ba;
   }
 
@@ -191,7 +202,7 @@ export class BAService {
       where: { id },
       data: {
         status,
-        status_reason: optionalString(input.status_reason),
+        status_reason: optionalString(input.status_reason ?? (input as { reason?: string }).reason),
         status_changed_at: new Date(),
         version: { increment: 1 }
       },
@@ -205,13 +216,24 @@ export class BAService {
   async publicCard(currentUser: User, id: string) {
     const ba = await this.getById(currentUser, id);
 
+    return this.toPublicProfile(ba);
+  }
+
+  private toPublicProfile(ba: {
+    id: string;
+    full_name: string;
+    level: BALevel;
+    avatar_url: string | null;
+    status: BAStatus;
+    skill_tags: Array<{ id: string; tag: { id: string; name: string; group: string; status: string } }>;
+  }) {
     return {
       id: ba.id,
       full_name: ba.full_name,
       level: ba.level,
       avatar_url: ba.avatar_url,
       status: ba.status,
-      skill_tags: ba.skill_tags.map((item) => item.tag)
+      skill_tags: ba.skill_tags
     };
   }
 
@@ -263,6 +285,17 @@ export class BAService {
     this.ensureManager(currentUser);
     await this.getExisting(baId);
 
+    if (!tagId) {
+      throw new BadRequestException('tag_id is required');
+    }
+
+    const tag = await this.prisma.skillTag.findFirst({
+      where: { id: tagId, status: SkillTagStatus.ACTIVE }
+    });
+    if (!tag) {
+      throw new BadRequestException('Active tag_id does not exist');
+    }
+
     const mapping = await this.prisma.bASkillTag.upsert({
       where: { ba_id_tag_id: { ba_id: baId, tag_id: tagId } },
       update: {},
@@ -287,6 +320,17 @@ export class BAService {
     });
     await this.audit(currentUser, 'REMOVE_BA_TAG', 'BAProfile', baId, { tag_id: tagId }, null);
     return { status: 'ok' };
+  }
+
+  async getAuditLogs(currentUser: User, id: string) {
+    this.ensureManager(currentUser);
+    await this.getExisting(id);
+
+    return this.prisma.auditLog.findMany({
+      where: { target_type: 'BAProfile', target_id: id },
+      include: { actor: true },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
   async listNotes(currentUser: User, baId: string) {
