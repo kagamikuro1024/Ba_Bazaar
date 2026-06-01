@@ -21,10 +21,10 @@ export type BAProfile = {
   id: string;
   user_id?: string | null;
   full_name: string;
-  email: string;
+  email?: string;
   phone?: string | null;
   level: BALevel;
-  joined_date: string;
+  joined_date?: string;
   avatar_url?: string | null;
   status: BAStatus;
   status_reason?: string | null;

@@ -9,7 +9,8 @@ export class AuthService {
 
   async getCurrentUser(request: Request): Promise<User> {
     const userId = this.readHeader(request, 'x-user-id');
-    const role = this.readHeader(request, 'x-mock-role') as UserRole | undefined;
+    const requestedRole = this.readHeader(request, 'x-mock-role');
+    const role = this.normalizeRole(requestedRole);
 
     const user = userId
       ? await this.prisma.user.findUnique({ where: { id: userId } })
@@ -53,5 +54,17 @@ export class AuthService {
     }
 
     return value;
+  }
+
+  private normalizeRole(value?: string): UserRole | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (value === 'BUSINESS_ANALYST') {
+      return UserRole.BA;
+    }
+
+    return Object.values(UserRole).includes(value as UserRole) ? (value as UserRole) : undefined;
   }
 }

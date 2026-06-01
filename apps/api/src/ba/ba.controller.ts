@@ -98,6 +98,11 @@ export class BAController {
     return this.baService.removeTag(await this.authService.getCurrentUser(request), id, tagId);
   }
 
+  @Get('ba/:id/audit')
+  async audit(@Req() request: Request, @Param('id') id: string) {
+    return this.baService.getAuditLogs(await this.authService.getCurrentUser(request), id);
+  }
+
   @Get('ba/:id/notes')
   async notes(@Req() request: Request, @Param('id') id: string) {
     return this.baService.listNotes(await this.authService.getCurrentUser(request), id);

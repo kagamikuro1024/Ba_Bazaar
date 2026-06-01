@@ -103,7 +103,7 @@ export function BAProfilePage() {
               <p>Email: {role === 'BA_MANAGER' ? ba.data.email : 'Hidden by policy'}</p>
               <p>Phone: {role === 'BA_MANAGER' ? ba.data.phone : 'Hidden by policy'}</p>
               <p>Level: {ba.data.level}</p>
-              <p>Joined: {formatDate(ba.data.joined_date)}</p>
+              {ba.data.joined_date ? <p>Joined: {formatDate(ba.data.joined_date)}</p> : null}
             </CardContent>
           </Card>
 
