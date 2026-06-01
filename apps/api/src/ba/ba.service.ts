@@ -14,8 +14,9 @@ import { isManagerRole } from '../auth/rbac';
 
 type DirectoryQuery = {
   search?: string;
-  status?: BAStatus;
-  level?: BALevel;
+  q?: string;
+  status?: string;
+  level?: string;
   tags?: string;
   bookable?: string;
 };
@@ -35,7 +36,13 @@ export class BAService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: DirectoryQuery) {
-    const search = query.search?.trim();
+    const search = (query.search ?? query.q)?.trim();
+    const statusFilter = Object.values(BAStatus).includes(query.status as BAStatus)
+      ? (query.status as BAStatus)
+      : undefined;
+    const levelFilter = Object.values(BALevel).includes(query.level as BALevel)
+      ? (query.level as BALevel)
+      : undefined;
     const tagFilters = (query.tags ?? '')
       .split(',')
       .map((tag) => tag.trim())
@@ -52,8 +59,8 @@ export class BAService {
       ...(currentUser.role === UserRole.BA
         ? { user_id: currentUser.id, status: { not: BAStatus.RESIGNED } }
         : {}),
-      ...(query.status && isManagerRole(currentUser.role) ? { status: query.status } : {}),
-      ...(query.level ? { level: query.level } : {}),
+      ...(statusFilter && isManagerRole(currentUser.role) ? { status: statusFilter } : {}),
+      ...(levelFilter ? { level: levelFilter } : {}),
       ...(search
         ? {
             OR: [

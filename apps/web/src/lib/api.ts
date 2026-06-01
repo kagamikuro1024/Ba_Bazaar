@@ -55,6 +55,7 @@ export type Booking = {
   manager_id?: string | null;
   title: string;
   description: string;
+  notes?: string | null;
   start_date: string;
   end_date: string;
   capacity_percent: number;

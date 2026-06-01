@@ -21,6 +21,7 @@ type BookingInput = {
   project_id?: string;
   title?: string;
   description?: string;
+  notes?: string;
   start_date?: string;
   end_date?: string;
   capacity_percent?: number;
@@ -149,6 +150,7 @@ export class BookingsService {
     const data = {
       title: input.title,
       description: input.description,
+      notes: input.notes,
       project_id: input.project_id ? requireString(input.project_id, 'project_id') : undefined,
       start_date: input.start_date ? requireDate(input.start_date, 'start_date') : undefined,
       end_date: input.end_date ? requireDate(input.end_date, 'end_date') : undefined,
@@ -346,6 +348,7 @@ export class BookingsService {
       project_id: requireString(input.project_id, 'project_id'),
       title: requireString(input.title, 'title'),
       description: requireString(input.description, 'description'),
+      notes: optionalString(input.notes),
       start_date: startDate,
       end_date: endDate,
       capacity_percent: requireCapacityPercent(input.capacity_percent),

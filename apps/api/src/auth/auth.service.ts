@@ -61,10 +61,14 @@ export class AuthService {
       return undefined;
     }
 
-    if (value === 'BUSINESS_ANALYST') {
+    const normalized = value.trim().toUpperCase();
+
+    if (normalized === 'BUSINESS_ANALYST') {
       return UserRole.BA;
     }
 
-    return Object.values(UserRole).includes(value as UserRole) ? (value as UserRole) : undefined;
+    return Object.values(UserRole).includes(normalized as UserRole)
+      ? (normalized as UserRole)
+      : undefined;
   }
 }
