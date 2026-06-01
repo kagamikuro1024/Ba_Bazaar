@@ -4,7 +4,9 @@ import {
   addDays,
   differenceInCalendarDays,
   eachDayOfInterval,
+  endOfMonth,
   format,
+  isSameDay,
   parseISO,
   startOfMonth
 } from 'date-fns';
@@ -48,6 +50,12 @@ const baInfoColumnWidth = 260;
 const mobileDayMinWidth = 70;
 const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
 
+function dayCellBackground(isAlternateRow: boolean) {
+  return isAlternateRow
+    ? 'bg-[repeating-linear-gradient(-45deg,#eff6ff,#eff6ff_6px,#dbeafe_6px,#dbeafe_12px)]'
+    : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]';
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window === 'undefined' ? false : window.innerWidth < 1024
@@ -74,6 +82,7 @@ export function TimelinePage() {
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role !== 'BA';
   const isMobile = useIsMobile();
+  const currentDate = useMemo(() => new Date(), []);
 
   useEffect(() => {
     if (!isMobile) {
@@ -84,7 +93,7 @@ export function TimelinePage() {
   const days = useMemo(() => {
     if (viewMode === 'month') {
       const start = startOfMonth(anchorDate);
-      return eachDayOfInterval({ start, end: addDays(start, 29) });
+      return eachDayOfInterval({ start, end: endOfMonth(start) });
     }
 
     return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) });
@@ -208,7 +217,10 @@ export function TimelinePage() {
                     {days.map((day) => (
                       <div
                         key={day.toISOString()}
-                        className="grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600"
+                        className={cn(
+                          'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
+                          isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                        )}
                       >
                         <div>
                           <div>{format(day, 'EEE')}</div>
@@ -222,7 +234,10 @@ export function TimelinePage() {
                   days.map((day) => (
                     <div
                       key={day.toISOString()}
-                      className="grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600"
+                      className={cn(
+                        'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
+                        isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                      )}
                     >
                       <div>
                         <div>{format(day, 'EEE')}</div>
@@ -345,7 +360,7 @@ export function TimelinePage() {
                 <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
               </div>
               <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
+                <span className="h-4 w-9 rounded border border-dashed border-blue-300 bg-blue-100" /> Pending
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
@@ -423,9 +438,7 @@ function TimelineRow({
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
             'group min-h-[72px] border-b border-r p-1 text-left text-xs text-slate-400',
-            isAlternateRow
-              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
-              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
+            dayCellBackground(isAlternateRow),
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           onClick={() => {
@@ -458,7 +471,7 @@ function TimelineRow({
               className={cn(
                 'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
                 pending
-                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
+                  ? 'border border-dashed border-blue-300 bg-blue-100 text-blue-900'
                   : 'bg-blue-600 text-white'
               )}
               style={{
@@ -502,9 +515,7 @@ function MobileTimelineRow({
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
             'group min-h-[120px] border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
-            isAlternateRow
-              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
-              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
+            dayCellBackground(isAlternateRow),
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           onClick={() => {
@@ -537,7 +548,7 @@ function MobileTimelineRow({
               className={cn(
                 'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
                 pending
-                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
+                  ? 'border border-dashed border-blue-300 bg-blue-100 text-blue-900'
                   : 'bg-blue-600 text-white'
               )}
               style={{
