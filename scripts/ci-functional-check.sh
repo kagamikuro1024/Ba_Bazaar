@@ -188,8 +188,8 @@ BOOKABLE_BA_ID=$(json_get "data[0].id")
 BOOKING_BODY="{\"ba_id\":\"$BOOKABLE_BA_ID\",\"project_id\":\"$PROJECT_ID\",\"title\":\"CI booking $STAMP\",\"description\":\"CI booking flow\",\"start_date\":\"2026-09-01\",\"end_date\":\"2026-09-02\",\"capacity_percent\":50,\"priority\":\"MEDIUM\"}"
 request POST /bookings/request PM_PO "$BOOKING_BODY" >/dev/null
 assert_status 201
-PENDING_BOOKING_ID=$(json_get "data.id")
-json_assert "data.status === 'PENDING'"
+PENDING_BOOKING_ID=$(json_get "(data.booking ?? data).id")
+json_assert "(data.booking ?? data).status === 'PENDING'"
 request GET /bookings?status=PENDING BA_MANAGER >/dev/null
 assert_status 200
 json_assert "Array.isArray(data) && data.some((booking) => booking.id === '$PENDING_BOOKING_ID')"
@@ -200,7 +200,7 @@ json_assert "data.status === 'APPROVED'"
 REJECT_BODY="{\"ba_id\":\"$BOOKABLE_BA_ID\",\"project_id\":\"$PROJECT_ID\",\"title\":\"CI reject booking $STAMP\",\"description\":\"CI reject flow\",\"start_date\":\"2026-09-03\",\"end_date\":\"2026-09-04\",\"capacity_percent\":50,\"priority\":\"LOW\"}"
 request POST /bookings/request PM_PO "$REJECT_BODY" >/dev/null
 assert_status 201
-REJECT_BOOKING_ID=$(json_get "data.id")
+REJECT_BOOKING_ID=$(json_get "(data.booking ?? data).id")
 request POST "/bookings/$REJECT_BOOKING_ID/reject" BA_MANAGER '{"reject_reason":"CI reject reason"}' >/dev/null
 assert_status 200
 json_assert "data.status === 'REJECTED' && data.reject_reason === 'CI reject reason'"
