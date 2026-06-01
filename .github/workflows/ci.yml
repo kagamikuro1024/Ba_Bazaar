@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - minerals
+
+jobs:
+  validate:
+    name: Lint, Test, Typecheck, Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @ba-bazaar/api db:generate
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @ba-bazaar/api db:validate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck API
+        run: pnpm --filter @ba-bazaar/api typecheck
+
+      - name: Typecheck Web
+        run: pnpm --filter @ba-bazaar/web typecheck
+
+      - name: Test API
+        run: pnpm --filter @ba-bazaar/api test
+
+      - name: Build API
+        run: pnpm --filter @ba-bazaar/api build
+
+      - name: Build Web
+        run: pnpm --filter @ba-bazaar/web build
