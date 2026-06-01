@@ -360,7 +360,7 @@ export function TimelinePage() {
                 <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
               </div>
               <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed border-blue-300 bg-blue-100" /> Pending
+                <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
@@ -471,7 +471,7 @@ function TimelineRow({
               className={cn(
                 'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
                 pending
-                  ? 'border border-dashed border-blue-300 bg-blue-100 text-blue-900'
+                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
                   : 'bg-blue-600 text-white'
               )}
               style={{
@@ -548,7 +548,7 @@ function MobileTimelineRow({
               className={cn(
                 'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
                 pending
-                  ? 'border border-dashed border-blue-300 bg-blue-100 text-blue-900'
+                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
                   : 'bg-blue-600 text-white'
               )}
               style={{
