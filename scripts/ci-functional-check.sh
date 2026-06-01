@@ -7,6 +7,18 @@ STAMP="$(date +%s)"
 TMP_DIR="${TMPDIR:-/tmp}/ba-bazaar-ci-e2e-$STAMP"
 mkdir -p "$TMP_DIR"
 
+request_raw() {
+  local method="$1"
+  local path="$2"
+  local role="${3:-BA_MANAGER}"
+  local out="$TMP_DIR/response.json"
+  local code
+  code=$(curl -sS -o "$out" -w '%{http_code}' -X "$method" \
+    -H "x-mock-role: $role" "$BASE_URL$path")
+  printf '%s' "$code" > "$TMP_DIR/status"
+  cat "$out"
+}
+
 request() {
   local method="$1"
   local path="$2"
@@ -46,7 +58,7 @@ json_assert() {
 }
 
 echo "[e2e] health"
-request GET /health BA_MANAGER >/dev/null
+request_raw GET /health BA_MANAGER >/dev/null
 assert_status 200
 json_assert "data.status === 'ok'"
 

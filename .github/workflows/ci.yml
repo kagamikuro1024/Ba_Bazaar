@@ -106,7 +106,7 @@ jobs:
           pnpm --filter @ba-bazaar/api dev > /tmp/ba-bazaar-api.log 2>&1 &
           echo $! > /tmp/ba-bazaar-api.pid
           for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:3000/health >/dev/null; then
               exit 0
             fi
             sleep 1
