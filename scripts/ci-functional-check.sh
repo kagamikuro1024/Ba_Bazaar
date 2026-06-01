@@ -54,7 +54,16 @@ json_get() {
 }
 
 json_assert() {
-  node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync('$TMP_DIR/response.json','utf8')); if (!($1)) { console.error('Assertion failed: $1'); console.error(JSON.stringify(data,null,2)); process.exit(1); }"
+  local expression="$1"
+  EXPR="$expression" RESPONSE_FILE="$TMP_DIR/response.json" node <<'NODE'
+const fs = require('fs');
+const data = JSON.parse(fs.readFileSync(process.env.RESPONSE_FILE, 'utf8'));
+if (!eval(process.env.EXPR)) {
+  console.error(`Assertion failed: ${process.env.EXPR}`);
+  console.error(JSON.stringify(data, null, 2));
+  process.exit(1);
+}
+NODE
 }
 
 echo "[e2e] health"
