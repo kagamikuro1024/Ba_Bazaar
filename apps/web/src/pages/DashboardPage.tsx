@@ -60,37 +60,16 @@ export function DashboardPage() {
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
         <CapacitySummary summary={summary.data} />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm uppercase">Legend</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" /> Rejected
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm uppercase">Capacity Rules</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm text-slate-600">
-              <p>Approved capacity cannot exceed 100% for overlapping dates.</p>
-              <p>Pending requests are allowed but counted as overbook risk.</p>
-              <p>BA Manager decides approve/reject.</p>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm uppercase">Capacity Rules</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm text-slate-600">
+            <p>Approved capacity cannot exceed 100% for overlapping dates.</p>
+            <p>Pending requests are allowed but counted as overbook risk.</p>
+            <p>BA Manager decides approve/reject.</p>
+          </CardContent>
+        </Card>
       </div>
       <Card>
         <CardHeader>

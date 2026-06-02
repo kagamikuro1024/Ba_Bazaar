@@ -12,7 +12,7 @@ import {
   startOfWeek,
   startOfMonth
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   apiFetch,
   getMockRole,
@@ -82,6 +82,10 @@ function bookingBarClass(status: Booking['status']) {
   switch (status) {
     case 'PENDING':
       return 'border border-dashed border-amber-400 bg-amber-100 text-amber-800';
+    case 'COMPLETED':
+      return 'border border-emerald-200 bg-emerald-100/90 text-emerald-800';
+    case 'CANCELLED':
+      return 'border border-rose-200 bg-rose-100/80 text-rose-700';
     case 'REJECTED':
       return 'border border-gray-300 bg-gray-100 text-gray-700 opacity-80';
     default:
@@ -210,6 +214,7 @@ export function TimelinePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [compactMobileInfo, setCompactMobileInfo] = useState(false);
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role !== 'BA';
   const isMobile = useIsMobile();
@@ -392,8 +397,8 @@ export function TimelinePage() {
         </div>
       </div>
       <Card className="overflow-hidden">
-          <CardHeader className="border-b border-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardHeader className="gap-0 p-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
               <div className="flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start">
                 <Button variant="secondary" size="icon" onClick={() => move(-1)}>
                   <ChevronLeft className="h-4 w-4" />
@@ -425,6 +430,43 @@ export function TimelinePage() {
                   ))}
                 </div>
               </label>
+            </div>
+            <div className="w-full border-b border-slate-200 bg-slate-50/50 px-6 py-3">
+              <button
+                type="button"
+                onClick={() => setLegendCollapsed((current) => !current)}
+                className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-600"
+              >
+                <span>Legend</span>
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 transition-transform',
+                    legendCollapsed && '-rotate-90'
+                  )}
+                />
+              </button>
+              {!legendCollapsed ? (
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded border border-emerald-200 bg-emerald-100/90" /> Completed
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" /> Rejected
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded border border-rose-200 bg-rose-100/80" /> Cancelled
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
+                  </div>
+                </div>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent className="relative p-0">
