@@ -61,6 +61,17 @@ function dayCellBackground(isAlternateRow: boolean) {
     : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]';
 }
 
+function bookingBarClass(status: Booking['status']) {
+  switch (status) {
+    case 'PENDING':
+      return 'border border-dashed border-amber-400 bg-amber-100 text-amber-800';
+    case 'REJECTED':
+      return 'border border-gray-300 bg-gray-100 text-gray-700 opacity-80';
+    default:
+      return 'bg-blue-600 text-white';
+  }
+}
+
 type BookingLayout = {
   booking: Booking;
   left: number;
@@ -451,6 +462,9 @@ export function TimelinePage() {
                 <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
               </div>
               <div className="flex items-center gap-2">
+                <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" /> Rejected
+              </div>
+              <div className="flex items-center gap-2">
                 <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
               </div>
             </CardContent>
@@ -551,16 +565,12 @@ function TimelineRow({
       >
         <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
           {layouts.map(({ booking, left, span, lane }) => {
-            const pending = booking.status === 'PENDING';
-
             return (
               <button
                 key={booking.id}
                 className={cn(
                   'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  pending
-                    ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
-                    : 'bg-blue-600 text-white'
+                  bookingBarClass(booking.status)
                 )}
                 style={{
                   left: `${(left / days.length) * 100}%`,
@@ -628,16 +638,12 @@ function MobileTimelineRow({
       >
         <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
           {layouts.map(({ booking, left, span, lane }) => {
-            const pending = booking.status === 'PENDING';
-
             return (
               <button
                 key={booking.id}
                 className={cn(
                   'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  pending
-                    ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
-                    : 'bg-blue-600 text-white'
+                  bookingBarClass(booking.status)
                 )}
                 style={{
                   left: `${(left / days.length) * 100}%`,

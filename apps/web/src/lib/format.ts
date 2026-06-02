@@ -20,6 +20,7 @@ export function statusTone(status: BookingStatus | BAStatus) {
     case 'ON_LEAVE':
       return 'warning';
     case 'REJECTED':
+      return 'neutral';
     case 'RESIGNED':
     case 'CANCELLED':
       return 'danger';

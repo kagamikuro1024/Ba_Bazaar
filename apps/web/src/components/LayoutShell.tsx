@@ -57,7 +57,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 xl:max-w-[1500px] 2xl:max-w-[1880px]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
               BA Bazaar
@@ -95,7 +95,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:max-w-[1500px] 2xl:max-w-[1880px]">
         <Card className="h-fit p-2">
           <nav className="grid gap-1" aria-label="Main navigation">
             {navigation.filter((item) => item.roles.includes(role)).map((item) => {
