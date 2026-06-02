@@ -278,10 +278,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-white/70 bg-white/90 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/12 lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="flex items-center justify-around gap-1">
+        <div className="flex items-stretch justify-around gap-1">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
 
@@ -290,22 +290,35 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                className={({ isActive }) =>
-                  [
-                    'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors',
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
-                  ].join(' ')
-                }
+                className="min-w-0 flex-1"
               >
-                <Icon className="h-5 w-5" aria-hidden="true" />
-                <span className="sr-only">{item.label}</span>
-                {item.to === '/notifications' && unreadCount > 0 ? (
-                  <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white ring-2 ring-white">
-                    {unreadCount}
-                  </span>
-                ) : null}
+                {({ isActive }) => (
+                  <div
+                    className={[
+                      'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
+                      isActive
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
+                    ].join(' ')}
+                  >
+                    <div
+                      className={[
+                        'relative flex h-8 w-12 items-center justify-center rounded-full transition-colors',
+                        isActive ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'bg-transparent'
+                      ].join(' ')}
+                    >
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                      {item.to === '/notifications' && unreadCount > 0 ? (
+                        <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="block w-full truncate text-[11px] font-medium leading-none">
+                      {item.label}
+                    </span>
+                  </div>
+                )}
               </NavLink>
             );
           })}
