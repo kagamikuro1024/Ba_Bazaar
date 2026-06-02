@@ -130,7 +130,7 @@ export function ReportsPage() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="grid gap-3 border-b border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-4">
+            <div className="grid gap-3 border-b border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start md:p-4">
               <div className="grid gap-1">
                 <label className="relative block">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -162,7 +162,7 @@ export function ReportsPage() {
               <select
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(event.target.value)}
-                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                className="h-10 self-start rounded-md border border-slate-200 bg-white px-3 text-sm"
                 aria-label="Rows per page"
               >
                 {pageSizeOptions.map((size) => (
