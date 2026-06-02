@@ -782,7 +782,7 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
       <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
       <span
         className={cn(
-          'shrink-0 overflow-hidden text-slate-500 transition-all duration-200 ease-out',
+          'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
           compact ? 'max-w-0 translate-x-2 opacity-0' : 'max-w-20 translate-x-0 opacity-100'
         )}
       >
