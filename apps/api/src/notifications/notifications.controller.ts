@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from './notifications.service';
@@ -20,5 +20,13 @@ export class NotificationsController {
   @Post(':id/read')
   async markRead(@Req() request: Request, @Param('id') id: string) {
     return this.notificationsService.markRead(await this.authService.getCurrentUser(request), id);
+  }
+
+  @Post('reminders/run')
+  async runReminders(@Req() request: Request, @Query('date') date?: string) {
+    return this.notificationsService.runReminders(
+      await this.authService.getCurrentUser(request),
+      date
+    );
   }
 }

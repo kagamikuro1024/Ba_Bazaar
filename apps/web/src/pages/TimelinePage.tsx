@@ -973,6 +973,14 @@ function BookingDetailModal({
       }),
     onSuccess: onDone
   });
+  const cancel = useMutation({
+    mutationFn: (reason: string) =>
+      apiFetch(`/api/bookings/${booking?.id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ cancel_reason: reason })
+      }),
+    onSuccess: onDone
+  });
 
   if (!booking) return null;
 
@@ -995,6 +1003,7 @@ function BookingDetailModal({
             <p>Requester: {booking.requester.full_name}</p>
             {booking.notes ? <p>Notes: {booking.notes}</p> : null}
             {booking.reject_reason ? <p>Reject reason: {booking.reject_reason}</p> : null}
+            {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
         {role === 'BA_MANAGER' && booking.status === 'PENDING' ? (
@@ -1011,9 +1020,23 @@ function BookingDetailModal({
             </Button>
           </div>
         ) : null}
-        {approve.error || reject.error ? (
+        {role === 'BA_MANAGER' &&
+        (booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS') ? (
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const reason = window.prompt('Cancel reason');
+                if (reason) cancel.mutate(reason);
+              }}
+            >
+              Cancel booking
+            </Button>
+          </div>
+        ) : null}
+        {approve.error || reject.error || cancel.error ? (
           <div className="rounded-md bg-rose-50 p-3 text-rose-700">
-            {(approve.error ?? reject.error)?.message}
+            {(approve.error ?? reject.error ?? cancel.error)?.message}
           </div>
         ) : null}
       </div>

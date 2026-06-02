@@ -264,7 +264,12 @@ export class BookingsService {
       id,
       reject_reason: rejectReason
     });
-    await this.notifyRequester(updated, 'BOOKING_REJECTED', 'Booking rejected');
+    await this.notifyRequester(
+      updated,
+      'BOOKING_REJECTED',
+      'Booking rejected',
+      `Reason: ${rejectReason}`
+    );
     return updated;
   }
 
@@ -291,8 +296,18 @@ export class BookingsService {
       id,
       cancel_reason: cancelReason
     });
-    await this.notifyRequester(updated, 'BOOKING_CANCELLED', 'Booking cancelled');
-    await this.notifyAssignedBA(updated, 'BOOKING_CANCELLED', 'Booking cancelled');
+    await this.notifyRequester(
+      updated,
+      'BOOKING_CANCELLED',
+      'Booking cancelled',
+      `Reason: ${cancelReason}`
+    );
+    await this.notifyAssignedBA(
+      updated,
+      'BOOKING_CANCELLED',
+      'Booking cancelled',
+      `Reason: ${cancelReason}`
+    );
     return updated;
   }
 
@@ -447,14 +462,15 @@ export class BookingsService {
   private async notifyRequester(
     booking: { id: string; title: string; requester_id: string },
     type: string,
-    title: string
+    title: string,
+    detail?: string
   ) {
     await this.prisma.notification.create({
       data: {
         recipient_id: booking.requester_id,
         type,
         title,
-        message: booking.title,
+        message: detail ? `${booking.title}\n${detail}` : booking.title,
         related_entity_type: 'Booking',
         related_entity_id: booking.id
       }
@@ -464,7 +480,8 @@ export class BookingsService {
   private async notifyAssignedBA(
     booking: { id: string; title: string; ba: { user_id: string | null } },
     type: string,
-    title: string
+    title: string,
+    detail?: string
   ) {
     if (!booking.ba.user_id) {
       return;
@@ -475,7 +492,7 @@ export class BookingsService {
         recipient_id: booking.ba.user_id,
         type,
         title,
-        message: booking.title,
+        message: detail ? `${booking.title}\n${detail}` : booking.title,
         related_entity_type: 'Booking',
         related_entity_id: booking.id
       }

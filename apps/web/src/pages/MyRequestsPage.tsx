@@ -67,6 +67,7 @@ export function MyRequestsPage() {
                 {formatDate(booking.start_date)} - {formatDate(booking.end_date)} · {booking.capacity_percent}% · {booking.priority}
               </p>
               {booking.reject_reason ? <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">Reject reason: {booking.reject_reason}</p> : null}
+              {booking.cancel_reason ? <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">Cancel reason: {booking.cancel_reason}</p> : null}
               {editing?.id === booking.id ? (
                 <ResubmitForm
                   booking={booking}
