@@ -394,27 +394,27 @@ export function TimelinePage() {
       <Card className="overflow-hidden">
           <CardHeader className="border-b border-slate-200">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-fit flex-1 items-center gap-2 max-[420px]:w-full max-[420px]:flex-none">
+              <div className="flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start">
                 <Button variant="secondary" size="icon" onClick={() => move(-1)}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
+                <Button variant="secondary" className="flex-1 px-3 sm:flex-none" onClick={() => setAnchorDate(initialWeek)}>
                   Today
                 </Button>
                 <Button variant="secondary" size="icon" onClick={() => move(1)}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <label className="flex min-w-fit flex-1 items-center justify-end gap-2 text-sm font-medium text-slate-600 max-[420px]:w-full max-[420px]:flex-none max-[420px]:justify-between">
+              <label className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
                 <span className="hidden sm:inline">View mode</span>
-                <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-1">
+                <div className="grid w-full grid-cols-2 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
                   {(['week', 'month'] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => setViewMode(mode)}
                       className={cn(
-                        'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                        'w-full rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
                         viewMode === mode
                           ? 'bg-white text-slate-950 shadow-sm'
                           : 'text-slate-600 hover:text-slate-950'

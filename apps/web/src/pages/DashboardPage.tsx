@@ -122,7 +122,7 @@ function CapacitySummary({ summary }: { summary?: CapacitySummaryData }) {
         <CardTitle className="text-sm uppercase">Capacity Summary</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="mx-auto grid h-28 w-28 place-items-center">
+        <div className="relative mx-auto grid h-28 w-28 place-items-center">
           <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
             <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="10" />
             <circle
