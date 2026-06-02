@@ -62,9 +62,20 @@ export class AuthService {
     }
 
     const normalized = value.trim().toUpperCase();
+    const compact = normalized.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const aliases: Record<string, UserRole> = {
+      BUSINESS_ANALYST: UserRole.BA,
+      BA: UserRole.BA,
+      PM_PO: UserRole.PM_PO,
+      PMPO: UserRole.PM_PO,
+      PRODUCT_OWNER: UserRole.PM_PO,
+      PROJECT_MANAGER: UserRole.PM_PO,
+      BA_MANAGER: UserRole.BA_MANAGER,
+      BAMANAGER: UserRole.BA_MANAGER
+    };
 
-    if (normalized === 'BUSINESS_ANALYST') {
-      return UserRole.BA;
+    if (aliases[compact]) {
+      return aliases[compact];
     }
 
     return Object.values(UserRole).includes(normalized as UserRole)

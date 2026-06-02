@@ -232,7 +232,10 @@ export class BAService {
     level: BALevel;
     avatar_url: string | null;
     status: BAStatus;
-    skill_tags: Array<{ id: string; tag: { id: string; name: string; group: string; status: string } }>;
+    skill_tags: Array<
+      | { tag: { id: string; name: string; group: string; status: string } }
+      | { id: string; name: string; group: string; status: string }
+    >;
   }) {
     return {
       id: ba.id,
@@ -240,7 +243,7 @@ export class BAService {
       level: ba.level,
       avatar_url: ba.avatar_url,
       status: ba.status,
-      skill_tags: ba.skill_tags
+      skill_tags: ba.skill_tags.map((item) => ('tag' in item ? item.tag : item))
     };
   }
 
@@ -294,6 +297,13 @@ export class BAService {
 
     if (!tagId) {
       throw new BadRequestException('tag_id is required');
+    }
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        tagId
+      )
+    ) {
+      throw new BadRequestException('tag_id must be a valid UUID of an existing active tag');
     }
 
     const tag = await this.prisma.skillTag.findFirst({
