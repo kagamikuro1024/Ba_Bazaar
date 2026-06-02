@@ -363,55 +363,68 @@ export function TimelinePage() {
       {bas.error || bookings.error || projects.error || summary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
       ) : null}
+      <div className="flex justify-end px-1">
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-auto lg:flex-nowrap">
+          <select
+            value={baFilter}
+            onChange={(event) => setBaFilter(event.target.value)}
+            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-48"
+          >
+            <option value="">All BA</option>
+            {(bas.data ?? []).map((ba) => (
+              <option key={ba.id} value={ba.id}>
+                {ba.full_name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={projectFilter}
+            onChange={(event) => setProjectFilter(event.target.value)}
+            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-52"
+          >
+            <option value="">All Projects</option>
+            {(projects.data ?? []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <Card className="overflow-hidden">
           <CardHeader className="border-b border-slate-200">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div />
-              <div className="grid gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_auto_auto_auto] lg:flex lg:flex-wrap">
-                <select
-                  value={baFilter}
-                  onChange={(event) => setBaFilter(event.target.value)}
-                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                >
-                  <option value="">All BA</option>
-                  {(bas.data ?? []).map((ba) => (
-                    <option key={ba.id} value={ba.id}>
-                      {ba.full_name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={projectFilter}
-                  onChange={(event) => setProjectFilter(event.target.value)}
-                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                >
-                  <option value="">All Projects</option>
-                  {(projects.data ?? []).map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 sm:contents">
-                  <select
-                    value={viewMode}
-                    onChange={(event) => setViewMode(event.target.value as 'week' | 'month')}
-                    className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                  >
-                    <option value="week">Week</option>
-                    <option value="month">Month</option>
-                  </select>
-                  <Button variant="secondary" size="icon" onClick={() => move(-1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
-                    Today
-                  </Button>
-                  <Button variant="secondary" size="icon" onClick={() => move(1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-fit flex-1 items-center gap-2 max-[420px]:w-full max-[420px]:flex-none">
+                <Button variant="secondary" size="icon" onClick={() => move(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
+                  Today
+                </Button>
+                <Button variant="secondary" size="icon" onClick={() => move(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
+              <label className="flex min-w-fit flex-1 items-center justify-end gap-2 text-sm font-medium text-slate-600 max-[420px]:w-full max-[420px]:flex-none max-[420px]:justify-between">
+                <span className="hidden sm:inline">View mode</span>
+                <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-1">
+                  {(['week', 'month'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setViewMode(mode)}
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                        viewMode === mode
+                          ? 'bg-white text-slate-950 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-950'
+                      )}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </label>
             </div>
           </CardHeader>
           <CardContent className="relative p-0">
