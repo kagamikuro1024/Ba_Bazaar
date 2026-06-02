@@ -38,13 +38,7 @@ export function BADirectoryPage() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-950">BA Directory</h2>
-          <p className="text-sm text-slate-600">
-            Manager sees all BA statuses. PM/PO sees active public profiles only.
-          </p>
-        </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
         {role === 'BA_MANAGER' ? (
           <Button onClick={() => setShowCreate((value) => !value)}>
             <Plus className="h-4 w-4" /> Create BA

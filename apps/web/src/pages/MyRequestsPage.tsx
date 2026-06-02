@@ -36,11 +36,7 @@ export function MyRequestsPage() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-950">My Requests</h2>
-          <p className="text-sm text-slate-600">Requests created by the current PM/PO.</p>
-        </div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
         <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border px-3 text-sm">
           <option value="">All status</option>
           {['PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((item) => <option key={item} value={item}>{item}</option>)}

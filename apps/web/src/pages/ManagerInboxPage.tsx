@@ -26,10 +26,6 @@ export function ManagerInboxPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-950">Manager Inbox</h2>
-        <p className="text-sm text-slate-600">Pending booking requests awaiting approval.</p>
-      </div>
       {(approve.error || reject.error) ? (
         <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
           {(approve.error ?? reject.error)?.message}

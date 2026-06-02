@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -20,6 +20,46 @@ type LayoutShellProps = {
   children: ReactNode;
 };
 
+type PageIntro = {
+  title: string;
+  body: string;
+};
+
+const pageIntros: Record<string, PageIntro> = {
+  '/': {
+    title: 'Dashboard',
+    body: 'Use this overview to monitor BA capacity, utilization rules, and shortcuts into the main booking workflow.'
+  },
+  '/timeline': {
+    title: 'Timeline',
+    body: 'Plan BA workload on the Gantt timeline. Filter by BA or project, move between weeks or months, and create booking requests from open date slots.'
+  },
+  '/my-schedule': {
+    title: 'My Schedule',
+    body: 'Review your assigned bookings, upcoming work, and any schedule changes that affect your workload.'
+  },
+  '/my-requests': {
+    title: 'My Requests',
+    body: 'Track booking requests you created, including pending approvals, rejected requests, and completed decisions.'
+  },
+  '/manager/inbox': {
+    title: 'Manager Inbox',
+    body: 'Review pending booking requests, check capacity risks, and approve or reject work allocations.'
+  },
+  '/crm/ba': {
+    title: 'BA Directory',
+    body: 'Browse BA profiles, skills, levels, and availability. Use the directory to understand who can be booked.'
+  },
+  '/reports': {
+    title: 'Reports',
+    body: 'Analyze utilization by month, search BA rows, paginate large result sets, and export CSV reports.'
+  },
+  '/notifications': {
+    title: 'Notifications',
+    body: 'See booking updates, approval decisions, and workflow alerts in one place.'
+  }
+};
+
 const navigation: Array<{
   to: string;
   label: string;
@@ -36,11 +76,20 @@ const navigation: Array<{
   { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
 ];
 
+function getIntroKey(pathname: string) {
+  if (pathname.startsWith('/crm/ba/')) return '/crm/ba';
+  return pageIntros[pathname] ? pathname : '';
+}
+
 export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const [role, setRole] = useState(getMockRole());
   const [notificationOpen, setNotificationOpen] = useState(false);
   const location = useLocation();
+  const introKey = getIntroKey(location.pathname);
+  const intro = introKey ? pageIntros[introKey] : undefined;
+  const storageKey = introKey ? `ba-bazaar:intro:${introKey}` : '';
+  const [introOpen, setIntroOpen] = useState(false);
   const notifications = useQuery({
     queryKey: ['notifications', role],
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications')
@@ -55,10 +104,39 @@ export function LayoutShell({ children }: LayoutShellProps) {
   });
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const recentNotifications = (notifications.data ?? []).slice(0, 5);
+  const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
+  const mobileNavigation = useMemo(() => {
+    const timelineItem = visibleNavigation.find((item) => item.to === '/timeline');
+    const otherItems = visibleNavigation.filter((item) => item.to !== '/timeline');
+    if (!timelineItem) return visibleNavigation;
+
+    const middleIndex = Math.floor(otherItems.length / 2);
+    return [
+      ...otherItems.slice(0, middleIndex),
+      timelineItem,
+      ...otherItems.slice(middleIndex)
+    ];
+  }, [visibleNavigation]);
 
   useEffect(() => {
     setNotificationOpen(false);
   }, [location.pathname, role]);
+
+  useEffect(() => {
+    if (!intro || !storageKey) {
+      setIntroOpen(false);
+      return;
+    }
+
+    setIntroOpen(window.localStorage.getItem(storageKey) !== 'seen');
+  }, [intro, storageKey]);
+
+  function dismissIntro() {
+    if (storageKey) {
+      window.localStorage.setItem(storageKey, 'seen');
+    }
+    setIntroOpen(false);
+  }
 
   function handleRoleChange(nextRole: UserRole) {
     setMockRole(nextRole);
@@ -89,7 +167,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
             <h1 className="text-xl font-bold text-slate-950">Booking + CRM</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <Button
                 variant="secondary"
                 size="icon"
@@ -105,7 +183,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 </span>
               ) : null}
               {notificationOpen ? (
-                <Card className="absolute right-0 top-12 z-30 w-[min(24rem,calc(100vw-2rem))] shadow-lg">
+                <Card className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] shadow-lg">
                   <CardContent className="p-0">
                     <div className="flex items-center justify-between border-b px-4 py-3">
                       <div>
@@ -168,10 +246,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:max-w-[1500px] 2xl:max-w-[1880px]">
-        <Card className="h-fit p-2">
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 pb-24 pt-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]">
+        <Card className="hidden h-fit p-2 lg:block">
           <nav className="grid gap-1" aria-label="Main navigation">
-            {navigation.filter((item) => item.roles.includes(role)).map((item) => {
+            {visibleNavigation.map((item) => {
               const Icon = item.icon;
 
               return (
@@ -198,6 +276,56 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
         <main>{children}</main>
       </div>
+
+      <nav
+        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-white/70 bg-white/90 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
+        aria-label="Mobile navigation"
+      >
+        <div className="flex items-center justify-around gap-1">
+          {mobileNavigation.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  [
+                    'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors',
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
+                  ].join(' ')
+                }
+              >
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">{item.label}</span>
+                {item.to === '/notifications' && unreadCount > 0 ? (
+                  <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white ring-2 ring-white">
+                    {unreadCount}
+                  </span>
+                ) : null}
+              </NavLink>
+            );
+          })}
+        </div>
+      </nav>
+
+      {introOpen && intro ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">
+          <Card className="w-full max-w-md shadow-2xl">
+            <CardContent className="grid gap-4 p-5">
+              <div>
+                <p className="text-xs font-bold uppercase text-blue-700">First visit</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-950">{intro.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{intro.body}</p>
+              </div>
+              <Button onClick={dismissIntro}>Got it</Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

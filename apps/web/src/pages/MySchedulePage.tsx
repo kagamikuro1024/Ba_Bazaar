@@ -12,10 +12,6 @@ export function MySchedulePage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-950">My Schedule</h2>
-        <p className="text-sm text-slate-600">Approved, in-progress, and completed assignments.</p>
-      </div>
       {schedule.isLoading ? (
         <Card><CardContent className="p-5 text-sm text-slate-600">Loading schedule...</CardContent></Card>
       ) : null}

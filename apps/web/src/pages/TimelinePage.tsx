@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addDays,
@@ -22,9 +22,8 @@ import {
   type Project
 } from '@/lib/api';
 import { BAIdentity, Field, StatusBadge } from '@/components/common';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { capacityColor, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -34,6 +33,23 @@ type RequestDraft = {
   start_date: string;
   end_date: string;
   direct: boolean;
+};
+
+type DraftSelection = {
+  ba_id: string;
+  start: Date;
+  end: Date;
+};
+
+type ActiveDraftSelection = DraftSelection & {
+  pointerId: number;
+};
+
+
+type DragScrollState = {
+  pointerId: number;
+  startX: number;
+  startScrollLeft: number;
 };
 
 type RangeCheck = {
@@ -133,6 +149,26 @@ function computeRowMinHeight(
   return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
 }
 
+function sortSelectionRange(selection: DraftSelection) {
+  return selection.start <= selection.end
+    ? { start: selection.start, end: selection.end }
+    : { start: selection.end, end: selection.start };
+}
+
+function isTextSelectionTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest('button, a, input, select, textarea'));
+}
+
+function selectionToDraft(selection: DraftSelection): RequestDraft {
+  const { start, end } = sortSelectionRange(selection);
+  return {
+    ba_id: selection.ba_id,
+    start_date: format(start, 'yyyy-MM-dd'),
+    end_date: format(end, 'yyyy-MM-dd'),
+    direct: false
+  };
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window === 'undefined' ? false : window.innerWidth < 1024
@@ -154,8 +190,10 @@ export function TimelinePage() {
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
+  const [activeSelection, setActiveSelection] = useState<ActiveDraftSelection | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [compactMobileInfo, setCompactMobileInfo] = useState(false);
+  const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role !== 'BA';
   const isMobile = useIsMobile();
@@ -227,6 +265,56 @@ export function TimelinePage() {
     setCompactMobileInfo((current) => (current === nextCompact ? current : nextCompact));
   }
 
+  function handleTimelineWheel(event: WheelEvent<HTMLDivElement>) {
+    if (isMobile || !event.shiftKey || event.deltaY === 0) return;
+    event.preventDefault();
+    event.currentTarget.scrollLeft += event.deltaY;
+  }
+
+  function beginSelection(baId: string, day: Date, pointerId: number) {
+    setActiveSelection({ ba_id: baId, start: day, end: day, pointerId });
+  }
+
+  function updateSelection(baId: string, day: Date, pointerId: number) {
+    setActiveSelection((current) => {
+      if (!current || current.pointerId !== pointerId || current.ba_id !== baId) return current;
+      if (isSameDay(current.end, day)) return current;
+      return { ...current, end: day };
+    });
+  }
+
+  function finishSelection(pointerId: number) {
+    setActiveSelection((current) => {
+      if (!current || current.pointerId !== pointerId) return current;
+      setDraft(selectionToDraft(current));
+      return null;
+    });
+  }
+
+  function isSelecting(pointerId: number) {
+    return activeSelection?.pointerId === pointerId;
+  }
+
+  function beginDragScroll(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || isTextSelectionTarget(event.target)) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragScroll({
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: event.currentTarget.scrollLeft
+    });
+  }
+
+  function updateDragScroll(event: PointerEvent<HTMLDivElement>) {
+    if (!dragScroll || dragScroll.pointerId !== event.pointerId || isSelecting(event.pointerId)) return;
+    event.preventDefault();
+    event.currentTarget.scrollLeft = dragScroll.startScrollLeft - (event.clientX - dragScroll.startX);
+  }
+
+  function endDragScroll(pointerId: number) {
+    setDragScroll((current) => (current?.pointerId === pointerId ? null : current));
+  }
+
   return (
     <div className="grid gap-5">
       {successMessage ? (
@@ -240,19 +328,15 @@ export function TimelinePage() {
       {bas.error || bookings.error || projects.error || summary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
       ) : null}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <Card className="overflow-hidden">
+      <Card className="overflow-hidden">
           <CardHeader className="border-b border-slate-200">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase text-blue-700">1. Resource Timeline</p>
-                <CardTitle>Gantt-style BA workload</CardTitle>
-              </div>
-              <div className="flex flex-wrap gap-2">
+              <div />
+              <div className="grid gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_auto_auto_auto] lg:flex lg:flex-wrap">
                 <select
                   value={baFilter}
                   onChange={(event) => setBaFilter(event.target.value)}
-                  className="h-9 rounded-md border px-2 text-sm"
+                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
                 >
                   <option value="">All BA</option>
                   {(bas.data ?? []).map((ba) => (
@@ -264,7 +348,7 @@ export function TimelinePage() {
                 <select
                   value={projectFilter}
                   onChange={(event) => setProjectFilter(event.target.value)}
-                  className="h-9 rounded-md border px-2 text-sm"
+                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
                 >
                   <option value="">All Projects</option>
                   {(projects.data ?? []).map((project) => (
@@ -273,28 +357,43 @@ export function TimelinePage() {
                     </option>
                   ))}
                 </select>
-                <select
-                  value={viewMode}
-                  onChange={(event) => setViewMode(event.target.value as 'week' | 'month')}
-                  className="h-9 rounded-md border px-2 text-sm"
-                >
-                  <option value="week">Week</option>
-                  <option value="month">Month</option>
-                </select>
-                <Button variant="secondary" size="icon" onClick={() => move(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="secondary" onClick={() => setAnchorDate(initialWeek)}>
-                  Today
-                </Button>
-                <Button variant="secondary" size="icon" onClick={() => move(1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 sm:contents">
+                  <select
+                    value={viewMode}
+                    onChange={(event) => setViewMode(event.target.value as 'week' | 'month')}
+                    className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
+                  >
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                  </select>
+                  <Button variant="secondary" size="icon" onClick={() => move(-1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
+                    Today
+                  </Button>
+                  <Button variant="secondary" size="icon" onClick={() => move(1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="relative p-0">
-            <div ref={timelineScrollRef} className="overflow-x-auto" onScroll={handleTimelineScroll}>
+            <div
+              ref={timelineScrollRef}
+              className={cn(
+                'overflow-x-auto',
+                !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
+                activeSelection && 'select-none touch-none'
+              )}
+              onScroll={handleTimelineScroll}
+              onWheel={handleTimelineWheel}
+              onPointerDown={beginDragScroll}
+              onPointerMove={updateDragScroll}
+              onPointerUp={(event) => endDragScroll(event.pointerId)}
+              onPointerCancel={(event) => endDragScroll(event.pointerId)}
+            >
               <div
                 className={cn('grid', !isMobile && 'min-w-[980px]')}
                 style={{
@@ -368,6 +467,10 @@ export function TimelinePage() {
                       rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
+                      activeSelection={activeSelection?.ba_id === ba.id ? activeSelection : null}
+                      onSelectionStart={beginSelection}
+                      onSelectionMove={updateSelection}
+                      onSelectionEnd={finishSelection}
                       onEmptyClick={(date) =>
                         setDraft({
                           ba_id: ba.id,
@@ -448,42 +551,6 @@ export function TimelinePage() {
           </CardContent>
         </Card>
 
-        <aside className="grid gap-4">
-          <CapacitySummary summary={summary.data} />
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm uppercase">Legend</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" /> Rejected
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm uppercase">Capacity Rules</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm text-slate-600">
-              <p>Approved capacity cannot exceed 100% for overlapping dates.</p>
-              <p>Pending requests are allowed but counted as overbook risk.</p>
-              <p>BA Manager decides approve/reject.</p>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
-
-      <WorkflowBand />
-
       <CreateBookingModal
         draft={draft}
         role={role}
@@ -515,6 +582,10 @@ function TimelineRow({
   rowMinHeight,
   isAlternateRow,
   canCreateBooking,
+  activeSelection,
+  onSelectionStart,
+  onSelectionMove,
+  onSelectionEnd,
   onEmptyClick,
   onBookingClick
 }: {
@@ -524,10 +595,15 @@ function TimelineRow({
   rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
+  activeSelection: DraftSelection | null;
+  onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
+  onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
+  onSelectionEnd: (pointerId: number) => void;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
   const layouts = computeBookingLayouts(days, bookings);
+  const selectedRange = activeSelection ? sortSelectionRange(activeSelection) : null;
 
   return (
     <>
@@ -540,17 +616,34 @@ function TimelineRow({
         aria-hidden="true"
       />
       <div className="relative col-span-full hidden" />
-      {days.map((day) => (
+      {days.map((day) => {
+        const isSelected = Boolean(
+          selectedRange && day >= selectedRange.start && day <= selectedRange.end
+        );
+
+        return (
         <button
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
-            'group border-b border-r p-1 text-left text-xs text-slate-400',
+            'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
             dayCellBackground(isAlternateRow),
-            canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
+            canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
+            isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
           )}
           style={{ minHeight: rowMinHeight }}
-          onClick={() => {
-            if (canCreateBooking) onEmptyClick(day);
+          onPointerDown={(event) => {
+            if (!canCreateBooking || event.button !== 0) return;
+            onSelectionStart(ba.id, day, event.pointerId);
+          }}
+          onPointerEnter={(event) => {
+            if (canCreateBooking && event.buttons === 1) onSelectionMove(ba.id, day, event.pointerId);
+          }}
+          onPointerUp={(event) => {
+            if (canCreateBooking) onSelectionEnd(event.pointerId);
+          }}
+          onPointerCancel={(event) => onSelectionEnd(event.pointerId)}
+          onClick={(event) => {
+            if (canCreateBooking && event.detail === 0) onEmptyClick(day);
           }}
           aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
         >
@@ -558,7 +651,8 @@ function TimelineRow({
             <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
           ) : null}
         </button>
-      ))}
+        );
+      })}
       <div
         className="pointer-events-none relative grid"
         style={{ gridColumn: `2 / span ${days.length}` }}
@@ -617,7 +711,7 @@ function MobileTimelineRow({
         <button
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
-            'group border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
+            'group select-none border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
             dayCellBackground(isAlternateRow),
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
@@ -662,7 +756,6 @@ function MobileTimelineRow({
     </>
   );
 }
-
 function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) {
   const initials = ba.full_name
     .split(' ')
@@ -696,59 +789,6 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
         - {ba.level}
       </span>
     </div>
-  );
-}
-
-function CapacitySummary({
-  summary
-}: {
-  summary?: { average_capacity: number; counts: Record<string, number> };
-}) {
-  const average = summary?.average_capacity ?? 0;
-  const circumference = 2 * Math.PI * 42;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm uppercase">Capacity Summary</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="mx-auto grid h-28 w-28 place-items-center">
-          <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="10" />
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="#2563eb"
-              strokeWidth="10"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference - (Math.min(average, 100) / 100) * circumference}
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="absolute text-center">
-            <p className="text-2xl font-bold text-slate-950">{average}%</p>
-            <p className="text-xs text-slate-500">Average</p>
-          </div>
-        </div>
-        {[
-          ['0-40%', 'Free', summary?.counts.free ?? 0, 'bg-emerald-500'],
-          ['40-80%', 'Working', summary?.counts.working ?? 0, 'bg-amber-500'],
-          ['80-100%', 'Near full', summary?.counts.near_full ?? 0, 'bg-orange-500'],
-          ['>100%', 'Overbook', summary?.counts.overbook ?? 0, 'bg-rose-500']
-        ].map(([range, label, count, color]) => (
-          <div key={range} className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2">
-              <span className={cn('h-2.5 w-2.5 rounded-full', color as string)} />
-              {range} · {label}
-            </span>
-            <strong>{count} BA</strong>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -1041,25 +1081,5 @@ function BookingDetailModal({
         ) : null}
       </div>
     </Modal>
-  );
-}
-
-function WorkflowBand() {
-  return (
-    <Card>
-      <CardContent className="grid gap-3 p-5 md:grid-cols-4">
-        {[
-          ['1', 'PM/PO creates request', 'bg-blue-50 border-blue-100'],
-          ['2', 'Request pending', 'bg-amber-50 border-amber-100'],
-          ['3', 'Manager approves/rejects', 'bg-violet-50 border-violet-100'],
-          ['4', 'Schedule and notifications update', 'bg-emerald-50 border-emerald-100']
-        ].map(([step, label, className]) => (
-          <div key={step} className={cn('rounded-md border p-4', className)}>
-            <Badge tone="info">Step {step}</Badge>
-            <p className="mt-3 text-sm font-semibold text-slate-800">{label}</p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }

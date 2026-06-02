@@ -44,10 +44,6 @@ export function NotificationsPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-950">Notifications</h2>
-        <p className="text-sm text-slate-600">In-app booking and approval updates.</p>
-      </div>
       {notifications.isLoading ? (
         <Card><CardContent className="p-5 text-sm text-slate-600">Loading notifications...</CardContent></Card>
       ) : null}
