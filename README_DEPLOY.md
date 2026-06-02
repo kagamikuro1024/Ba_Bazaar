@@ -68,6 +68,9 @@ Update at least:
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
+The API container runs `prisma migrate deploy` before starting, so pending database
+migrations are applied during redeploy.
+
 ## 7) Check container status
 
 ```bash
@@ -96,6 +99,13 @@ curl -I http://YOUR_VPS_IP
 
 ```bash
 docker compose -f docker-compose.prod.yml logs -f --tail=200
+```
+
+If the API returns 500 after a merge that added Prisma migrations, check the API
+startup log first:
+
+```bash
+docker compose -f docker-compose.prod.yml logs api --tail=200
 ```
 
 ## 11) Restart / redeploy

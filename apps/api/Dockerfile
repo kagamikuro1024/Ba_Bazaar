@@ -27,7 +27,8 @@ COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/apps/api/prisma /app/apps/api/prisma
+COPY --from=build /app/apps/api/prisma.config.ts /app/apps/api/prisma.config.ts
 COPY --from=build /app/packages/shared /app/packages/shared
 
 EXPOSE 3001
-CMD ["node", "/app/apps/api/dist/main.js"]
+CMD ["sh", "-c", "cd /app/apps/api && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && exec node dist/main.js"]
