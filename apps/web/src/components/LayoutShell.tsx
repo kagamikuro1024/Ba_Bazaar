@@ -66,15 +66,15 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-  { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
-  { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
-  { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
-  { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
-  { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
-];
+    { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
+    { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
+    { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
+    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
+    { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
+  ];
 
 function getIntroKey(pathname: string) {
   if (pathname.startsWith('/crm/ba/')) return '/crm/ba';
@@ -297,26 +297,18 @@ export function LayoutShell({ children }: LayoutShellProps) {
                     className={[
                       'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
                       isActive
-                        ? 'bg-blue-50 text-blue-700'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
                     ].join(' ')}
                   >
-                    <div
-                      className={[
-                        'relative flex h-8 w-12 items-center justify-center rounded-full transition-colors',
-                        isActive ? 'bg-white shadow-sm ring-1 ring-blue-100' : 'bg-transparent'
-                      ].join(' ')}
-                    >
+                    <div className="relative flex h-8 w-12 items-center justify-center">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                       {item.to === '/notifications' && unreadCount > 0 ? (
-                        <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                        <span className="absolute right-1.5 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
                           {unreadCount}
                         </span>
                       ) : null}
                     </div>
-                    <span className="block w-full truncate text-[11px] font-medium leading-none">
-                      {item.label}
-                    </span>
                   </div>
                 )}
               </NavLink>
