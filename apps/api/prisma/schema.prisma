@@ -165,6 +165,7 @@ model Booking {
 
   title             String
   description       String
+  notes             String?
   start_date        DateTime        @db.Date
   end_date          DateTime        @db.Date
   capacity_percent  Int

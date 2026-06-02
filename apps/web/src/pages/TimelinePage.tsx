@@ -2,10 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addDays,
+  addMonths,
   differenceInCalendarDays,
   eachDayOfInterval,
+  endOfMonth,
   format,
+  isSameDay,
   parseISO,
+  startOfWeek,
   startOfMonth
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
@@ -43,10 +47,80 @@ type RangeCheck = {
   }>;
 };
 
-const initialWeek = new Date('2026-06-01T00:00:00.000Z');
+const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
 const mobileDayMinWidth = 70;
 const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
+const bookingLaneHeight = 36;
+const desktopBarBaseTop = 16;
+const mobileBarBaseTop = 58;
+
+function dayCellBackground(isAlternateRow: boolean) {
+  return isAlternateRow
+    ? 'bg-[repeating-linear-gradient(-45deg,#eff6ff,#eff6ff_6px,#dbeafe_6px,#dbeafe_12px)]'
+    : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]';
+}
+
+type BookingLayout = {
+  booking: Booking;
+  left: number;
+  span: number;
+  lane: number;
+};
+
+function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout[] {
+  if (days.length === 0) return [];
+  const first = days[0];
+  const last = days[days.length - 1];
+
+  const visible = bookings
+    .map((booking) => {
+      const rawStart = parseISO(booking.start_date);
+      const rawEnd = parseISO(booking.end_date);
+      const start = rawStart < first ? first : rawStart;
+      const end = rawEnd > last ? last : rawEnd;
+      if (end < first || start > last) return null;
+      return { booking, start, end };
+    })
+    .filter((item): item is { booking: Booking; start: Date; end: Date } => item !== null)
+    .sort((a, b) => {
+      const byStart = a.start.getTime() - b.start.getTime();
+      if (byStart !== 0) return byStart;
+      return a.end.getTime() - b.end.getTime();
+    });
+
+  const laneEndDays: number[] = [];
+  const layouts: BookingLayout[] = [];
+
+  for (const item of visible) {
+    const left = Math.max(0, differenceInCalendarDays(item.start, first));
+    const span = differenceInCalendarDays(item.end, item.start) + 1;
+    const endDay = left + span - 1;
+
+    let lane = laneEndDays.findIndex((laneEnd) => laneEnd < left);
+    if (lane === -1) {
+      lane = laneEndDays.length;
+      laneEndDays.push(endDay);
+    } else {
+      laneEndDays[lane] = endDay;
+    }
+
+    layouts.push({ booking: item.booking, left, span, lane });
+  }
+
+  return layouts;
+}
+
+function computeRowMinHeight(
+  days: Date[],
+  bookings: Booking[],
+  barBaseTop: number,
+  minHeight: number
+) {
+  const layouts = computeBookingLayouts(days, bookings);
+  const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
+  return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() =>
@@ -74,6 +148,7 @@ export function TimelinePage() {
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role !== 'BA';
   const isMobile = useIsMobile();
+  const currentDate = useMemo(() => new Date(), []);
 
   useEffect(() => {
     if (!isMobile) {
@@ -84,7 +159,7 @@ export function TimelinePage() {
   const days = useMemo(() => {
     if (viewMode === 'month') {
       const start = startOfMonth(anchorDate);
-      return eachDayOfInterval({ start, end: addDays(start, 29) });
+      return eachDayOfInterval({ start, end: endOfMonth(start) });
     }
 
     return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) });
@@ -115,9 +190,24 @@ export function TimelinePage() {
   const visibleBookings = (bookings.data ?? []).filter(
     (booking) => !projectFilter || booking.project_id === projectFilter
   );
+  const rowData = useMemo(
+    () =>
+      visibleBas.map((ba) => {
+        const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+        return {
+          ba,
+          bookings: baBookings,
+          desktopRowMinHeight: computeRowMinHeight(days, baBookings, desktopBarBaseTop, 72),
+          mobileRowMinHeight: computeRowMinHeight(days, baBookings, mobileBarBaseTop, 120)
+        };
+      }),
+    [days, visibleBas, visibleBookings]
+  );
 
   const move = (direction: number) =>
-    setAnchorDate((current) => addDays(current, direction * (viewMode === 'week' ? 7 : 30)));
+    setAnchorDate((current) =>
+      viewMode === 'week' ? addDays(current, direction * 7) : addMonths(current, direction)
+    );
 
   function handleTimelineScroll() {
     if (!isMobile) return;
@@ -208,7 +298,10 @@ export function TimelinePage() {
                     {days.map((day) => (
                       <div
                         key={day.toISOString()}
-                        className="grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600"
+                        className={cn(
+                          'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
+                          isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                        )}
                       >
                         <div>
                           <div>{format(day, 'EEE')}</div>
@@ -222,7 +315,10 @@ export function TimelinePage() {
                   days.map((day) => (
                     <div
                       key={day.toISOString()}
-                      className="grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600"
+                      className={cn(
+                        'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
+                        isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                      )}
                     >
                       <div>
                         <div>{format(day, 'EEE')}</div>
@@ -230,8 +326,7 @@ export function TimelinePage() {
                       </div>
                     </div>
                   ))}
-                {visibleBas.map((ba, index) => {
-                  const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+                {rowData.map(({ ba, bookings: baBookings, desktopRowMinHeight, mobileRowMinHeight }, index) => {
                   const isAlternateRow = index % 2 === 1;
 
                   return isMobile ? (
@@ -240,6 +335,7 @@ export function TimelinePage() {
                       ba={ba}
                       days={days}
                       bookings={baBookings}
+                      rowMinHeight={mobileRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
@@ -258,6 +354,7 @@ export function TimelinePage() {
                       ba={ba}
                       days={days}
                       bookings={baBookings}
+                      rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
@@ -276,14 +373,18 @@ export function TimelinePage() {
             </div>
             {isMobile ? (
               <div className="pointer-events-none absolute left-0 top-12 z-20">
-                {visibleBas.map((ba, index) => {
+                {(() => {
+                  let topOffset = 0;
+                  return rowData.map(({ ba, mobileRowMinHeight }) => {
                   const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+                  const rowTop = topOffset;
+                  topOffset += mobileRowMinHeight;
 
                   return (
                     <div
                       key={ba.id}
                       className="pointer-events-auto absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
-                      style={{ top: index * 120, width: baInfoColumnWidth }}
+                      style={{ top: rowTop, width: baInfoColumnWidth }}
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -301,14 +402,15 @@ export function TimelinePage() {
                       </span>
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             ) : (
               <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
                 <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
                   BA
                 </div>
-                {visibleBas.map((ba, index) => {
+                {rowData.map(({ ba, desktopRowMinHeight }, index) => {
                   const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
                   const isAlternateRow = index % 2 === 1;
 
@@ -316,9 +418,10 @@ export function TimelinePage() {
                     <div
                       key={ba.id}
                       className={cn(
-                        'pointer-events-auto flex h-[72px] w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                        'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
                         isAlternateRow ? 'bg-sky-50' : 'bg-white'
                       )}
+                      style={{ height: desktopRowMinHeight }}
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
@@ -395,6 +498,7 @@ function TimelineRow({
   ba,
   days,
   bookings,
+  rowMinHeight,
   isAlternateRow,
   canCreateBooking,
   onEmptyClick,
@@ -403,18 +507,22 @@ function TimelineRow({
   ba: BAProfile;
   days: Date[];
   bookings: Booking[];
+  rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
+  const layouts = computeBookingLayouts(days, bookings);
+
   return (
     <>
       <div
         className={cn(
-          'h-[72px] border-b border-r',
+          'border-b border-r',
           isAlternateRow ? 'bg-sky-50' : 'bg-white'
         )}
+        style={{ height: rowMinHeight }}
         aria-hidden="true"
       />
       <div className="relative col-span-full hidden" />
@@ -422,12 +530,11 @@ function TimelineRow({
         <button
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
-            'group min-h-[72px] border-b border-r p-1 text-left text-xs text-slate-400',
-            isAlternateRow
-              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
-              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
+            'group border-b border-r p-1 text-left text-xs text-slate-400',
+            dayCellBackground(isAlternateRow),
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
+          style={{ minHeight: rowMinHeight }}
           onClick={() => {
             if (canCreateBooking) onEmptyClick(day);
           }}
@@ -439,40 +546,35 @@ function TimelineRow({
         </button>
       ))}
       <div
-        className="pointer-events-none relative -mt-[72px] grid min-h-[72px]"
+        className="pointer-events-none relative grid"
         style={{ gridColumn: `2 / span ${days.length}` }}
       >
-        {bookings.map((booking, index) => {
-          const first = days[0];
-          const last = days[days.length - 1];
-          const start = parseISO(booking.start_date) < first ? first : parseISO(booking.start_date);
-          const end = parseISO(booking.end_date) > last ? last : parseISO(booking.end_date);
-          if (end < first || start > last) return null;
-          const left = Math.max(0, differenceInCalendarDays(start, first));
-          const span = differenceInCalendarDays(end, start) + 1;
-          const pending = booking.status === 'PENDING';
+        <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
+          {layouts.map(({ booking, left, span, lane }) => {
+            const pending = booking.status === 'PENDING';
 
-          return (
-            <button
-              key={booking.id}
-              className={cn(
-                'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                pending
-                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
-                  : 'bg-blue-600 text-white'
-              )}
-              style={{
-                left: `${(left / days.length) * 100}%`,
-                width: `calc(${(span / days.length) * 100}% - 8px)`,
-                top: `${16 + (index % 2) * 28}px`
-              }}
-              onClick={() => onBookingClick(booking)}
-              aria-label={`${booking.status} booking ${booking.title}`}
-            >
-              {booking.project.name} · {booking.capacity_percent}%
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={booking.id}
+                className={cn(
+                  'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                  pending
+                    ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
+                    : 'bg-blue-600 text-white'
+                )}
+                style={{
+                  left: `${(left / days.length) * 100}%`,
+                  width: `calc(${(span / days.length) * 100}% - 8px)`,
+                  top: `${desktopBarBaseTop + lane * bookingLaneHeight}px`
+                }}
+                onClick={() => onBookingClick(booking)}
+                aria-label={`${booking.status} booking ${booking.title}`}
+              >
+                {booking.project.name} · {booking.capacity_percent}%
+              </button>
+            );
+          })}
+        </div>
       </div>
     </>
   );
@@ -482,6 +584,7 @@ function MobileTimelineRow({
   ba,
   days,
   bookings,
+  rowMinHeight,
   isAlternateRow,
   canCreateBooking,
   onEmptyClick,
@@ -490,23 +593,25 @@ function MobileTimelineRow({
   ba: BAProfile;
   days: Date[];
   bookings: Booking[];
+  rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   onEmptyClick: (date: Date) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
+  const layouts = computeBookingLayouts(days, bookings);
+
   return (
     <>
       {days.map((day) => (
         <button
           key={`${ba.id}-${day.toISOString()}`}
           className={cn(
-            'group min-h-[120px] border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
-            isAlternateRow
-              ? 'bg-[repeating-linear-gradient(-45deg,#eaf7ff,#eaf7ff_6px,#cfeeff_6px,#cfeeff_12px)]'
-              : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]',
+            'group border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
+            dayCellBackground(isAlternateRow),
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
+          style={{ minHeight: rowMinHeight }}
           onClick={() => {
             if (canCreateBooking) onEmptyClick(day);
           }}
@@ -518,40 +623,35 @@ function MobileTimelineRow({
         </button>
       ))}
       <div
-        className="pointer-events-none relative -mt-[120px] grid min-h-[120px]"
+        className="pointer-events-none relative grid"
         style={{ gridColumn: `1 / span ${days.length}` }}
       >
-        {bookings.map((booking, index) => {
-          const first = days[0];
-          const last = days[days.length - 1];
-          const start = parseISO(booking.start_date) < first ? first : parseISO(booking.start_date);
-          const end = parseISO(booking.end_date) > last ? last : parseISO(booking.end_date);
-          if (end < first || start > last) return null;
-          const left = Math.max(0, differenceInCalendarDays(start, first));
-          const span = differenceInCalendarDays(end, start) + 1;
-          const pending = booking.status === 'PENDING';
+        <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
+          {layouts.map(({ booking, left, span, lane }) => {
+            const pending = booking.status === 'PENDING';
 
-          return (
-            <button
-              key={booking.id}
-              className={cn(
-                'pointer-events-auto absolute top-5 h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                pending
-                  ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
-                  : 'bg-blue-600 text-white'
-              )}
-              style={{
-                left: `${(left / days.length) * 100}%`,
-                width: `calc(${(span / days.length) * 100}% - 8px)`,
-                top: `${58 + (index % 2) * 30}px`
-              }}
-              onClick={() => onBookingClick(booking)}
-              aria-label={`${booking.status} booking ${booking.title}`}
-            >
-              {booking.project.name} · {booking.capacity_percent}%
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={booking.id}
+                className={cn(
+                  'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                  pending
+                    ? 'border border-dashed border-amber-400 bg-amber-100 text-amber-800'
+                    : 'bg-blue-600 text-white'
+                )}
+                style={{
+                  left: `${(left / days.length) * 100}%`,
+                  width: `calc(${(span / days.length) * 100}% - 8px)`,
+                  top: `${mobileBarBaseTop + lane * bookingLaneHeight}px`
+                }}
+                onClick={() => onBookingClick(booking)}
+                aria-label={`${booking.status} booking ${booking.title}`}
+              >
+                {booking.project.name} · {booking.capacity_percent}%
+              </button>
+            );
+          })}
+        </div>
       </div>
     </>
   );
@@ -666,6 +766,7 @@ function CreateBookingModal({
     project_id: '',
     title: '',
     description: '',
+    notes: '',
     capacity_percent: 50,
     priority: 'MEDIUM' as BookingPriority
   });
@@ -782,6 +883,13 @@ function CreateBookingModal({
             required
           />
         </Field>
+        <Field label="Ghi chú thêm / Notes">
+          <textarea
+            value={form.notes}
+            onChange={(event) => setForm({ ...form, notes: event.target.value })}
+            className="min-h-20 rounded-md border p-3"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Capacity">
             <select
@@ -879,6 +987,7 @@ function BookingDetailModal({
             </p>
             <p>Capacity: {booking.capacity_percent}%</p>
             <p>Requester: {booking.requester.full_name}</p>
+            {booking.notes ? <p>Notes: {booking.notes}</p> : null}
             {booking.reject_reason ? <p>Reject reason: {booking.reject_reason}</p> : null}
           </div>
         </div>
