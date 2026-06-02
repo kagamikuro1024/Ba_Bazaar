@@ -1,9 +1,15 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { BAStatus, BookingStatus, User } from '@prisma/client';
 import { canExportReports } from '../auth/rbac';
 import { calculateBookedWorkingDays } from '../domain/capacity';
 import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
 import { PrismaService } from '../prisma/prisma.service';
+
+const reportBookingStatuses = [
+  BookingStatus.APPROVED,
+  BookingStatus.IN_PROGRESS,
+  BookingStatus.COMPLETED
+] as const;
 
 @Injectable()
 export class ReportsService {
@@ -17,18 +23,40 @@ export class ReportsService {
 
     const { startDate, endDate } = monthRange(month);
     const workingDays = workingDaysInRange(startDate, endDate).length;
+    const nextMonth = this.shiftMonth(month, 1);
+    const { startDate: nextMonthStartDate, endDate: nextMonthEndDate } = monthRange(nextMonth);
     const bas = await this.prisma.bAProfile.findMany({
+      where: { status: BAStatus.ACTIVE },
       include: {
         bookings: {
           where: {
             start_date: { lte: endDate },
-            end_date: { gte: startDate }
+            end_date: { gte: startDate },
+            status: { in: reportBookingStatuses as unknown as BookingStatus[] }
           },
           include: { project: true, requester: true }
         }
       },
       orderBy: { full_name: 'asc' }
     });
+    const [currentMonthBookingCount, nextMonthBookingCount] = await Promise.all([
+      this.prisma.booking.count({
+        where: {
+          ba: { status: BAStatus.ACTIVE },
+          start_date: { lte: endDate },
+          end_date: { gte: startDate },
+          status: { in: reportBookingStatuses as unknown as BookingStatus[] }
+        }
+      }),
+      this.prisma.booking.count({
+        where: {
+          ba: { status: BAStatus.ACTIVE },
+          start_date: { lte: nextMonthEndDate },
+          end_date: { gte: nextMonthStartDate },
+          status: { in: reportBookingStatuses as unknown as BookingStatus[] }
+        }
+      })
+    ]);
 
     const rows = bas.map((ba) => {
       const bookedDays = calculateBookedWorkingDays(ba.bookings, startDate, endDate);
@@ -54,6 +82,9 @@ export class ReportsService {
       period: month,
       start_date: toDateKey(startDate),
       end_date: toDateKey(endDate),
+      active_ba_count: rows.length,
+      total_booking_count: currentMonthBookingCount,
+      next_month_booking_count: nextMonthBookingCount,
       average_utilization_percent: rows.length
         ? Number(
             (
@@ -81,23 +112,6 @@ export class ReportsService {
     const lines = [header.join(',')];
 
     for (const row of report.rows) {
-      if (row.bookings.length === 0) {
-        lines.push(
-          [
-            row.ba_name,
-            row.level,
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            report.period
-          ].map(this.csvCell).join(',')
-        );
-        continue;
-      }
-
       for (const booking of row.bookings) {
         lines.push(
           [
@@ -120,6 +134,14 @@ export class ReportsService {
 
   private csvCell(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  private shiftMonth(month: string, offset: number) {
+    const { startDate } = monthRange(month);
+    const shifted = new Date(
+      Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + offset, 1)
+    );
+    return shifted.toISOString().slice(0, 7);
   }
 
   private async auditDenied(user: User, action: string, targetType: string, targetId: string) {

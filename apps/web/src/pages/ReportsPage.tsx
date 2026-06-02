@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 type Report = {
+  active_ba_count: number;
+  total_booking_count: number;
+  next_month_booking_count: number;
   average_utilization_percent: number;
   rows: Array<{
     ba_id: string;
@@ -46,43 +49,74 @@ export function ReportsPage() {
       {report.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>
       ) : null}
-      <Card>
-        <CardContent className="p-5">
-          <p className="text-sm text-slate-500">Average utilization</p>
-          <p className="mt-2 text-4xl font-bold text-blue-700">{report.data?.average_utilization_percent ?? 0}%</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="p-3">BA</th>
-                <th className="p-3">Level</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Booked days</th>
-                <th className="p-3">Projects</th>
-                <th className="p-3">Utilization</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(report.data?.rows ?? []).map((row) => (
-                <tr key={row.ba_id} className="border-t">
-                  <td className="p-3 font-semibold">{row.ba_name}</td>
-                  <td className="p-3">{row.level}</td>
-                  <td className="p-3">{row.status}</td>
-                  <td className="p-3">{row.booked_days}/{row.working_days}</td>
-                  <td className="p-3">{row.project_count}</td>
-                  <td className="p-3 font-semibold">{row.utilization_percent}%</td>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-slate-500">Active BA</p>
+            <p className="mt-2 text-4xl font-bold text-slate-950">{report.data?.active_ba_count ?? 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-slate-500">Approved bookings</p>
+            <p className="mt-2 text-4xl font-bold text-slate-950">{report.data?.total_booking_count ?? 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-slate-500">Average utilization</p>
+            <p className="mt-2 text-4xl font-bold text-blue-700">{report.data?.average_utilization_percent ?? 0}%</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-slate-500">Next month bookings</p>
+            <p className="mt-2 text-4xl font-bold text-slate-950">{report.data?.next_month_booking_count ?? 0}</p>
+          </CardContent>
+        </Card>
+      </div>
+      {report.data && report.data.total_booking_count === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <p className="text-base font-semibold text-slate-950">No bookings in this month</p>
+            <p className="mt-2 text-sm text-slate-600">
+              There are no approved or completed bookings overlapping the selected month.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="bg-slate-50 text-left text-slate-500">
+                <tr>
+                  <th className="p-3">BA</th>
+                  <th className="p-3">Level</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Booked days</th>
+                  <th className="p-3">Projects</th>
+                  <th className="p-3">Utilization</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {report.data?.rows.length === 0 ? (
-            <div className="p-5 text-sm text-slate-600">No utilization rows for this month.</div>
-          ) : null}
-        </CardContent>
-      </Card>
+              </thead>
+              <tbody>
+                {(report.data?.rows ?? []).map((row) => (
+                  <tr key={row.ba_id} className="border-t">
+                    <td className="p-3 font-semibold">{row.ba_name}</td>
+                    <td className="p-3">{row.level}</td>
+                    <td className="p-3">{row.status}</td>
+                    <td className="p-3">{row.booked_days}/{row.working_days}</td>
+                    <td className="p-3">{row.project_count}</td>
+                    <td className="p-3 font-semibold">{row.utilization_percent}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {report.data?.rows.length === 0 ? (
+              <div className="p-5 text-sm text-slate-600">No utilization rows for this month.</div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
