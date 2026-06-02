@@ -42,9 +42,11 @@ export function ManagerInboxPage() {
           <Card key={booking.id}>
             <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
               <div className="grid gap-3">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-start gap-3">
                   <BAIdentity ba={booking.ba} />
-                  <StatusBadge status={booking.status} />
+                  <div className="-mt-0.5">
+                    <StatusBadge status={booking.status} />
+                  </div>
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-950">{booking.project.name}</h3>

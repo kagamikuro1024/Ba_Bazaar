@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -66,15 +66,15 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-  { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
-  { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
-  { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
-  { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
-  { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
-];
+    { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
+    { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
+    { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
+    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
+    { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
+  ];
 
 function getIntroKey(pathname: string) {
   if (pathname.startsWith('/crm/ba/')) return '/crm/ba';
@@ -85,6 +85,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const [role, setRole] = useState(getMockRole());
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const introKey = getIntroKey(location.pathname);
   const intro = introKey ? pageIntros[introKey] : undefined;
@@ -123,6 +124,23 @@ export function LayoutShell({ children }: LayoutShellProps) {
   }, [location.pathname, role]);
 
   useEffect(() => {
+    if (!notificationOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (notificationRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setNotificationOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [notificationOpen]);
+
+  useEffect(() => {
     if (!intro || !storageKey) {
       setIntroOpen(false);
       return;
@@ -158,7 +176,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 xl:max-w-[1500px] 2xl:max-w-[1880px]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
@@ -167,7 +185,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
             <h1 className="text-xl font-bold text-slate-950">Booking + CRM</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative hidden sm:block">
+            <div ref={notificationRef} className="relative hidden sm:block">
               <Button
                 variant="secondary"
                 size="icon"
@@ -194,7 +212,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
                         <Link to="/notifications">View all</Link>
                       </Button>
                     </div>
-                    <div className="max-h-96 overflow-y-auto">
+                    <div
+                      className="max-h-96 overflow-y-auto overscroll-contain"
+                      onWheel={(event) => event.stopPropagation()}
+                    >
                       {recentNotifications.length === 0 ? (
                         <div className="p-4 text-sm text-slate-600">No notifications yet.</div>
                       ) : (
@@ -246,7 +267,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 pb-24 pt-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]">
+      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 pb-28 pt-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]">
         <Card className="hidden h-fit p-2 lg:block">
           <nav className="grid gap-1" aria-label="Main navigation">
             {visibleNavigation.map((item) => {
@@ -278,10 +299,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-white/70 bg-white/90 p-2 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/12 lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="flex items-center justify-around gap-1">
+        <div className="flex items-stretch justify-around gap-1">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
 
@@ -290,22 +311,27 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                className={({ isActive }) =>
-                  [
-                    'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors',
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
-                  ].join(' ')
-                }
+                className="min-w-0 flex-1"
               >
-                <Icon className="h-5 w-5" aria-hidden="true" />
-                <span className="sr-only">{item.label}</span>
-                {item.to === '/notifications' && unreadCount > 0 ? (
-                  <span className="absolute right-2 top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white ring-2 ring-white">
-                    {unreadCount}
-                  </span>
-                ) : null}
+                {({ isActive }) => (
+                  <div
+                    className={[
+                      'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
+                    ].join(' ')}
+                  >
+                    <div className="relative flex h-8 w-12 items-center justify-center">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                      {item.to === '/notifications' && unreadCount > 0 ? (
+                        <span className="absolute right-1.5 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </NavLink>
             );
           })}

@@ -70,6 +70,7 @@ const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
 const bookingLaneHeight = 36;
 const desktopBarBaseTop = 16;
 const mobileBarBaseTop = 58;
+const timelineViewModeStorageKey = 'ba-bazaar-timeline-view-mode';
 
 function dayCellBackground(isAlternateRow: boolean) {
   return isAlternateRow
@@ -156,7 +157,15 @@ function sortSelectionRange(selection: DraftSelection) {
 }
 
 function isTextSelectionTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest('button, a, input, select, textarea'));
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('[data-allow-scroll-drag="true"]')) {
+    return false;
+  }
+
+  return Boolean(target.closest('button, a, input, select, textarea'));
 }
 
 function selectionToDraft(selection: DraftSelection): RequestDraft {
@@ -184,7 +193,14 @@ function useIsMobile() {
 export function TimelinePage() {
   const queryClient = useQueryClient();
   const role = getMockRole();
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [viewMode, setViewMode] = useState<'week' | 'month'>(() => {
+    if (typeof window === 'undefined') {
+      return 'week';
+    }
+
+    const stored = window.localStorage.getItem(timelineViewModeStorageKey);
+    return stored === 'month' ? 'month' : 'week';
+  });
   const [anchorDate, setAnchorDate] = useState(initialWeek);
   const [baFilter, setBaFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
@@ -204,6 +220,10 @@ export function TimelinePage() {
       setCompactMobileInfo(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    window.localStorage.setItem(timelineViewModeStorageKey, viewMode);
+  }, [viewMode]);
 
   const days = useMemo(() => {
     if (viewMode === 'month') {
@@ -271,6 +291,21 @@ export function TimelinePage() {
     event.currentTarget.scrollLeft += event.deltaY;
   }
 
+  function handleMobileIdentityWheel(event: WheelEvent<HTMLButtonElement>) {
+    const container = timelineScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (delta === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    container.scrollLeft += delta;
+  }
+
   function beginSelection(baId: string, day: Date, pointerId: number) {
     setActiveSelection({ ba_id: baId, start: day, end: day, pointerId });
   }
@@ -328,60 +363,74 @@ export function TimelinePage() {
       {bas.error || bookings.error || projects.error || summary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
       ) : null}
+      <div className="flex justify-end px-1">
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-auto lg:flex-nowrap">
+          <select
+            value={baFilter}
+            onChange={(event) => setBaFilter(event.target.value)}
+            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-48"
+          >
+            <option value="">All BA</option>
+            {(bas.data ?? []).map((ba) => (
+              <option key={ba.id} value={ba.id}>
+                {ba.full_name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={projectFilter}
+            onChange={(event) => setProjectFilter(event.target.value)}
+            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-52"
+          >
+            <option value="">All Projects</option>
+            {(projects.data ?? []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <Card className="overflow-hidden">
           <CardHeader className="border-b border-slate-200">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div />
-              <div className="grid gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)_auto_auto_auto] lg:flex lg:flex-wrap">
-                <select
-                  value={baFilter}
-                  onChange={(event) => setBaFilter(event.target.value)}
-                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                >
-                  <option value="">All BA</option>
-                  {(bas.data ?? []).map((ba) => (
-                    <option key={ba.id} value={ba.id}>
-                      {ba.full_name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={projectFilter}
-                  onChange={(event) => setProjectFilter(event.target.value)}
-                  className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                >
-                  <option value="">All Projects</option>
-                  {(projects.data ?? []).map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 sm:contents">
-                  <select
-                    value={viewMode}
-                    onChange={(event) => setViewMode(event.target.value as 'week' | 'month')}
-                    className="h-9 w-full min-w-0 rounded-md border px-2 text-sm"
-                  >
-                    <option value="week">Week</option>
-                    <option value="month">Month</option>
-                  </select>
-                  <Button variant="secondary" size="icon" onClick={() => move(-1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
-                    Today
-                  </Button>
-                  <Button variant="secondary" size="icon" onClick={() => move(1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-fit flex-1 items-center gap-2 max-[420px]:w-full max-[420px]:flex-none">
+                <Button variant="secondary" size="icon" onClick={() => move(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="secondary" className="px-3" onClick={() => setAnchorDate(initialWeek)}>
+                  Today
+                </Button>
+                <Button variant="secondary" size="icon" onClick={() => move(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
+              <label className="flex min-w-fit flex-1 items-center justify-end gap-2 text-sm font-medium text-slate-600 max-[420px]:w-full max-[420px]:flex-none max-[420px]:justify-between">
+                <span className="hidden sm:inline">View mode</span>
+                <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-1">
+                  {(['week', 'month'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setViewMode(mode)}
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                        viewMode === mode
+                          ? 'bg-white text-slate-950 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-950'
+                      )}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </label>
             </div>
           </CardHeader>
           <CardContent className="relative p-0">
             <div
               ref={timelineScrollRef}
+              data-timeline-scroll="true"
               className={cn(
                 'overflow-x-auto',
                 !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
@@ -497,12 +546,14 @@ export function TimelinePage() {
                   return (
                     <div
                       key={ba.id}
-                      className="pointer-events-auto absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
+                      className="absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
                       style={{ top: rowTop, width: baInfoColumnWidth }}
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
                     >
-                      <MobileBAIdentity ba={ba} compact={compactMobileInfo} />
+                      <MobileBAIdentity
+                        ba={ba}
+                        compact={compactMobileInfo}
+                        onWheel={handleMobileIdentityWheel}
+                      />
                       <span
                         className={cn(
                           'shrink-0 overflow-hidden text-xs font-bold transition-all duration-200 ease-out',
@@ -756,7 +807,15 @@ function MobileTimelineRow({
     </>
   );
 }
-function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) {
+function MobileBAIdentity({
+  ba,
+  compact,
+  onWheel
+}: {
+  ba: BAProfile;
+  compact: boolean;
+  onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
+}) {
   const initials = ba.full_name
     .split(' ')
     .map((part) => part[0])
@@ -764,17 +823,23 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
     .join('');
 
   return (
-    <div className="flex min-w-0 items-center gap-2 text-xs">
+    <button
+      type="button"
+      data-allow-scroll-drag="true"
+      className="pointer-events-auto flex min-w-0 items-center gap-2 text-xs"
+      onClick={(event) => event.stopPropagation()}
+      onWheel={onWheel}
+    >
       <span
         className={cn(
           'block shrink-0 overflow-hidden transition-all duration-200 ease-out',
-          compact ? 'w-0 -translate-x-2 opacity-0' : 'w-7 translate-x-0 opacity-100'
+          compact ? 'w-0 -translate-x-2 opacity-0' : 'w-6 translate-x-0 opacity-100'
         )}
       >
         {ba.avatar_url ? (
-          <img src={ba.avatar_url} alt="" className="h-7 w-7 rounded-full" />
+          <img src={ba.avatar_url} alt="" className="h-6 w-6 rounded-full" />
         ) : (
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
             {initials}
           </span>
         )}
@@ -782,13 +847,13 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
       <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
       <span
         className={cn(
-          'shrink-0 overflow-hidden text-slate-500 transition-all duration-200 ease-out',
+          'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
           compact ? 'max-w-0 translate-x-2 opacity-0' : 'max-w-20 translate-x-0 opacity-100'
         )}
       >
         - {ba.level}
       </span>
-    </div>
+    </button>
   );
 }
 
