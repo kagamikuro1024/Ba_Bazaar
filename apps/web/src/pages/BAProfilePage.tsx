@@ -1,5 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LinearScale,
+  Tooltip,
+  type TooltipItem
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 import { useParams } from 'react-router-dom';
 import { apiFetch, getMockRole, type BAProfile, type Booking, type SkillTag } from '@/lib/api';
 import { BAIdentity, Field, StatusBadge } from '@/components/common';
@@ -8,12 +19,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/format';
 
+const historyChartHeight = 280;
+const defaultHistoryMonth = new Date().toISOString().slice(0, 7);
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Filler);
+
 export function BAProfilePage() {
   const { id = '' } = useParams();
   const role = getMockRole();
   const queryClient = useQueryClient();
   const [note, setNote] = useState('');
   const [tagId, setTagId] = useState('');
+  const [historyMonth, setHistoryMonth] = useState(defaultHistoryMonth);
 
   const ba = useQuery({
     queryKey: ['ba-profile', id, role],
@@ -39,7 +56,10 @@ export function BAProfilePage() {
   });
   const notes = useQuery({
     queryKey: ['ba-notes', id, role],
-    queryFn: () => apiFetch<Array<{ id: string; content: string; created_at: string; creator: { full_name: string } }>>(`/api/ba/${id}/notes`),
+    queryFn: () =>
+      apiFetch<Array<{ id: string; content: string; created_at: string; creator: { full_name: string } }>>(
+        `/api/ba/${id}/notes`
+      ),
     enabled: role === 'BA_MANAGER' && Boolean(id)
   });
   const appendNote = useMutation({
@@ -69,6 +89,111 @@ export function BAProfilePage() {
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['ba-profile', id] })
   });
+
+  const historyBookings = useMemo(
+    () =>
+      [...(history.data ?? [])].sort(
+        (left, right) => new Date(right.start_date).getTime() - new Date(left.start_date).getTime()
+      ),
+    [history.data]
+  );
+  const completedHistoryBookings = useMemo(
+    () => historyBookings.filter((booking) => booking.status === 'COMPLETED'),
+    [historyBookings]
+  );
+  const filteredCompletedHistoryBookings = useMemo(
+    () =>
+      completedHistoryBookings.filter(
+        (booking) => booking.start_date.slice(0, 7) === historyMonth || booking.end_date.slice(0, 7) === historyMonth
+      ),
+    [completedHistoryBookings, historyMonth]
+  );
+
+  const historyChartData = useMemo(
+    () => ({
+      labels: filteredCompletedHistoryBookings.map((booking) => booking.project.name),
+      datasets: [
+        {
+          label: 'Effort taken (capacity %)',
+          data: filteredCompletedHistoryBookings.map((booking) => booking.capacity_percent),
+          backgroundColor: 'rgba(37, 99, 235, 0.72)',
+          borderColor: '#2563eb',
+          borderRadius: 10,
+          borderSkipped: false,
+          borderWidth: 1,
+          hoverBackgroundColor: 'rgba(29, 78, 216, 0.9)',
+          hoverBorderColor: '#1d4ed8'
+        }
+      ]
+    }),
+    [filteredCompletedHistoryBookings]
+  );
+
+  const historyChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'nearest' as const,
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.96)',
+          padding: 12,
+          displayColors: false,
+          cornerRadius: 10,
+          callbacks: {
+            title: (items: TooltipItem<'bar'>[]) => items[0]?.label ?? '',
+            label: (item: TooltipItem<'bar'>) => {
+              const booking = filteredCompletedHistoryBookings[item.dataIndex];
+              return booking ? `Capacity: ${booking.capacity_percent}%` : '';
+            },
+            afterLabel: (item: TooltipItem<'bar'>) => {
+              const booking = filteredCompletedHistoryBookings[item.dataIndex];
+              if (!booking) return [];
+
+              return [
+                `Title: ${booking.title}`,
+                `Dates: ${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`,
+                `Priority: ${booking.priority}`,
+                `Status: ${booking.status}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: (value: string | number) => `${value}%`
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.25)'
+          },
+          title: {
+            display: true,
+            text: 'Capacity %'
+          }
+        },
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            maxRotation: 0,
+            minRotation: 0
+          }
+        }
+      }
+    }),
+    [filteredCompletedHistoryBookings]
+  );
 
   if (ba.isLoading) return <Card><CardContent className="p-6">Loading profile...</CardContent></Card>;
   if (!ba.data) return <Card><CardContent className="p-6">Profile not found.</CardContent></Card>;
@@ -109,18 +234,64 @@ export function BAProfilePage() {
 
           <Card>
             <CardHeader><CardTitle>Booking History</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
-              {(history.data ?? []).map((booking) => (
-                <div key={booking.id} className="rounded-md border p-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <strong>{booking.project.name}</strong>
-                    <StatusBadge status={booking.status} />
+            <CardContent className="grid gap-4">
+              {historyBookings.length > 0 ? (
+                <>
+                  {completedHistoryBookings.length > 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 via-white to-blue-50/40 p-4">
+                      <div className="mb-3 grid gap-3 md:flex md:items-start md:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">Completed booking capacity trend</p>
+                          <p className="text-xs text-slate-500">Hover a point to see completed booking details only.</p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[auto_auto] sm:items-center">
+                          <input
+                            type="month"
+                            value={historyMonth}
+                            onChange={(event) => setHistoryMonth(event.target.value)}
+                            className="h-10 min-w-0 rounded-md border px-3 text-sm"
+                            aria-label="Filter completed booking chart by month"
+                          />
+                          <div className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
+                            {filteredCompletedHistoryBookings.length} completed booking{filteredCompletedHistoryBookings.length === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                      </div>
+                      {filteredCompletedHistoryBookings.length > 0 ? (
+                        <div style={{ height: `${historyChartHeight}px` }}>
+                          <Bar data={historyChartData} options={historyChartOptions} />
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                          No completed bookings found in {historyMonth}.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                      No completed bookings available for the chart yet.
+                    </div>
+                  )}
+
+                  <div className="grid gap-3">
+                    {historyBookings.map((booking) => (
+                      <div key={booking.id} className="rounded-md border p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{booking.project.name}</strong>
+                          <StatusBadge status={booking.status} />
+                        </div>
+                        <p className="mt-1 text-slate-600">
+                          {formatDate(booking.start_date)} - {formatDate(booking.end_date)} · {booking.capacity_percent}%
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="mt-1 text-slate-600">
-                    {formatDate(booking.start_date)} - {formatDate(booking.end_date)} · {booking.capacity_percent}%
-                  </p>
+                </>
+              ) : (
+                <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                  No booking history available yet.
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>
@@ -140,7 +311,10 @@ export function BAProfilePage() {
             <CardHeader><CardTitle>Skill / Domain Tags</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
               <div className="flex flex-wrap gap-2">
-                {ba.data.skill_tags.map((item) => <Badge key={item.tag.id} tone="info">{item.tag.name}</Badge>)}
+                {ba.data.skill_tags.map((item) => {
+                  const tag = 'tag' in item ? item.tag : item;
+                  return <Badge key={tag.id} tone="info">{tag.name}</Badge>;
+                })}
               </div>
               {role === 'BA_MANAGER' ? (
                 <div className="flex gap-2">
