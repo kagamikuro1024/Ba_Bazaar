@@ -186,6 +186,7 @@ async function main() {
     [6, 'Mobile Onboarding', 1, 'Onboarding discovery', '2026-06-09', '2026-06-13', 50, BookingStatus.PENDING, BookingPriority.MEDIUM],
     [7, 'Logistics Tracking', 2, 'Carrier integration analysis', '2026-06-10', '2026-06-14', 50, BookingStatus.APPROVED, BookingPriority.HIGH],
     [8, 'CRM Revamp', 3, 'Customer profile grooming', '2026-06-09', '2026-06-10', 100, BookingStatus.REJECTED, BookingPriority.LOW],
+    [10, 'BI Dashboard', 1, 'Completed onboarding metric wrap-up', '2026-06-02', '2026-06-03', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
     [8, 'Internal Portal', 1, 'Portal backlog walkthrough', '2026-05-21', '2026-05-23', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
     [8, 'BI Dashboard', 4, 'CRM metrics mapping', '2026-05-12', '2026-05-16', 50, BookingStatus.COMPLETED, BookingPriority.HIGH],
     [8, 'Payment Refund Flow', 0, 'Refund contact-center scenarios', '2026-04-22', '2026-04-25', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
