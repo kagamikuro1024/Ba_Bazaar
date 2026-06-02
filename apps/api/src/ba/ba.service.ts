@@ -233,8 +233,20 @@ export class BAService {
     avatar_url: string | null;
     status: BAStatus;
     skill_tags: Array<
-      | { tag: { id: string; name: string; group: string; status: string } }
-      | { id: string; name: string; group: string; status: string }
+      | {
+          tag: {
+            id: string;
+            name: string;
+            group: string;
+            status: string;
+          };
+        }
+      | {
+          id: string;
+          name: string;
+          group: string;
+          status: string;
+        }
     >;
   }) {
     return {
@@ -243,7 +255,15 @@ export class BAService {
       level: ba.level,
       avatar_url: ba.avatar_url,
       status: ba.status,
-      skill_tags: ba.skill_tags.map((item) => ('tag' in item ? item.tag : item))
+      skill_tags: ba.skill_tags.map((item) => {
+        const tag = 'tag' in item ? item.tag : item;
+        return {
+          id: tag.id,
+          name: tag.name,
+          group: tag.group,
+          status: tag.status
+        };
+      })
     };
   }
 
