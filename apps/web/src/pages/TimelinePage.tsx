@@ -157,7 +157,15 @@ function sortSelectionRange(selection: DraftSelection) {
 }
 
 function isTextSelectionTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest('button, a, input, select, textarea'));
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('[data-allow-scroll-drag="true"]')) {
+    return false;
+  }
+
+  return Boolean(target.closest('button, a, input, select, textarea'));
 }
 
 function selectionToDraft(selection: DraftSelection): RequestDraft {
@@ -283,6 +291,21 @@ export function TimelinePage() {
     event.currentTarget.scrollLeft += event.deltaY;
   }
 
+  function handleMobileIdentityWheel(event: WheelEvent<HTMLButtonElement>) {
+    const container = timelineScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (delta === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    container.scrollLeft += delta;
+  }
+
   function beginSelection(baId: string, day: Date, pointerId: number) {
     setActiveSelection({ ba_id: baId, start: day, end: day, pointerId });
   }
@@ -394,6 +417,7 @@ export function TimelinePage() {
           <CardContent className="relative p-0">
             <div
               ref={timelineScrollRef}
+              data-timeline-scroll="true"
               className={cn(
                 'overflow-x-auto',
                 !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
@@ -509,12 +533,14 @@ export function TimelinePage() {
                   return (
                     <div
                       key={ba.id}
-                      className="pointer-events-auto absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
+                      className="absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
                       style={{ top: rowTop, width: baInfoColumnWidth }}
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
                     >
-                      <MobileBAIdentity ba={ba} compact={compactMobileInfo} />
+                      <MobileBAIdentity
+                        ba={ba}
+                        compact={compactMobileInfo}
+                        onWheel={handleMobileIdentityWheel}
+                      />
                       <span
                         className={cn(
                           'shrink-0 overflow-hidden text-xs font-bold transition-all duration-200 ease-out',
@@ -768,7 +794,15 @@ function MobileTimelineRow({
     </>
   );
 }
-function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) {
+function MobileBAIdentity({
+  ba,
+  compact,
+  onWheel
+}: {
+  ba: BAProfile;
+  compact: boolean;
+  onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
+}) {
   const initials = ba.full_name
     .split(' ')
     .map((part) => part[0])
@@ -776,17 +810,23 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
     .join('');
 
   return (
-    <div className="flex min-w-0 items-center gap-2 text-xs">
+    <button
+      type="button"
+      data-allow-scroll-drag="true"
+      className="pointer-events-auto flex min-w-0 items-center gap-2 text-xs"
+      onClick={(event) => event.stopPropagation()}
+      onWheel={onWheel}
+    >
       <span
         className={cn(
           'block shrink-0 overflow-hidden transition-all duration-200 ease-out',
-          compact ? 'w-0 -translate-x-2 opacity-0' : 'w-7 translate-x-0 opacity-100'
+          compact ? 'w-0 -translate-x-2 opacity-0' : 'w-6 translate-x-0 opacity-100'
         )}
       >
         {ba.avatar_url ? (
-          <img src={ba.avatar_url} alt="" className="h-7 w-7 rounded-full" />
+          <img src={ba.avatar_url} alt="" className="h-6 w-6 rounded-full" />
         ) : (
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
             {initials}
           </span>
         )}
@@ -800,7 +840,7 @@ function MobileBAIdentity({ ba, compact }: { ba: BAProfile; compact: boolean }) 
       >
         - {ba.level}
       </span>
-    </div>
+    </button>
   );
 }
 
