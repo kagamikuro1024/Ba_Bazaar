@@ -90,7 +90,7 @@ export function BADirectoryPage() {
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load BA directory. Check API connection and retry.</CardContent></Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {(bas.data ?? []).map((ba) => (
           <Link key={ba.id} to={`/crm/ba/${ba.id}`}>
             <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
@@ -104,10 +104,9 @@ export function BADirectoryPage() {
                     <Badge key={item.tag.id} tone="info">{item.tag.name}</Badge>
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-sm text-slate-600">
+                <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
                   <span>Level: <strong>{ba.level}</strong></span>
                   <span>Bookings: <strong>{ba.bookings?.length ?? 0}</strong></span>
-                  <span>Status: <strong>{ba.status}</strong></span>
                 </div>
               </CardContent>
             </Card>
