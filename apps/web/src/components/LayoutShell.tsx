@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -7,13 +7,14 @@ import {
   Home,
   Inbox,
   Bell,
+  ChevronRight,
   Users
 } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, getMockRole, setMockRole, type NotificationItem, type UserRole } from '@/lib/api';
 import { Button } from './ui/button';
-import { Card } from './ui/card';
+import { Card, CardContent } from './ui/card';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -38,20 +39,43 @@ const navigation: Array<{
 export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const [role, setRole] = useState(getMockRole());
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const location = useLocation();
   const notifications = useQuery({
     queryKey: ['notifications', role],
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications')
+  });
+  const markRead = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] })
   });
   const me = useQuery({
     queryKey: ['me', role],
     queryFn: () => apiFetch<{ user: { full_name: string; role: UserRole } }>('/api/me')
   });
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
+  const recentNotifications = (notifications.data ?? []).slice(0, 5);
+
+  useEffect(() => {
+    setNotificationOpen(false);
+  }, [location.pathname, role]);
 
   function handleRoleChange(nextRole: UserRole) {
     setMockRole(nextRole);
     setRole(nextRole);
     void queryClient.invalidateQueries();
+  }
+
+  function resolveNotificationPath(item: NotificationItem) {
+    if (item.type === 'BOOKING_REJECTED' || item.type === 'BOOKING_CANCELLED') {
+      return '/my-requests';
+    }
+
+    if (item.related_entity_type === 'Booking') {
+      return role === 'BA' ? '/my-schedule' : '/notifications';
+    }
+
+    return '/notifications';
   }
 
   return (
@@ -66,13 +90,62 @@ export function LayoutShell({ children }: LayoutShellProps) {
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Button variant="secondary" size="icon" aria-label="Notifications">
+              <Button
+                variant="secondary"
+                size="icon"
+                aria-label="Notifications"
+                aria-expanded={notificationOpen}
+                onClick={() => setNotificationOpen((current) => !current)}
+              >
                 <Bell className="h-4 w-4" />
               </Button>
               {unreadCount > 0 ? (
                 <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
                   {unreadCount}
                 </span>
+              ) : null}
+              {notificationOpen ? (
+                <Card className="absolute right-0 top-12 z-30 w-[min(24rem,calc(100vw-2rem))] shadow-lg">
+                  <CardContent className="p-0">
+                    <div className="flex items-center justify-between border-b px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">Notifications</p>
+                        <p className="text-xs text-slate-500">{unreadCount} unread</p>
+                      </div>
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link to="/notifications">View all</Link>
+                      </Button>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {recentNotifications.length === 0 ? (
+                        <div className="p-4 text-sm text-slate-600">No notifications yet.</div>
+                      ) : (
+                        recentNotifications.map((item) => (
+                          <Link
+                            key={item.id}
+                            to={resolveNotificationPath(item)}
+                            className="block border-b px-4 py-3 last:border-b-0 hover:bg-slate-50"
+                            onClick={() => {
+                              if (!item.read_at) {
+                                markRead.mutate(item.id);
+                              }
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                                <p className="mt-1 whitespace-pre-line text-sm text-slate-600">
+                                  {item.message}
+                                </p>
+                              </div>
+                              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            </div>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : null}
             </div>
             <div className="hidden text-right text-xs text-slate-500 sm:block">

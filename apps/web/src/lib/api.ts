@@ -75,6 +75,8 @@ export type NotificationItem = {
   type: string;
   title: string;
   message: string;
+  related_entity_type?: string | null;
+  related_entity_id?: string | null;
   read_at?: string | null;
   created_at: string;
 };
