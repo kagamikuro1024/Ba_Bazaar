@@ -70,8 +70,8 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-4 sm:gap-5">
-      <div className="grid gap-3 sm:flex sm:items-center sm:justify-between">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:ml-auto sm:flex">
+      <div className="grid gap-3 md:flex md:items-center md:justify-between">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:ml-auto md:flex">
           <input
             type="month"
             value={month}
@@ -130,7 +130,7 @@ export function ReportsPage() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="grid gap-3 border-b border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-4">
+            <div className="grid gap-3 border-b border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-4">
               <div className="grid gap-1">
                 <label className="relative block">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -170,7 +170,7 @@ export function ReportsPage() {
                 ))}
               </select>
             </div>
-            <div className="grid gap-3 p-3 sm:hidden">
+            <div className="grid gap-3 p-3 md:hidden">
               {paginatedRows.map((row) => (
                 <div key={row.ba_id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -200,8 +200,8 @@ export function ReportsPage() {
                 </div>
               ) : null}
             </div>
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[760px] text-sm">
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
                     <th className="p-3">BA</th>

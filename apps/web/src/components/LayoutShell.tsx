@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -85,6 +85,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const [role, setRole] = useState(getMockRole());
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const introKey = getIntroKey(location.pathname);
   const intro = introKey ? pageIntros[introKey] : undefined;
@@ -121,6 +122,23 @@ export function LayoutShell({ children }: LayoutShellProps) {
   useEffect(() => {
     setNotificationOpen(false);
   }, [location.pathname, role]);
+
+  useEffect(() => {
+    if (!notificationOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (notificationRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setNotificationOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [notificationOpen]);
 
   useEffect(() => {
     if (!intro || !storageKey) {
@@ -167,7 +185,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
             <h1 className="text-xl font-bold text-slate-950">Booking + CRM</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative hidden sm:block">
+            <div ref={notificationRef} className="relative hidden sm:block">
               <Button
                 variant="secondary"
                 size="icon"
@@ -194,7 +212,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
                         <Link to="/notifications">View all</Link>
                       </Button>
                     </div>
-                    <div className="max-h-96 overflow-y-auto">
+                    <div
+                      className="max-h-96 overflow-y-auto overscroll-contain"
+                      onWheel={(event) => event.stopPropagation()}
+                    >
                       {recentNotifications.length === 0 ? (
                         <div className="p-4 text-sm text-slate-600">No notifications yet.</div>
                       ) : (
