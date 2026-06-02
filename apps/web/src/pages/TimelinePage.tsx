@@ -70,6 +70,7 @@ const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
 const bookingLaneHeight = 36;
 const desktopBarBaseTop = 16;
 const mobileBarBaseTop = 58;
+const timelineViewModeStorageKey = 'ba-bazaar-timeline-view-mode';
 
 function dayCellBackground(isAlternateRow: boolean) {
   return isAlternateRow
@@ -184,7 +185,14 @@ function useIsMobile() {
 export function TimelinePage() {
   const queryClient = useQueryClient();
   const role = getMockRole();
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [viewMode, setViewMode] = useState<'week' | 'month'>(() => {
+    if (typeof window === 'undefined') {
+      return 'week';
+    }
+
+    const stored = window.localStorage.getItem(timelineViewModeStorageKey);
+    return stored === 'month' ? 'month' : 'week';
+  });
   const [anchorDate, setAnchorDate] = useState(initialWeek);
   const [baFilter, setBaFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
@@ -204,6 +212,10 @@ export function TimelinePage() {
       setCompactMobileInfo(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    window.localStorage.setItem(timelineViewModeStorageKey, viewMode);
+  }, [viewMode]);
 
   const days = useMemo(() => {
     if (viewMode === 'month') {
