@@ -23,6 +23,7 @@ const prisma = new PrismaClient({
 });
 
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const pravatar = (imageId: number) => `https://i.pravatar.cc/300?img=${imageId}`;
 
 async function resetDatabase() {
   await prisma.auditLog.deleteMany();
@@ -50,7 +51,7 @@ async function main() {
       email: 'manager@ba-bazaar.local',
       role: UserRole.BA_MANAGER,
       password_hash: managerPasswordHash,
-      avatar_url: 'https://api.dicebear.com/9.x/initials/svg?seed=Mai%20Lan%20Anh'
+      avatar_url: pravatar(11)
     }
   });
 
@@ -60,7 +61,7 @@ async function main() {
       email: 'admin@ba-bazaar.local',
       role: UserRole.ADMIN,
       password_hash: adminPasswordHash,
-      avatar_url: 'https://api.dicebear.com/9.x/initials/svg?seed=Bao%20Tri%20Admin'
+      avatar_url: pravatar(12)
     }
   });
 
@@ -73,7 +74,7 @@ async function main() {
             email: `pm${index + 1}@ba-bazaar.local`,
             role: UserRole.PM_PO,
             password_hash: pmPasswordHash,
-            avatar_url: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`
+            avatar_url: pravatar(21 + index)
           }
         })
     )
@@ -150,7 +151,7 @@ async function main() {
         email: `ba${index + 1}@ba-bazaar.local`,
         role: UserRole.BA,
         password_hash: baPasswordHash,
-        avatar_url: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`
+        avatar_url: pravatar(41 + index)
       }
     });
 
