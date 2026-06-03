@@ -89,8 +89,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const { user, logout } = useAuth();
   const role = user?.role ?? 'BA_MANAGER';
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const introKey = getIntroKey(location.pathname);
   const intro = introKey ? pageIntros[introKey] : undefined;
@@ -122,24 +124,28 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   useEffect(() => {
     setNotificationOpen(false);
+    setUserMenuOpen(false);
   }, [location.pathname, role]);
 
   useEffect(() => {
-    if (!notificationOpen) {
+    if (!notificationOpen && !userMenuOpen) {
       return;
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (notificationRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (notificationRef.current?.contains(target) || userMenuRef.current?.contains(target)) {
         return;
       }
 
       setNotificationOpen(false);
+      setUserMenuOpen(false);
     }
 
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [notificationOpen]);
+  }, [notificationOpen, userMenuOpen]);
 
   useEffect(() => {
     if (!intro || !storageKey) {
@@ -252,15 +258,50 @@ export function LayoutShell({ children }: LayoutShellProps) {
               </p>
               <p>{role.replace('_', ' ')}</p>
             </div>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                await logout();
-                await queryClient.invalidateQueries();
-              }}
-            >
-              Logout
-            </Button>
+            <div ref={userMenuRef} className="relative">
+              <button
+                type="button"
+                aria-label="User menu"
+                aria-expanded={userMenuOpen}
+                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 transition hover:border-slate-300"
+                onClick={() => setUserMenuOpen((current) => !current)}
+              >
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-sm font-semibold text-slate-700">
+                    {(user?.full_name ?? 'U')
+                      .split(' ')
+                      .map((part) => part[0])
+                      .slice(0, 2)
+                      .join('')}
+                  </span>
+                )}
+              </button>
+              {userMenuOpen ? (
+                <Card className="absolute right-0 top-12 z-50 w-56 shadow-lg">
+                  <CardContent className="p-2">
+                    <div className="border-b border-slate-100 px-2 py-2">
+                      <p className="truncate text-sm font-semibold text-slate-950">
+                        {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
+                      </p>
+                      <p className="text-xs text-slate-500">{role.replace('_', ' ')}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="mt-1 w-full justify-start"
+                      onClick={async () => {
+                        setUserMenuOpen(false);
+                        await logout();
+                        await queryClient.invalidateQueries();
+                      }}
+                    >
+                      Logout
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

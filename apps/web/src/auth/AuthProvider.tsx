@@ -66,6 +66,112 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const { accessToken, refreshToken } = session;
+
+    let cancelled = false;
+
+    async function tryRefreshSession() {
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      }).catch(() => null);
+
+      if (!response?.ok) {
+        return null;
+      }
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            access_token?: string;
+            refresh_token?: string;
+          }
+        | null;
+
+      if (!payload?.access_token || !payload.refresh_token) {
+        return null;
+      }
+
+      return {
+        accessToken: payload.access_token,
+        refreshToken: payload.refresh_token
+      };
+    }
+
+    async function fetchCurrentUser(currentAccessToken: string) {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${currentAccessToken}`
+        }
+      }).catch(() => null);
+
+      if (!response) {
+        return null;
+      }
+
+      if (!response.ok) {
+        return response;
+      }
+
+      const payload = (await response.json().catch(() => null)) as { user?: User } | null;
+      return payload?.user ?? null;
+    }
+
+    async function syncSessionUser() {
+      let nextAccessToken = accessToken;
+      let nextRefreshToken = refreshToken;
+      let currentUser = await fetchCurrentUser(nextAccessToken);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (currentUser instanceof Response && currentUser.status === 401) {
+        const refreshedTokens = await tryRefreshSession();
+
+        if (!refreshedTokens) {
+          clearStoredSession();
+          setSession(null);
+          window.dispatchEvent(new Event('auth:logout'));
+          return;
+        }
+
+        nextAccessToken = refreshedTokens.accessToken;
+        nextRefreshToken = refreshedTokens.refreshToken;
+        currentUser = await fetchCurrentUser(nextAccessToken);
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      if (currentUser instanceof Response || !currentUser) {
+        return;
+      }
+
+      const nextSession: AuthSession = {
+        accessToken: nextAccessToken,
+        refreshToken: nextRefreshToken,
+        user: currentUser
+      };
+      setStoredSession(nextSession);
+      setSession(nextSession);
+    }
+
+    void syncSessionUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.accessToken]);
+
   async function login(email: string, password: string) {
     const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
