@@ -296,6 +296,18 @@ export function LayoutShell({ children }: LayoutShellProps) {
               );
             })}
           </nav>
+          {canCreateBooking ? (
+            <div className="mt-2 border-t pt-2">
+              <button
+                type="button"
+                onClick={() => setBookingModalOpen(true)}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Create Booking</span>
+              </button>
+            </div>
+          ) : null}
         </Card>
 
         <main>{children}</main>

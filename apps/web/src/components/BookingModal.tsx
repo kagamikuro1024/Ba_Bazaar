@@ -13,11 +13,19 @@ type RangeCheck = {
 export function BookingModal({
   open,
   onClose,
+  onSuccess,
   initialBaId = '',
+  initialProjectId = '',
+  initialStartDate = '',
+  initialEndDate = '',
 }: {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   initialBaId?: string;
+  initialProjectId?: string;
+  initialStartDate?: string;
+  initialEndDate?: string;
 }) {
   const role = getMockRole();
   const queryClient = useQueryClient();
@@ -36,12 +44,12 @@ export function BookingModal({
 
   const [form, setForm] = useState({
     ba_id: initialBaId,
-    project_id: '',
+    project_id: initialProjectId,
     title: '',
     description: '',
     notes: '',
-    start_date: format(new Date(), 'yyyy-MM-dd'),
-    end_date: format(new Date(), 'yyyy-MM-dd'),
+    start_date: initialStartDate || format(new Date(), 'yyyy-MM-dd'),
+    end_date: initialEndDate || format(new Date(), 'yyyy-MM-dd'),
     capacity_percent: 50,
     priority: 'MEDIUM' as BookingPriority,
     direct: false,
@@ -52,10 +60,17 @@ export function BookingModal({
   useEffect(() => {
     if (open) {
       const autoAssign = !initialBaId;
-      setForm(prev => ({ ...prev, ba_id: initialBaId, auto_assign: autoAssign }));
+      setForm(prev => ({
+        ...prev,
+        ba_id: initialBaId,
+        project_id: initialProjectId,
+        start_date: initialStartDate || format(new Date(), 'yyyy-MM-dd'),
+        end_date: initialEndDate || format(new Date(), 'yyyy-MM-dd'),
+        auto_assign: autoAssign
+      }));
       setLocalError('');
     }
-  }, [open, initialBaId]);
+  }, [open, initialBaId, initialProjectId, initialStartDate, initialEndDate]);
 
   const capacityCheck = useQuery({
     queryKey: [
@@ -86,6 +101,7 @@ export function BookingModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['capacity-summary'] });
+      onSuccess?.();
       onClose();
     }
   });

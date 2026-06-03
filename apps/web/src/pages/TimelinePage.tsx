@@ -18,16 +18,17 @@ import {
   getMockRole,
   type BAProfile,
   type Booking,
-  type BookingPriority,
   type Project
 } from '@/lib/api';
-import { BAIdentity, Field, StatusBadge } from '@/components/common';
+import { BAIdentity, StatusBadge } from '@/components/common';
+import { BookingModal } from '@/components/BookingModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { capacityColor, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
 
 type RequestDraft = {
   ba_id: string;
@@ -52,17 +53,6 @@ type DragScrollState = {
   pointerId: number;
   startX: number;
   startScrollLeft: number;
-};
-
-type RangeCheck = {
-  has_overbook_risk_after_request: boolean;
-  daily: Array<{
-    date: string;
-    approved_capacity: number;
-    pending_capacity: number;
-    requested_capacity: number;
-    risk_after_request: number;
-  }>;
 };
 
 const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -245,10 +235,7 @@ export function TimelinePage() {
     queryKey: ['ba-directory', role],
     queryFn: () => apiFetch<BAProfile[]>('/api/ba')
   });
-  const bookableBas = useQuery({
-    queryKey: ['bookable-bas', role],
-    queryFn: () => apiFetch<BAProfile[]>('/api/ba?bookable=true')
-  });
+
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: () => apiFetch<Project[]>('/api/projects')
@@ -328,7 +315,7 @@ export function TimelinePage() {
   function finishSelection(pointerId: number) {
     setActiveSelection((current) => {
       if (!current || current.pointerId !== pointerId) return current;
-      setDraft(selectionToDraft(current));
+      setDraft({ ...selectionToDraft(current), ba_id: '' });
       return null;
     });
   }
@@ -358,14 +345,9 @@ export function TimelinePage() {
   }
 
   function openCreateBooking() {
-    const fallbackBaId = baFilter || bookableBas.data?.[0]?.id || '';
-    if (!fallbackBaId) {
-      return;
-    }
-
     const today = format(currentDate, 'yyyy-MM-dd');
     setDraft({
-      ba_id: fallbackBaId,
+      ba_id: '',
       start_date: today,
       end_date: today,
       direct: false,
@@ -564,7 +546,7 @@ export function TimelinePage() {
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: ba.id,
+                          ba_id: '',
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false
@@ -587,7 +569,7 @@ export function TimelinePage() {
                       onSelectionEnd={finishSelection}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: ba.id,
+                          ba_id: '',
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false
@@ -667,17 +649,18 @@ export function TimelinePage() {
           </CardContent>
         </Card>
 
-      <CreateBookingModal
-        draft={draft}
-        role={role}
-        bas={bookableBas.data ?? []}
-        projects={projects.data ?? []}
+      <BookingModal
+        open={Boolean(draft)}
         onClose={() => setDraft(null)}
-        onDone={() => {
+        onSuccess={() => {
           setDraft(null);
           setSuccessMessage('Booking request submitted.');
           void queryClient.invalidateQueries();
         }}
+        initialBaId={draft?.ba_id ?? ''}
+        initialProjectId={draft?.project_id ?? ''}
+        initialStartDate={draft?.start_date ?? ''}
+        initialEndDate={draft?.end_date ?? ''}
       />
       <BookingDetailModal
         booking={selectedBooking}
@@ -922,212 +905,7 @@ function MobileBAIdentity({
   );
 }
 
-function CreateBookingModal({
-  draft,
-  role,
-  bas,
-  projects,
-  onClose,
-  onDone
-}: {
-  draft: RequestDraft | null;
-  role: string;
-  bas: BAProfile[];
-  projects: Project[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [range, setRange] = useState<RequestDraft | null>(draft);
-  const [form, setForm] = useState({
-    project_id: draft?.project_id ?? '',
-    title: '',
-    description: '',
-    notes: '',
-    capacity_percent: 50,
-    priority: 'MEDIUM' as BookingPriority
-  });
-  const [localError, setLocalError] = useState('');
-  useEffect(() => {
-    setRange(draft);
-    setForm({
-      project_id: draft?.project_id ?? '',
-      title: '',
-      description: '',
-      notes: '',
-      capacity_percent: 50,
-      priority: 'MEDIUM'
-    });
-    setLocalError('');
-  }, [draft]);
-  const capacityCheck = useQuery({
-    queryKey: [
-      'capacity-range-check',
-      range?.ba_id,
-      range?.start_date,
-      range?.end_date,
-      form.capacity_percent
-    ],
-    queryFn: () =>
-      apiFetch<RangeCheck>(
-        `/api/capacity/range-check?ba_id=${encodeURIComponent(range?.ba_id ?? '')}&start_date=${range?.start_date}&end_date=${range?.end_date}&capacity_percent=${form.capacity_percent}`
-      ),
-    enabled: Boolean(range?.ba_id && range.start_date && range.end_date)
-  });
-  const mutation = useMutation({
-    mutationFn: () =>
-      apiFetch(range?.direct ? '/api/bookings/direct' : '/api/bookings/request', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...range,
-          ...form
-        })
-      }),
-    onSuccess: onDone
-  });
 
-  if (!range) return null;
-
-  return (
-    <Modal title="Create Booking Request" open={Boolean(draft)} onClose={onClose}>
-      <form
-        className="grid gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (range.end_date < range.start_date) {
-            setLocalError('End date must be greater than or equal to start date.');
-            return;
-          }
-          setLocalError('');
-          mutation.mutate();
-        }}
-      >
-        <Field label="BA">
-          <select
-            value={range.ba_id}
-            onChange={(event) =>
-              setRange({ ...range, ba_id: event.target.value })
-            }
-            className="h-10 rounded-md border px-3"
-          >
-            {bas.map((ba) => (
-              <option key={ba.id} value={ba.id}>
-                {ba.full_name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Project">
-          <select
-            value={form.project_id}
-            onChange={(event) => setForm({ ...form, project_id: event.target.value })}
-            className="h-10 rounded-md border px-3"
-            required
-          >
-            <option value="">Select project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Start date">
-            <input
-              type="date"
-              value={range.start_date}
-              onChange={(event) => setRange({ ...range, start_date: event.target.value })}
-              className="h-10 rounded-md border px-3"
-              required
-            />
-          </Field>
-          <Field label="End date">
-            <input
-              type="date"
-              value={range.end_date}
-              onChange={(event) => setRange({ ...range, end_date: event.target.value })}
-              className="h-10 rounded-md border px-3"
-              required
-            />
-          </Field>
-        </div>
-        <Field label="Title">
-          <input
-            value={form.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
-            className="h-10 rounded-md border px-3"
-            required
-          />
-        </Field>
-        <Field label="Description">
-          <textarea
-            value={form.description}
-            onChange={(event) => setForm({ ...form, description: event.target.value })}
-            className="min-h-24 rounded-md border p-3"
-            required
-          />
-        </Field>
-        <Field label="Ghi chú thêm / Notes">
-          <textarea
-            value={form.notes}
-            onChange={(event) => setForm({ ...form, notes: event.target.value })}
-            className="min-h-20 rounded-md border p-3"
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Capacity">
-            <select
-              value={form.capacity_percent}
-              onChange={(event) => setForm({ ...form, capacity_percent: Number(event.target.value) })}
-              className="h-10 rounded-md border px-3"
-            >
-              <option value={50}>50%</option>
-              <option value={100}>100%</option>
-            </select>
-          </Field>
-          <Field label="Priority">
-            <select
-              value={form.priority}
-              onChange={(event) => setForm({ ...form, priority: event.target.value as BookingPriority })}
-              className="h-10 rounded-md border px-3"
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-              <option value="URGENT">Urgent</option>
-            </select>
-          </Field>
-        </div>
-        {role === 'BA_MANAGER' ? (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={range.direct}
-              onChange={(event) => setRange({ ...range, direct: event.target.checked })}
-            />
-            Create direct approved booking
-          </label>
-        ) : null}
-        {capacityCheck.data?.has_overbook_risk_after_request ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Overbook risk: selected range may exceed 100% capacity when pending requests are included.
-          </div>
-        ) : null}
-        {localError ? (
-          <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
-            {localError}
-          </div>
-        ) : null}
-        {mutation.error ? (
-          <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
-            {mutation.error.message}
-          </div>
-        ) : null}
-        <Button type="submit">{mutation.isPending ? 'Submitting...' : 'Submit Request'}</Button>
-      </form>
-    </Modal>
-  );
-}
 
 function BookingDetailModal({
   booking,

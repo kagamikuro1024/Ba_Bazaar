@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   CalendarRange,
-  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Hash,
@@ -18,7 +18,6 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import {
   apiFetch,
-  getManagerRequestMessage,
   getManagerRequestState,
   getRequestType,
   needsManagerVerification,
@@ -33,7 +32,6 @@ import { Avatar, BAIdentity } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingScreen } from '@/components/ui/loading-screen';
 import { Modal } from '@/components/ui/modal';
 
 type CapacitySummary = {
@@ -389,23 +387,7 @@ export function ManagerInboxPage() {
     onSuccess: () => handleMutationSuccess('Request cancelled.')
   });
 
-  const suggestionList = useMemo(() => {
-    const capacityMap = new Map((summary.data?.items ?? []).map((item) => [item.ba_id, item]));
 
-    return (bas.data ?? [])
-      .map((ba) => {
-        const capacity = capacityMap.get(ba.id);
-        return {
-          ba,
-          approvedCapacity: capacity?.approved_capacity ?? 0,
-          pendingCapacity: capacity?.pending_capacity ?? 0,
-          riskCapacity: capacity?.risk_capacity ?? 0,
-          availability: Math.max(0, 100 - (capacity?.approved_capacity ?? 0))
-        };
-      })
-      .sort((left, right) => left.riskCapacity - right.riskCapacity || right.availability - left.availability)
-      .slice(0, 3);
-  }, [bas.data, summary.data]);
 
   useEffect(() => {
     if (!selectedBooking || !isMobile) {
@@ -712,7 +694,7 @@ export function ManagerInboxPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-sm font-medium text-slate-500">
@@ -743,47 +725,46 @@ export function ManagerInboxPage() {
                 type="button"
                 onClick={() => openDetail(booking.id)}
                 className={[
-                  'rounded-xl border bg-white p-4 text-left shadow-sm transition',
+                  'rounded-xl border bg-white p-4 text-left shadow-sm transition block w-full',
                   selected
-                    ? 'border-blue-300 ring-2 ring-blue-100'
+                    ? 'border-blue-400 ring-1 ring-blue-400'
                     : 'border-slate-200 hover:border-slate-300'
                 ].join(' ')}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <p className="truncate text-lg font-semibold text-slate-900">{booking.title}</p>
+                      <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <RequestTypeBadge booking={booking} />
                       <RequestStateBadge booking={booking} />
+                      {needsManagerVerification(booking) ? (
+                        <Badge tone="warning">Needs verification</Badge>
+                      ) : null}
                     </div>
-                    <p className="mt-2 text-sm font-medium text-blue-700">
-                      {getManagerRequestMessage(booking)}
-                    </p>
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
                 </div>
 
-                <div className="mt-4 grid gap-2 text-sm text-slate-500 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
+                <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
+                  <div className="flex items-center gap-2 truncate">
                     {type === 'SPECIFIC_BA' ? (
-                      <UserRound className="h-4 w-4 text-slate-400" />
+                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
                     ) : (
-                      <UsersRound className="h-4 w-4 text-slate-400" />
+                      <UsersRound className="h-4 w-4 shrink-0 text-slate-400" />
                     )}
-                    <span>{booking.ba?.full_name ?? 'Unassigned'}</span>
+                    <span className="truncate">{booking.ba?.full_name ?? 'Unassigned'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CalendarRange className="h-4 w-4 text-slate-400" />
-                    <span>
+                  <div className="flex items-center gap-2 truncate">
+                    <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
+                    <span className="truncate">
                       {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
                     </span>
                   </div>
-                  <div>Requester: {booking.requester.full_name}</div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
-                    {needsManagerVerification(booking) ? (
-                      <Badge tone="warning">Needs verification</Badge>
-                    ) : null}
+                  <div className="flex items-center gap-2 truncate sm:col-span-2">
+                    <span className="truncate">Requester: {booking.requester.full_name}</span>
                   </div>
                 </div>
               </button>
@@ -857,7 +838,8 @@ export function ManagerInboxPage() {
         {!isMobile && selectedBooking ? (
           <RequestDetailPanel
             booking={selectedBooking}
-            suggestionList={suggestionList}
+            allBas={bas.data ?? []}
+            capacitySummary={summary.data}
             selectedBaId={selectedBaId}
             capacity={selectedCapacity.data}
             onSelectBa={(baId) =>
@@ -899,7 +881,8 @@ export function ManagerInboxPage() {
             <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200" />
             <RequestDetailPanel
               booking={selectedBooking}
-              suggestionList={suggestionList}
+              allBas={bas.data ?? []}
+              capacitySummary={summary.data}
               selectedBaId={selectedBaId}
               capacity={selectedCapacity.data}
               onSelectBa={(baId) =>
@@ -1005,7 +988,8 @@ export function ManagerInboxPage() {
 
 function RequestDetailPanel({
   booking,
-  suggestionList,
+  allBas,
+  capacitySummary,
   selectedBaId,
   capacity,
   onSelectBa,
@@ -1018,13 +1002,8 @@ function RequestDetailPanel({
   isSubmitting
 }: {
   booking: Booking;
-  suggestionList: Array<{
-    ba: BAProfile;
-    approvedCapacity: number;
-    pendingCapacity: number;
-    riskCapacity: number;
-    availability: number;
-  }>;
+  allBas: BAProfile[];
+  capacitySummary?: CapacitySummary;
   selectedBaId: string;
   capacity?: CapacityDetail;
   onSelectBa: (baId: string) => void;
@@ -1036,6 +1015,8 @@ function RequestDetailPanel({
   onSaveForLater: () => void;
   isSubmitting: boolean;
 }) {
+  const [baSearch, setBaSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const requestState = getManagerRequestState(booking);
   const type = getRequestType(booking);
   const verificationItems = getVerificationItems(booking);
@@ -1043,6 +1024,25 @@ function RequestDetailPanel({
   const canAssign = booking.status === 'PENDING' && !booking.ba_id;
   const canReject = booking.status === 'PENDING';
   const canCancel = booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS';
+
+  const filteredBas = useMemo(() => {
+    const search = baSearch.toLowerCase().trim();
+    const capacityMap = new Map((capacitySummary?.items ?? []).map((item) => [item.ba_id, item]));
+
+    return allBas
+      .map((ba) => {
+        const cap = capacityMap.get(ba.id);
+        return {
+          ba,
+          availability: Math.max(0, 100 - (cap?.approved_capacity ?? 0)),
+          riskCapacity: cap?.risk_capacity ?? 0
+        };
+      })
+      .filter((item) => !search || item.ba.full_name.toLowerCase().includes(search))
+      .sort((a, b) => a.riskCapacity - b.riskCapacity);
+  }, [allBas, baSearch, capacitySummary]);
+
+  const selectedBa = allBas.find((ba) => ba.id === selectedBaId);
 
   return (
     <Card className="h-fit">
@@ -1088,8 +1088,8 @@ function RequestDetailPanel({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <DetailStat
             label={type === 'SPECIFIC_BA' ? 'Requested BA' : 'Requested BA / Assignment'}
-            value={booking.ba?.full_name ?? 'Unassigned'}
-            hint={booking.ba?.level ?? 'Assign BA'}
+            value={booking.ba?.full_name ?? selectedBa?.full_name ?? 'Unassigned'}
+            hint={booking.ba?.level ?? selectedBa?.level ?? 'Assign BA'}
             tone="person"
             icon={UserRound}
           />
@@ -1199,58 +1199,81 @@ function RequestDetailPanel({
         {canAssign ? (
           <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-950">Suggested BA</p>
+              <p className="text-sm font-semibold text-slate-950">Select BA for Assignment</p>
               <Button variant="ghost" size="sm" asChild>
-                <a href="/crm/ba">View all in BA Directory</a>
+                <a href="/crm/ba">BA Directory</a>
               </Button>
             </div>
-            <div className="grid gap-3 xl:grid-cols-3">
-              {suggestionList.map((item) => {
-                const selected = selectedBaId === item.ba.id;
-                return (
-                  <button
-                    key={item.ba.id}
-                    type="button"
-                    onClick={() => onSelectBa(item.ba.id)}
-                    className={[
-                      'rounded-xl border p-4 text-left transition',
-                      selected
-                        ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-100'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    ].join(' ')}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={item.ba.full_name} url={item.ba.avatar_url} />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-950">
-                            {item.ba.full_name}
+            
+            <div className="relative">
+              <div 
+                className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                {selectedBa ? (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={selectedBa.full_name} url={selectedBa.avatar_url} />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">{selectedBa.full_name}</p>
+                      <p className="text-xs text-slate-500">{selectedBa.level}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">Choose a BA...</p>
+                )}
+                <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="flex items-center gap-2 border-b border-slate-100 p-3">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <input 
+                      autoFocus
+                      className="w-full text-sm outline-none" 
+                      placeholder="Search BAs..."
+                      value={baSearch}
+                      onChange={(e) => setBaSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {filteredBas.map((item) => (
+                      <div 
+                        key={item.ba.id}
+                        className="flex cursor-pointer items-center justify-between gap-3 p-3 hover:bg-slate-50"
+                        onClick={() => {
+                          onSelectBa(item.ba.id);
+                          setIsDropdownOpen(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar name={item.ba.full_name} url={item.ba.avatar_url} />
+                          <div>
+                            <p className="text-sm font-medium text-slate-950">{item.ba.full_name}</p>
+                            <p className="text-xs text-slate-500">{item.ba.level}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xs font-semibold ${item.availability < 20 ? 'text-rose-600' : 'text-slate-600'}`}>
+                            {item.availability}% Avail.
                           </p>
-                          <p className="text-xs text-slate-500">{item.ba.level}</p>
+                          <p className="text-[10px] text-slate-400">
+                            {item.riskCapacity}% load
+                          </p>
                         </div>
                       </div>
-                      <span
-                        className={[
-                          'mt-1 h-4 w-4 rounded-full border',
-                          selected ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
-                        ].join(' ')}
-                      >
-                        {selected ? <Check className="h-3 w-3 text-white" /> : null}
-                      </span>
-                    </div>
-                    <div className="mt-4 grid gap-2 text-xs text-slate-500">
-                      <MetricRow label="Availability" value={`${item.availability}%`} />
-                      <MetricRow label="Approved capacity" value={`${item.approvedCapacity}%`} />
-                      <MetricRow label="Current workload" value={`${item.riskCapacity}%`} />
-                    </div>
-                  </button>
-                );
-              })}
+                    ))}
+                    {filteredBas.length === 0 && (
+                      <p className="p-4 text-center text-sm text-slate-500">No BAs found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         ) : (
           <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-semibold text-slate-950">Requested BA</p>
+            <p className="text-sm font-semibold text-slate-950">Assigned BA</p>
             <BAIdentity ba={booking.ba} />
           </section>
         )}
@@ -1387,14 +1410,7 @@ function InfoCard({
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span>{label}</span>
-      <span className="font-semibold text-slate-700">{value}</span>
-    </div>
-  );
-}
+
 
 function RequestTypeBadge({ booking }: { booking: Booking }) {
   return (
