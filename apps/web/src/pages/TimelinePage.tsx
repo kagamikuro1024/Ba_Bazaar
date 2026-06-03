@@ -33,6 +33,7 @@ type RequestDraft = {
   start_date: string;
   end_date: string;
   direct: boolean;
+  project_id?: string;
 };
 
 type DraftSelection = {
@@ -355,6 +356,22 @@ export function TimelinePage() {
     setDragScroll((current) => (current?.pointerId === pointerId ? null : current));
   }
 
+  function openCreateBooking() {
+    const fallbackBaId = baFilter || bookableBas.data?.[0]?.id || '';
+    if (!fallbackBaId) {
+      return;
+    }
+
+    const today = format(currentDate, 'yyyy-MM-dd');
+    setDraft({
+      ba_id: fallbackBaId,
+      start_date: today,
+      end_date: today,
+      direct: false,
+      project_id: projectFilter || ''
+    });
+  }
+
   return (
     <div className="grid gap-5">
       {successMessage ? (
@@ -368,8 +385,8 @@ export function TimelinePage() {
       {bas.error || bookings.error || projects.error || summary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
       ) : null}
-      <div className="flex justify-end px-1">
-        <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-auto lg:flex-nowrap">
+      <div>
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-full lg:flex-nowrap lg:items-center">
           <select
             value={baFilter}
             onChange={(event) => setBaFilter(event.target.value)}
@@ -394,8 +411,23 @@ export function TimelinePage() {
               </option>
             ))}
           </select>
+          {canCreateBooking ? (
+            <Button className="hidden lg:ml-auto lg:inline-flex" onClick={openCreateBooking}>
+              <Plus className="h-4 w-4" /> Create booking
+            </Button>
+          ) : null}
         </div>
       </div>
+      {canCreateBooking ? (
+        <Button
+          className="fixed bottom-24 right-4 z-30 h-12 w-12 rounded-full shadow-lg lg:hidden"
+          size="icon"
+          onClick={openCreateBooking}
+          aria-label="Create booking"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      ) : null}
       <Card className="overflow-hidden">
           <CardHeader className="gap-0 p-0">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
@@ -916,7 +948,7 @@ function CreateBookingModal({
 }) {
   const [range, setRange] = useState<RequestDraft | null>(draft);
   const [form, setForm] = useState({
-    project_id: '',
+    project_id: draft?.project_id ?? '',
     title: '',
     description: '',
     notes: '',
@@ -926,6 +958,14 @@ function CreateBookingModal({
   const [localError, setLocalError] = useState('');
   useEffect(() => {
     setRange(draft);
+    setForm({
+      project_id: draft?.project_id ?? '',
+      title: '',
+      description: '',
+      notes: '',
+      capacity_percent: 50,
+      priority: 'MEDIUM'
+    });
     setLocalError('');
   }, [draft]);
   const capacityCheck = useQuery({
