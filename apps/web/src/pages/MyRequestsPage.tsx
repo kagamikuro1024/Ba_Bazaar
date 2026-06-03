@@ -55,7 +55,7 @@ export function MyRequestsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-slate-950">{booking.project.name}</h3>
-                  <p className="text-sm text-slate-600">{booking.ba.full_name}</p>
+                  <p className="text-sm text-slate-600">{booking.ba?.full_name ?? 'Auto assign'}</p>
                 </div>
                 <StatusBadge status={booking.status} />
               </div>

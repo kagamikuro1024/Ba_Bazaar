@@ -13,7 +13,7 @@ import {
   requireDate,
   requireString
 } from '../common/parse';
-import { canApproveBooking, canCreateBookingRequest, canCreateDirectBooking } from '../auth/rbac';
+import { canApproveBooking, canAssignBooking, canCreateBookingRequest, canCreateDirectBooking } from '../auth/rbac';
 import { PrismaService } from '../prisma/prisma.service';
 
 type BookingInput = {
@@ -91,7 +91,15 @@ export class BookingsService {
     });
 
     await this.audit(currentUser, 'CREATE_BOOKING_REQUEST', 'Booking', booking.id, null, booking);
-    await this.notifyManagers('BOOKING_REQUEST_CREATED', 'New booking request', booking);
+    if (normalized.ba_id) {
+      await this.notifyManagers('BOOKING_REQUEST_CREATED', 'New booking request', booking);
+    } else {
+      await this.notifyManagers(
+        'BOOKING_NEEDS_ASSIGNMENT',
+        'Booking needs BA assignment',
+        booking
+      );
+    }
 
     return {
       booking,
@@ -106,6 +114,10 @@ export class BookingsService {
     }
 
     const normalized = await this.normalizeBookingInput(input);
+    if (!normalized.ba_id) {
+      throw new BadRequestException('BA is required for direct bookings');
+    }
+    
     const existing = await this.getBaBookings(normalized.ba_id);
     const approval = canApproveCapacity(
       existing,
@@ -123,6 +135,7 @@ export class BookingsService {
     const booking = await this.prisma.booking.create({
       data: {
         ...normalized,
+        ba_id: normalized.ba_id,
         requester_id: currentUser.id,
         manager_id: currentUser.id,
         status: BookingStatus.APPROVED,
@@ -198,6 +211,46 @@ export class BookingsService {
     });
 
     await this.audit(currentUser, 'UPDATE_BOOKING', 'Booking', id, booking, updated);
+    return updated;
+  }
+
+  async assign(currentUser: User, id: string, input: BookingInput) {
+    if (!canAssignBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'ASSIGN_BOOKING_BA', 'Booking', id);
+      throw new ForbiddenException('Manager role required to assign booking');
+    }
+
+    const baId = requireString(input.ba_id, 'ba_id');
+    const ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
+    if (!ba || ba.status !== BAStatus.ACTIVE) {
+      throw new BadRequestException('Only active BA can be assigned');
+    }
+
+    const booking = await this.getExisting(id);
+    const existing = await this.getBaBookings(baId);
+    const approval = canApproveCapacity(
+      existing,
+      booking.start_date,
+      booking.end_date,
+      booking.capacity_percent,
+      booking.id
+    );
+
+    if (!approval.allowed) {
+      throw new BadRequestException(
+        `Cannot assign BA because capacity exceeds 100% on ${approval.blocking_day}`
+      );
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: { ba_id: baId, manager_id: currentUser.id },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'ASSIGN_BOOKING_BA', 'Booking', id, booking, updated);
+    await this.notifyRequester(updated, 'BOOKING_ASSIGNED', 'BA assigned', `Assigned BA: ${ba.full_name}`);
+    await this.notifyAssignedBA(updated, 'BOOKING_ASSIGNED', 'Booking assigned');
     return updated;
   }
 
@@ -346,10 +399,14 @@ export class BookingsService {
   }
 
   private async normalizeBookingInput(input: BookingInput) {
-    const baId = requireString(input.ba_id, 'ba_id');
-    const ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
-    if (!ba || ba.status !== BAStatus.ACTIVE) {
-      throw new BadRequestException('Only active BA can be booked');
+    const baId = input.ba_id?.trim() || null;
+    let ba = null;
+    
+    if (baId) {
+      ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
+      if (!ba || ba.status !== BAStatus.ACTIVE) {
+        throw new BadRequestException('Only active BA can be booked');
+      }
     }
 
     const startDate = requireDate(input.start_date, 'start_date');
@@ -372,11 +429,15 @@ export class BookingsService {
   }
 
   private async getSubmitWarning(
-    baId: string,
+    baId: string | null,
     startDate: Date,
     endDate: Date,
     capacityPercent: number
   ) {
+    if (!baId) {
+      return null;
+    }
+    
     const existing = await this.getBaBookings(baId);
     const capacity = getRangeCapacity(existing, startDate, endDate);
     const warningDay = capacity.daily.find(
@@ -398,7 +459,8 @@ export class BookingsService {
     };
   }
 
-  private async getBaBookings(baId: string) {
+  private async getBaBookings(baId: string | null) {
+    if (!baId) return [];
     return this.prisma.booking.findMany({ where: { ba_id: baId } });
   }
 
@@ -412,7 +474,7 @@ export class BookingsService {
 
   private ensureCanRead(
     currentUser: User,
-    booking: { requester_id: string; ba?: { user_id: string | null } }
+    booking: { requester_id: string; ba?: { user_id: string | null } | null }
   ) {
     if (canApproveBooking(currentUser.role)) {
       return;
@@ -478,12 +540,12 @@ export class BookingsService {
   }
 
   private async notifyAssignedBA(
-    booking: { id: string; title: string; ba: { user_id: string | null } },
+    booking: { id: string; title: string; ba: { user_id: string | null } | null },
     type: string,
     title: string,
     detail?: string
   ) {
-    if (!booking.ba.user_id) {
+    if (!booking.ba || !booking.ba.user_id) {
       return;
     }
 

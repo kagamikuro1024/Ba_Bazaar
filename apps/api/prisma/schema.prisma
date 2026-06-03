@@ -158,7 +158,7 @@ model Project {
 
 model Booking {
   id                String          @id @default(uuid()) @db.Uuid
-  ba_id             String          @db.Uuid
+  ba_id             String?         @db.Uuid
   project_id        String          @db.Uuid
   requester_id      String          @db.Uuid
   manager_id        String?         @db.Uuid
@@ -181,7 +181,7 @@ model Booking {
   created_at        DateTime        @default(now())
   updated_at        DateTime        @updatedAt
 
-  ba                BAProfile       @relation(fields: [ba_id], references: [id], onDelete: Restrict)
+  ba                BAProfile?      @relation(fields: [ba_id], references: [id], onDelete: Restrict)
   project           Project         @relation(fields: [project_id], references: [id], onDelete: Restrict)
   requester         User            @relation("BookingRequester", fields: [requester_id], references: [id], onDelete: Restrict)
   manager           User?           @relation("BookingManager", fields: [manager_id], references: [id], onDelete: SetNull)

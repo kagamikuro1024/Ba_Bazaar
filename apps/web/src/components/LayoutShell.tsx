@@ -8,13 +8,15 @@ import {
   Inbox,
   Bell,
   ChevronRight,
-  Users
+  Users,
+  Plus
 } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, getMockRole, setMockRole, type NotificationItem, type UserRole } from '@/lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
+import { BookingModal } from './BookingModal';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -85,6 +87,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const [role, setRole] = useState(getMockRole());
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const introKey = getIntroKey(location.pathname);
@@ -106,18 +109,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const recentNotifications = (notifications.data ?? []).slice(0, 5);
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
+  const canCreateBooking = role !== 'BA';
   const mobileNavigation = useMemo(() => {
-    const timelineItem = visibleNavigation.find((item) => item.to === '/timeline');
-    const otherItems = visibleNavigation.filter((item) => item.to !== '/timeline');
-    if (!timelineItem) return visibleNavigation;
-
-    const middleIndex = Math.floor(otherItems.length / 2);
-    return [
-      ...otherItems.slice(0, middleIndex),
-      timelineItem,
-      ...otherItems.slice(middleIndex)
-    ];
-  }, [visibleNavigation]);
+    if (role === 'BA_MANAGER') {
+      return visibleNavigation.filter((item) => item.to !== '/reports');
+    }
+    return visibleNavigation;
+  }, [visibleNavigation, role]);
 
   useEffect(() => {
     setNotificationOpen(false);
@@ -305,7 +303,6 @@ export function LayoutShell({ children }: LayoutShellProps) {
         <div className="flex items-stretch justify-around gap-1">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
-
             return (
               <NavLink
                 key={item.to}
@@ -318,7 +315,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                     className={[
                       'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
                       isActive
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                        ? 'text-blue-600'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
                     ].join(' ')}
                   >
@@ -337,6 +334,24 @@ export function LayoutShell({ children }: LayoutShellProps) {
           })}
         </div>
       </nav>
+
+      {canCreateBooking ? (
+        <button
+          type="button"
+          onClick={() => setBookingModalOpen(true)}
+          className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 hover:bg-blue-700 transition-all active:scale-95 lg:hidden"
+          aria-label="Create Booking Request"
+        >
+          <Plus className="h-6 w-6" strokeWidth={3} />
+        </button>
+      ) : null}
+
+      {canCreateBooking && (
+        <BookingModal
+          open={bookingModalOpen}
+          onClose={() => setBookingModalOpen(false)}
+        />
+      )}
 
       {introOpen && intro ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">
