@@ -49,7 +49,7 @@ export type User = {
 
 export type Booking = {
   id: string;
-  ba_id: string;
+  ba_id: string | null;
   project_id: string;
   requester_id: string;
   manager_id?: string | null;
@@ -64,7 +64,7 @@ export type Booking = {
   reject_reason?: string | null;
   cancel_reason?: string | null;
   manager_comment?: string | null;
-  ba: BAProfile;
+  ba: BAProfile | null;
   project: Project;
   requester: User;
   manager?: User | null;

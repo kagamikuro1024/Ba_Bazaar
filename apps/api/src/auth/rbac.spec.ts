@@ -4,7 +4,8 @@ import {
   canApproveBooking,
   canCreateBookingRequest,
   canCreateDirectBooking,
-  canReadPrivateNotes
+  canReadPrivateNotes,
+  canAssignBooking
 } from './rbac';
 
 describe('rbac rules', () => {
@@ -22,5 +23,15 @@ describe('rbac rules', () => {
 
   it('prevents BA from creating booking requests', () => {
     expect(canCreateBookingRequest(UserRole.BA)).toBe(false);
+  });
+
+  it('allows BA_MANAGER and ADMIN to assign bookings', () => {
+    expect(canAssignBooking(UserRole.BA_MANAGER)).toBe(true);
+    expect(canAssignBooking(UserRole.ADMIN)).toBe(true);
+  });
+
+  it('denies PM_PO and BA from assigning bookings', () => {
+    expect(canAssignBooking(UserRole.PM_PO)).toBe(false);
+    expect(canAssignBooking(UserRole.BA)).toBe(false);
   });
 });

@@ -63,6 +63,15 @@ export class BookingsController {
     return this.bookingsService.approve(await this.authService.getCurrentUser(request), id);
   }
 
+  @Patch(':id/assign')
+  async assign(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>
+  ) {
+    return this.bookingsService.assign(await this.authService.getCurrentUser(request), id, body);
+  }
+
   @Post(':id/reject')
   async reject(
     @Req() request: Request,

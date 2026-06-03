@@ -18,7 +18,20 @@ export function Avatar({ name, url }: { name: string; url?: string | null }) {
   );
 }
 
-export function BAIdentity({ ba }: { ba: BAProfile }) {
+export function BAIdentity({ ba }: { ba: BAProfile | null }) {
+  if (!ba) {
+    return (
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-400">
+          ?
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-500 italic">Auto assign</p>
+          <p className="text-xs text-slate-400">Assignment pending</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Avatar name={ba.full_name} url={ba.avatar_url} />

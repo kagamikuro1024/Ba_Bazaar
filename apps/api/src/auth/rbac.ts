@@ -16,6 +16,10 @@ export function canApproveBooking(role: UserRole) {
   return isManagerRole(role);
 }
 
+export function canAssignBooking(role: UserRole) {
+  return isManagerRole(role);
+}
+
 export function canManageBaProfile(role: UserRole) {
   return isManagerRole(role);
 }
