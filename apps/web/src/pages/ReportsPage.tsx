@@ -4,6 +4,7 @@ import { Download, Search, X } from 'lucide-react';
 import { apiFetch, downloadCsv } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 const pageSizeOptions = [10, 25, 50];
 
@@ -87,7 +88,7 @@ export function ReportsPage() {
         </div>
       </div>
       {report.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading report...</CardContent></Card>
+        <LoadingScreen message="Loading report" />
       ) : null}
       {report.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>

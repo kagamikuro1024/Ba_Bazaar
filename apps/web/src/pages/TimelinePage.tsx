@@ -25,6 +25,7 @@ import { BAIdentity, Field, StatusBadge } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { capacityColor, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -380,7 +381,7 @@ export function TimelinePage() {
         </div>
       ) : null}
       {bas.isLoading || bookings.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading timeline...</CardContent></Card>
+        <LoadingScreen message="Loading timeline" />
       ) : null}
       {bas.error || bookings.error || projects.error || summary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>

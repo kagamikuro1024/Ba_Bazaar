@@ -7,6 +7,7 @@ import { BAIdentity, Field, StatusBadge } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 export function BADirectoryPage() {
   const queryClient = useQueryClient();
@@ -84,7 +85,7 @@ export function BADirectoryPage() {
       }} /> : null}
 
       {bas.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading BA directory...</CardContent></Card>
+        <LoadingScreen message="Loading BA directory" />
       ) : null}
       {bas.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load BA directory. Check API connection and retry.</CardContent></Card>

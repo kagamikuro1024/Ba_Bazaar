@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiFetch, type NotificationItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 import { getMockRole } from '@/lib/api';
 
@@ -45,7 +46,7 @@ export function NotificationsPage() {
   return (
     <div className="grid gap-5">
       {notifications.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading notifications...</CardContent></Card>
+        <LoadingScreen message="Loading notifications" />
       ) : null}
       {notifications.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load notifications. Check API connection and retry.</CardContent></Card>

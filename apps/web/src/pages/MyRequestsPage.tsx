@@ -4,6 +4,7 @@ import { apiFetch, type Booking } from '@/lib/api';
 import { StatusBadge } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 
 export function MyRequestsPage() {
@@ -43,7 +44,7 @@ export function MyRequestsPage() {
         </select>
       </div>
       {requests.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading requests...</CardContent></Card>
+        <LoadingScreen message="Loading your requests" />
       ) : null}
       {requests.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load requests. Check API connection and retry.</CardContent></Card>

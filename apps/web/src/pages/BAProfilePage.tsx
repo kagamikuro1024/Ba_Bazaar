@@ -17,6 +17,7 @@ import { BAIdentity, Field, StatusBadge } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 
 const historyChartHeight = 280;
@@ -195,7 +196,7 @@ export function BAProfilePage() {
     [filteredCompletedHistoryBookings]
   );
 
-  if (ba.isLoading) return <Card><CardContent className="p-6">Loading profile...</CardContent></Card>;
+  if (ba.isLoading) return <LoadingScreen message="Loading profile" />;
   if (!ba.data) return <Card><CardContent className="p-6">Profile not found.</CardContent></Card>;
 
   return (
