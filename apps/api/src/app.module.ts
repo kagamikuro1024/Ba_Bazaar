@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { HealthController } from './health.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -22,7 +23,8 @@ import { ReportsService } from './reports/reports.service';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../../.env']
-    })
+    }),
+    JwtModule.register({})
   ],
   controllers: [
     HealthController,

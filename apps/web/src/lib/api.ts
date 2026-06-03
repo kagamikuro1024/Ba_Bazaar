@@ -1,3 +1,5 @@
+import { clearStoredSession, getStoredRole, getStoredSession, setStoredSession } from '@/auth/storage';
+
 export type UserRole = 'BA_MANAGER' | 'PM_PO' | 'BA' | 'ADMIN';
 export type BAStatus = 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED';
 export type BALevel = 'JUNIOR' | 'MIDDLE' | 'SENIOR' | 'LEAD';
@@ -93,15 +95,104 @@ export type NotificationItem = {
   created_at: string;
 };
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
+function resolveApiBaseUrl() {
+  const configured = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
+  if (configured) {
+    return configured;
+  }
 
-export function getMockRole(): UserRole {
-  return (localStorage.getItem('ba-bazaar-role') as UserRole | null) ?? 'BA_MANAGER';
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    return `${protocol}//${window.location.hostname}:3000`;
+  }
+
+  return 'http://localhost:3000';
 }
 
-export function setMockRole(role: UserRole) {
-  localStorage.setItem('ba-bazaar-role', role);
+export const API_BASE_URL = resolveApiBaseUrl();
+
+let refreshPromise: Promise<string | null> | null = null;
+
+export function getMockRole(): UserRole {
+  return getStoredRole() ?? 'BA_MANAGER';
+}
+
+export function setMockRole() {
+  return;
+}
+
+function allowMockAuth() {
+  return import.meta.env.VITE_ALLOW_MOCK_AUTH === 'true';
+}
+
+async function refreshAccessToken() {
+  const session = getStoredSession();
+  if (!session?.refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ refresh_token: session.refreshToken })
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        message?: string;
+        access_token?: string;
+        refresh_token?: string;
+      }
+    | null;
+
+  if (!response.ok || !payload?.access_token || !payload.refresh_token) {
+    clearStoredSession();
+    window.dispatchEvent(new Event('auth:logout'));
+    return null;
+  }
+
+  const nextSession = {
+    ...session,
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token
+  };
+  setStoredSession(nextSession);
+  window.dispatchEvent(new Event('auth:refresh'));
+  return nextSession.accessToken;
+}
+
+async function getFreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+}
+
+function buildHeaders(init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  const session = getStoredSession();
+
+  if (!headers.has('Content-Type') && init?.body && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (session?.accessToken) {
+    headers.set('Authorization', `Bearer ${session.accessToken}`);
+  } else if (allowMockAuth()) {
+    headers.set('x-mock-role', getMockRole());
+  }
+
+  return headers;
+}
+
+async function parseError(response: Response) {
+  const error = (await response.json().catch(() => null)) as { message?: string } | null;
+  return error?.message ?? `Request failed with ${response.status}`;
 }
 
 export function getRequestType(booking: Booking): RequestType {
@@ -159,16 +250,31 @@ export function getManagerRequestMessage(booking: Booking) {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-mock-role': getMockRole(),
-      ...init?.headers
-    }
+    headers: buildHeaders(init)
   });
 
+  if (response.status === 401 && !path.startsWith('/api/auth/')) {
+    const nextAccessToken = await getFreshAccessToken();
+    if (nextAccessToken) {
+      const retryHeaders = buildHeaders(init);
+      retryHeaders.set('Authorization', `Bearer ${nextAccessToken}`);
+
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers: retryHeaders
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(await parseError(retryResponse));
+      }
+
+      const retryText = await retryResponse.text();
+      return (retryText ? JSON.parse(retryText) : null) as T;
+    }
+  }
+
   if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(error?.message ?? `Request failed with ${response.status}`);
+    throw new Error(await parseError(response));
   }
 
   const text = await response.text();
@@ -176,15 +282,21 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export async function downloadCsv(path: string) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'x-mock-role': getMockRole()
-    }
+  let response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: buildHeaders()
   });
 
+  if (response.status === 401) {
+    const nextAccessToken = await getFreshAccessToken();
+    if (nextAccessToken) {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: buildHeaders()
+      });
+    }
+  }
+
   if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(error?.message ?? `CSV download failed with ${response.status}`);
+    throw new Error(await parseError(response));
   }
 
   const blob = await response.blob();
