@@ -261,6 +261,97 @@ async function main() {
     createdBookings.push(booking);
   }
 
+  const inboxFocusedBookings = [
+    {
+      ba_id: bas[4].id,
+      project_id: (projectByName.get('Payment Refund Flow') ?? projects[0]).id,
+      requester_id: pmUsers[4].id,
+      title: 'Payment Refund Flow',
+      description: 'Portal request for failed refunds and validation updates.',
+      notes: 'Requested BA: Bui Phuong Thao',
+      start_date: date('2026-06-01'),
+      end_date: date('2026-06-05'),
+      capacity_percent: 100,
+      priority: BookingPriority.URGENT,
+      status: BookingStatus.PENDING
+    },
+    {
+      ba_id: null,
+      project_id: (projectByName.get('CRM Revamp') ?? projects[0]).id,
+      requester_id: pmUsers[1].id,
+      title: 'CRM Revamp',
+      description: 'Open request for dependency mapping and BA assignment.',
+      notes: 'BA not assigned yet.',
+      start_date: date('2026-06-03'),
+      end_date: date('2026-06-06'),
+      capacity_percent: 50,
+      priority: BookingPriority.MEDIUM,
+      status: BookingStatus.PENDING
+    },
+    {
+      ba_id: null,
+      project_id: (projectByName.get('Mobile Onboarding') ?? projects[0]).id,
+      requester_id: pmUsers[3].id,
+      title: 'Mobile Onboarding',
+      description: 'Open request for onboarding workstream alignment.',
+      notes: '[VERIFY] Needs manager verification before BA assignment.',
+      start_date: date('2026-06-05'),
+      end_date: date('2026-06-12'),
+      capacity_percent: 100,
+      priority: BookingPriority.MEDIUM,
+      status: BookingStatus.PENDING
+    },
+    {
+      ba_id: bas[3].id,
+      project_id: (projectByName.get('CRM Revamp') ?? projects[0]).id,
+      requester_id: pmUsers[0].id,
+      title: 'Reporting Portal Upgrade',
+      description: 'Specific BA request for portal reporting enhancements.',
+      notes: 'Requested BA: Le Dang Khoa',
+      start_date: date('2026-06-07'),
+      end_date: date('2026-06-11'),
+      capacity_percent: 50,
+      priority: BookingPriority.MEDIUM,
+      status: BookingStatus.PENDING
+    },
+    {
+      ba_id: bas[9].id,
+      project_id: (projectByName.get('BI Dashboard') ?? projects[0]).id,
+      requester_id: pmUsers[2].id,
+      title: 'Data Warehouse Redesign',
+      description: 'Specific BA request for reporting model redesign.',
+      notes: 'Requested BA: Nguyen Mai Linh',
+      start_date: date('2026-06-08'),
+      end_date: date('2026-06-13'),
+      capacity_percent: 50,
+      priority: BookingPriority.HIGH,
+      status: BookingStatus.PENDING
+    },
+    {
+      ba_id: null,
+      project_id: (projectByName.get('BI Dashboard') ?? projects[0]).id,
+      requester_id: pmUsers[2].id,
+      title: 'Analytics Dashboard',
+      description: 'Open request for analytics dashboard discovery.',
+      notes: 'Needs BA assignment.',
+      start_date: date('2026-06-09'),
+      end_date: date('2026-06-13'),
+      capacity_percent: 50,
+      priority: BookingPriority.HIGH,
+      status: BookingStatus.PENDING
+    }
+  ] as const;
+
+  for (const input of inboxFocusedBookings) {
+    const booking = await prisma.booking.create({
+      data: {
+        ...input,
+        manager_id: null
+      }
+    });
+    createdBookings.push(booking);
+  }
+
   for (const [index, content] of [
     'Strong stakeholder facilitation, good fit for discovery-heavy work.',
     'Prefers clear acceptance criteria before sprint planning.',

@@ -9,6 +9,16 @@ export type BookingStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 export type BookingPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type RequestType = 'SPECIFIC_BA' | 'OPEN_REQUEST';
+export type ManagerRequestState =
+  | 'PENDING'
+  | 'NEEDS_ASSIGNMENT'
+  | 'NEED_VERIFICATION'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
 export type SkillTag = {
   id: string;
@@ -64,6 +74,8 @@ export type Booking = {
   reject_reason?: string | null;
   cancel_reason?: string | null;
   manager_comment?: string | null;
+  created_at: string;
+  updated_at: string;
   ba: BAProfile | null;
   project: Project;
   requester: User;
@@ -90,6 +102,58 @@ export function getMockRole(): UserRole {
 
 export function setMockRole(role: UserRole) {
   localStorage.setItem('ba-bazaar-role', role);
+}
+
+export function getRequestType(booking: Booking): RequestType {
+  return booking.ba_id ? 'SPECIFIC_BA' : 'OPEN_REQUEST';
+}
+
+export function needsManagerVerification(booking: Booking) {
+  const content = `${booking.description}\n${booking.notes ?? ''}`.toLowerCase();
+
+  if (content.includes('[verify]')) {
+    return true;
+  }
+
+  if (content.includes('need verification') || content.includes('manager verification')) {
+    return true;
+  }
+
+  return !booking.ba_id && booking.capacity_percent >= 100;
+}
+
+export function getManagerRequestState(booking: Booking): ManagerRequestState {
+  if (booking.status !== 'PENDING') {
+    return booking.status;
+  }
+
+  if (!booking.ba_id && needsManagerVerification(booking)) {
+    return 'NEED_VERIFICATION';
+  }
+
+  if (!booking.ba_id) {
+    return 'NEEDS_ASSIGNMENT';
+  }
+
+  return 'PENDING';
+}
+
+export function getManagerRequestMessage(booking: Booking) {
+  const state = getManagerRequestState(booking);
+
+  if (state === 'NEED_VERIFICATION') {
+    return 'Needs manager verification';
+  }
+
+  if (state === 'NEEDS_ASSIGNMENT') {
+    return 'BA not assigned yet';
+  }
+
+  if (getRequestType(booking) === 'SPECIFIC_BA' && booking.ba) {
+    return `Requested BA: ${booking.ba.full_name}`;
+  }
+
+  return 'Ready for manager review';
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
