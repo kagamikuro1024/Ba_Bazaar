@@ -1,84 +1,118 @@
 import { type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider, useAuth } from './auth/AuthProvider';
+import { roleHomePath } from './auth/routes';
 import { LayoutShell } from './components/LayoutShell';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
-import { getMockRole, type UserRole } from './lib/api';
+import { type UserRole } from './lib/api';
 import { BADirectoryPage } from './pages/BADirectoryPage';
 import { BAProfilePage } from './pages/BAProfilePage';
 import { DashboardPage } from './pages/DashboardPage';
+import { LoginPage } from './pages/LoginPage';
 import { ManagerInboxPage } from './pages/ManagerInboxPage';
 import { MyRequestsPage } from './pages/MyRequestsPage';
 import { MySchedulePage } from './pages/MySchedulePage';
 import { NotificationsPage } from './pages/NotificationsPage';
+import { RegisterPage } from './pages/RegisterPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { TimelinePage } from './pages/TimelinePage';
 
 export function App() {
   return (
-    <LayoutShell>
+    <AuthProvider>
       <Routes>
-        <Route path="/" element={<HomeRedirect />} />
         <Route
-          path="/manager/dashboard"
+          path="/login"
           element={
-            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
-              <DashboardPage />
-            </RequireRole>
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
           }
         />
-        <Route path="/timeline" element={<TimelinePage />} />
-        <Route path="/my-schedule" element={<MySchedulePage />} />
-        <Route path="/my-requests" element={<MyRequestsPage />} />
+        <Route
+          path="/register"
+          element={
+            <PublicOnlyRoute>
+              <RegisterPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route path="/" element={<ProtectedPage><LayoutShell><DashboardPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
+        <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
+        <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />
         <Route
           path="/manager/inbox"
           element={
-            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
-              <ManagerInboxPage />
-            </RequireRole>
+            <ProtectedPage>
+              <LayoutShell>
+                <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
+                  <ManagerInboxPage />
+                </RequireRole>
+              </LayoutShell>
+            </ProtectedPage>
           }
         />
-        <Route path="/crm/ba" element={<BADirectoryPage />} />
-        <Route path="/crm/ba/:id" element={<BAProfilePage />} />
+        <Route path="/crm/ba" element={<ProtectedPage><LayoutShell><BADirectoryPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/crm/ba/:id" element={<ProtectedPage><LayoutShell><BAProfilePage /></LayoutShell></ProtectedPage>} />
         <Route
           path="/reports"
           element={
-            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
-              <ReportsPage />
-            </RequireRole>
+            <ProtectedPage>
+              <LayoutShell>
+                <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
+                  <ReportsPage />
+                </RequireRole>
+              </LayoutShell>
+            </ProtectedPage>
           }
         />
-        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/notifications" element={<ProtectedPage><LayoutShell><NotificationsPage /></LayoutShell></ProtectedPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </LayoutShell>
+    </AuthProvider>
   );
 }
 
-function HomeRedirect() {
-  const role = getMockRole();
+function ProtectedPage({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isReady } = useAuth();
 
-  if (role === 'BA_MANAGER' || role === 'ADMIN') {
-    return <Navigate to="/manager/dashboard" replace />;
+  if (!isReady) {
+    return null;
   }
 
-  if (role === 'PM_PO') {
-    return <Navigate to="/my-requests" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
-  return <Navigate to="/my-schedule" replace />;
+  return <>{children}</>;
+}
+
+function PublicOnlyRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isReady, user } = useAuth();
+
+  if (!isReady) {
+    return null;
+  }
+
+  if (isAuthenticated && user) {
+    return <Navigate to={roleHomePath(user.role)} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 function RequireRole({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
-  const role = getMockRole();
+  const { user } = useAuth();
 
-  if (!roles.includes(role)) {
+  if (!user || !roles.includes(user.role)) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Access denied</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-slate-600">
-          Current mock role does not have permission to view this page.
+          Your account does not have permission to view this page.
         </CardContent>
       </Card>
     );

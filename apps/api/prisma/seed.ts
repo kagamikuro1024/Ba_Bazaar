@@ -9,6 +9,7 @@ import {
   UserRole
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { hashPassword } from '../src/auth/password';
 
 const localDevDatabaseUrl =
   'postgresql://ba_bazaar:change_me@localhost:5432/ba_bazaar?schema=public';
@@ -32,18 +33,34 @@ async function resetDatabase() {
   await prisma.skillTag.deleteMany();
   await prisma.project.deleteMany();
   await prisma.bAProfile.deleteMany();
+  await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 }
 
 async function main() {
   await resetDatabase();
+  const managerPasswordHash = await hashPassword('Manager@123');
+  const pmPasswordHash = await hashPassword('Pmpo@123');
+  const baPasswordHash = await hashPassword('Ba@123');
+  const adminPasswordHash = await hashPassword('Admin@123');
 
   const manager = await prisma.user.create({
     data: {
       full_name: 'Mai Lan Anh',
-      email: 'lan.anh.manager@ba-bazaar.local',
+      email: 'manager@ba-bazaar.local',
       role: UserRole.BA_MANAGER,
+      password_hash: managerPasswordHash,
       avatar_url: 'https://api.dicebear.com/9.x/initials/svg?seed=Mai%20Lan%20Anh'
+    }
+  });
+
+  await prisma.user.create({
+    data: {
+      full_name: 'Bao Tri Admin',
+      email: 'admin@ba-bazaar.local',
+      role: UserRole.ADMIN,
+      password_hash: adminPasswordHash,
+      avatar_url: 'https://api.dicebear.com/9.x/initials/svg?seed=Bao%20Tri%20Admin'
     }
   });
 
@@ -55,6 +72,7 @@ async function main() {
             full_name: name,
             email: `pm${index + 1}@ba-bazaar.local`,
             role: UserRole.PM_PO,
+            password_hash: pmPasswordHash,
             avatar_url: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`
           }
         })
@@ -131,6 +149,7 @@ async function main() {
         full_name: name,
         email: `ba${index + 1}@ba-bazaar.local`,
         role: UserRole.BA,
+        password_hash: baPasswordHash,
         avatar_url: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`
       }
     });
