@@ -3,7 +3,7 @@ import { eachDay, rangesOverlap, toDateKey, workingDaysInRange } from './date';
 
 export type CapacityBooking = {
   id: string;
-  ba_id: string;
+  ba_id: string | null;
   start_date: Date;
   end_date: Date;
   capacity_percent: number;

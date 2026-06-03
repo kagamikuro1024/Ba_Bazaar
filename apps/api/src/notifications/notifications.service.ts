@@ -51,14 +51,31 @@ export class NotificationsService {
       })
     ]);
 
+    const assignedStartBookings = startBookings.filter((booking) => booking.ba !== null) as Array<{
+      id: string;
+      title: string;
+      start_date: Date;
+      end_date: Date;
+      requester_id: string;
+      ba: { full_name: string; user_id: string | null };
+    }>;
+    const assignedEndBookings = endBookings.filter((booking) => booking.ba !== null) as Array<{
+      id: string;
+      title: string;
+      start_date: Date;
+      end_date: Date;
+      requester_id: string;
+      ba: { full_name: string; user_id: string | null };
+    }>;
+
     const created = [
-      ...(await this.createReminderNotifications(startBookings, {
+      ...(await this.createReminderNotifications(assignedStartBookings, {
         type: 'BOOKING_START_REMINDER',
         title: 'Booking starts in 3 days',
         buildMessage: (booking) =>
           `${booking.title}\nStarts on ${toDateKey(booking.start_date)} for ${booking.ba.full_name}.`
       })),
-      ...(await this.createReminderNotifications(endBookings, {
+      ...(await this.createReminderNotifications(assignedEndBookings, {
         type: 'BOOKING_END_REMINDER',
         title: 'Booking ends tomorrow',
         buildMessage: (booking) =>

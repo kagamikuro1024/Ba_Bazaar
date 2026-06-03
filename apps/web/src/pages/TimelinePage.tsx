@@ -418,16 +418,6 @@ export function TimelinePage() {
           ) : null}
         </div>
       </div>
-      {canCreateBooking ? (
-        <Button
-          className="fixed bottom-24 right-4 z-30 h-12 w-12 rounded-full shadow-lg lg:hidden"
-          size="icon"
-          onClick={openCreateBooking}
-          aria-label="Create booking"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-      ) : null}
       <Card className="overflow-hidden">
           <CardHeader className="gap-0 p-0">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
