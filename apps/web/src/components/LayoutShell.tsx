@@ -111,11 +111,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
   const canCreateBooking = role !== 'BA';
   const mobileNavigation = useMemo(() => {
-    if (role === 'BA_MANAGER') {
-      return visibleNavigation.filter((item) => item.to !== '/reports');
-    }
     return visibleNavigation;
-  }, [visibleNavigation, role]);
+  }, [visibleNavigation]);
 
   useEffect(() => {
     setNotificationOpen(false);

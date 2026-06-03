@@ -432,7 +432,7 @@ export function TimelinePage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <label className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
+              <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
                 <span className="hidden sm:inline">View mode</span>
                 <div className="grid w-full grid-cols-2 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
                   {(['week', 'month'] as const).map((mode) => (
@@ -451,7 +451,7 @@ export function TimelinePage() {
                     </button>
                   ))}
                 </div>
-              </label>
+              </div>
             </div>
             <div className="w-full border-b border-slate-200 bg-slate-50/50 px-6 py-3">
               <button
