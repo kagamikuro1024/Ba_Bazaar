@@ -11,7 +11,7 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const localDevDatabaseUrl =
-  'postgresql://ba_bazaar:change_me@localhost:5432/ba_bazaar?schema=public';
+  'postgresql://ba_bazaar:change_me@localhost:5433/ba_bazaar?schema=public';
 
 process.env.DATABASE_URL ??= localDevDatabaseUrl;
 

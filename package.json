@@ -17,10 +17,13 @@
     "db:validate": "pnpm --filter @ba-bazaar/api db:validate",
     "db:migrate": "pnpm --filter @ba-bazaar/api db:migrate",
     "db:generate": "pnpm --filter @ba-bazaar/api db:generate",
-    "db:seed": "pnpm --filter @ba-bazaar/api db:seed"
+    "db:seed": "pnpm --filter @ba-bazaar/api db:seed",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.60.0",
     "concurrently": "^9.1.0",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",

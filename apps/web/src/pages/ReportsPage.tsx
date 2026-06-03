@@ -34,7 +34,7 @@ export function ReportsPage() {
     queryKey: ['reports', month],
     queryFn: () => apiFetch<Report>(`/api/reports/utilization?month=${month}`)
   });
-  const rows = report.data?.rows ?? [];
+  const rows = useMemo(() => report.data?.rows ?? [], [report.data]);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return rows;
