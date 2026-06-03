@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch, type Booking } from '@/lib/api';
 import { BAIdentity, StatusBadge } from '@/components/common';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 
 export function MySchedulePage() {
@@ -13,7 +14,7 @@ export function MySchedulePage() {
   return (
     <div className="grid gap-5">
       {schedule.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading schedule...</CardContent></Card>
+        <LoadingScreen message="Loading your schedule" />
       ) : null}
       {schedule.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load schedule. Check API connection and retry.</CardContent></Card>

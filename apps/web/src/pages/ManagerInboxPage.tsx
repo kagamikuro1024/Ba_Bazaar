@@ -4,6 +4,7 @@ import { apiFetch, type BAProfile, type Booking } from '@/lib/api';
 import { BAIdentity, StatusBadge } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 
 export function ManagerInboxPage() {
@@ -46,7 +47,7 @@ export function ManagerInboxPage() {
         </div>
       ) : null}
       {pending.isLoading ? (
-        <Card><CardContent className="p-5 text-sm text-slate-600">Loading pending requests...</CardContent></Card>
+        <LoadingScreen message="Loading pending requests" />
       ) : null}
       {pending.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load manager inbox. Check API connection and retry.</CardContent></Card>
