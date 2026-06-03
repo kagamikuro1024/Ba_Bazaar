@@ -9,20 +9,38 @@ async function bootstrap() {
 
   const webPort = configService.get<string>('WEB_PORT') ?? '5173';
   const corsOriginEnv = configService.get<string>('CORS_ORIGIN');
-  const corsOrigins = corsOriginEnv
+  const configuredOrigins = corsOriginEnv
     ? corsOriginEnv
         .split(',')
         .map((origin) => origin.trim())
         .filter(Boolean)
-    : [`http://localhost:${webPort}`, `http://127.0.0.1:${webPort}`];
+    : [];
+
+  function isAllowedLanOrigin(origin: string) {
+    return new RegExp(
+      `^http://(?:localhost|127\\.0\\.0\\.1|10(?:\\.\\d{1,3}){3}|172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}|192\\.168(?:\\.\\d{1,3}){2}):${webPort}$`
+    ).test(origin);
+  }
 
   app.enableCors({
-    origin: corsOrigins,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (configuredOrigins.includes(origin) || isAllowedLanOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin ${origin}`), false);
+    },
     credentials: true
   });
 
   const apiPort = Number(configService.get<string>('API_PORT') ?? 3000);
-  await app.listen(apiPort);
+  await app.listen(apiPort, '0.0.0.0');
 }
 
 void bootstrap();

@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch, getMockRole, setMockRole, type NotificationItem, type UserRole } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { apiFetch, type NotificationItem, type UserRole } from '@/lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
@@ -85,17 +86,20 @@ function getIntroKey(pathname: string) {
 
 export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
-  const [role, setRole] = useState(getMockRole());
+  const { user, logout } = useAuth();
+  const role = user?.role ?? 'BA_MANAGER';
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const introKey = getIntroKey(location.pathname);
   const intro = introKey ? pageIntros[introKey] : undefined;
   const storageKey = introKey ? `ba-bazaar:intro:${introKey}` : '';
   const [introOpen, setIntroOpen] = useState(false);
   const notifications = useQuery({
-    queryKey: ['notifications', role],
+    queryKey: ['notifications', user?.id],
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications')
   });
   const markRead = useMutation({
@@ -103,7 +107,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] })
   });
   const me = useQuery({
-    queryKey: ['me', role],
+    queryKey: ['me', user?.id],
     queryFn: () => apiFetch<{ user: { full_name: string; role: UserRole } }>('/api/me')
   });
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
@@ -120,24 +124,28 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
   useEffect(() => {
     setNotificationOpen(false);
+    setUserMenuOpen(false);
   }, [location.pathname, role]);
 
   useEffect(() => {
-    if (!notificationOpen) {
+    if (!notificationOpen && !userMenuOpen) {
       return;
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (notificationRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (notificationRef.current?.contains(target) || userMenuRef.current?.contains(target)) {
         return;
       }
 
       setNotificationOpen(false);
+      setUserMenuOpen(false);
     }
 
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [notificationOpen]);
+  }, [notificationOpen, userMenuOpen]);
 
   useEffect(() => {
     if (!intro || !storageKey) {
@@ -153,12 +161,6 @@ export function LayoutShell({ children }: LayoutShellProps) {
       window.localStorage.setItem(storageKey, 'seen');
     }
     setIntroOpen(false);
-  }
-
-  function handleRoleChange(nextRole: UserRole) {
-    setMockRole(nextRole);
-    setRole(nextRole);
-    void queryClient.invalidateQueries();
   }
 
   function resolveNotificationPath(item: NotificationItem) {
@@ -252,20 +254,54 @@ export function LayoutShell({ children }: LayoutShellProps) {
             </div>
             <div className="hidden text-right text-xs text-slate-500 sm:block">
               <p className="font-semibold text-slate-700">
-                {me.data?.user.full_name ?? 'Mock user'}
+                {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
               </p>
               <p>{role.replace('_', ' ')}</p>
             </div>
-            <select
-              value={role}
-              onChange={(event) => handleRoleChange(event.target.value as UserRole)}
-              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700"
-              aria-label="Mock role switcher"
-            >
-              <option value="BA_MANAGER">BA Manager</option>
-              <option value="PM_PO">PM/PO</option>
-              <option value="BA">BA</option>
-            </select>
+            <div ref={userMenuRef} className="relative">
+              <button
+                type="button"
+                aria-label="User menu"
+                aria-expanded={userMenuOpen}
+                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 transition hover:border-slate-300"
+                onClick={() => setUserMenuOpen((current) => !current)}
+              >
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-sm font-semibold text-slate-700">
+                    {(user?.full_name ?? 'U')
+                      .split(' ')
+                      .map((part) => part[0])
+                      .slice(0, 2)
+                      .join('')}
+                  </span>
+                )}
+              </button>
+              {userMenuOpen ? (
+                <Card className="absolute right-0 top-12 z-50 w-56 shadow-lg">
+                  <CardContent className="p-2">
+                    <div className="border-b border-slate-100 px-2 py-2">
+                      <p className="truncate text-sm font-semibold text-slate-950">
+                        {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
+                      </p>
+                      <p className="text-xs text-slate-500">{role.replace('_', ' ')}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="mt-1 w-full justify-start"
+                      onClick={async () => {
+                        setUserMenuOpen(false);
+                        await logout();
+                        await queryClient.invalidateQueries();
+                      }}
+                    >
+                      Logout
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

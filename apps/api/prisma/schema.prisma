@@ -68,7 +68,9 @@ model User {
   full_name            String
   email                String         @unique
   role                 UserRole
+  password_hash        String?
   avatar_url           String?
+  last_login_at        DateTime?
   created_at           DateTime       @default(now())
   updated_at           DateTime       @updatedAt
 
@@ -79,9 +81,27 @@ model User {
   created_notes        PrivateNote[]  @relation("NoteCreatedBy")
   masked_notes         PrivateNote[]  @relation("NoteMaskedBy")
   notifications        Notification[]
+  refresh_tokens       RefreshToken[]
   audit_logs           AuditLog[]     @relation("AuditActor")
 
   @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  user_id     String    @db.Uuid
+  token_hash  String    @unique
+  expires_at  DateTime
+  revoked_at  DateTime?
+  user_agent  String?
+  ip_address  String?
+  created_at  DateTime  @default(now())
+
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@map("refresh_tokens")
 }
 
 model BAProfile {
