@@ -28,9 +28,9 @@ type PageIntro = {
 };
 
 const pageIntros: Record<string, PageIntro> = {
-  '/': {
-    title: 'Dashboard',
-    body: 'Use this overview to monitor BA capacity, utilization rules, and shortcuts into the main booking workflow.'
+  '/manager/dashboard': {
+    title: 'Manager Dashboard',
+    body: 'Review high-priority requests, scan what needs action, and jump into Manager Inbox for resolution.'
   },
   '/timeline': {
     title: 'Timeline',
@@ -46,7 +46,7 @@ const pageIntros: Record<string, PageIntro> = {
   },
   '/manager/inbox': {
     title: 'Manager Inbox',
-    body: 'Review pending booking requests, check capacity risks, and approve or reject work allocations.'
+    body: 'Review, prioritize, and resolve booking requests in one focused workspace.'
   },
   '/crm/ba': {
     title: 'BA Directory',
@@ -68,14 +68,14 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-    { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/manager/dashboard', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'ADMIN'] },
     { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
     { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
     { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
-    { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER'] },
+    { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
     { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
-    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER'] },
-    { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA'] }
+    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
+    { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] }
   ];
 
 function getIntroKey(pathname: string) {
@@ -111,8 +111,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
   const canCreateBooking = role !== 'BA';
   const mobileNavigation = useMemo(() => {
+    if (role === 'BA_MANAGER' || role === 'ADMIN') {
+      return visibleNavigation.filter((item) => item.to !== '/reports');
+    }
+
     return visibleNavigation;
-  }, [visibleNavigation]);
+  }, [role, visibleNavigation]);
 
   useEffect(() => {
     setNotificationOpen(false);
@@ -163,6 +167,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
     }
 
     if (item.related_entity_type === 'Booking') {
+      if (role === 'BA_MANAGER' || role === 'ADMIN') {
+        return '/manager/inbox';
+      }
+
       return role === 'BA' ? '/my-schedule' : '/notifications';
     }
 
@@ -272,7 +280,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === '/'}
+                  end
                   className={({ isActive }) =>
                     [
                       'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -301,12 +309,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className="min-w-0 flex-1"
-              >
+              <NavLink key={item.to} to={item.to} end className="min-w-0 flex-1">
                 {({ isActive }) => (
                   <div
                     className={[
@@ -336,7 +339,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
         <button
           type="button"
           onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 hover:bg-blue-700 transition-all active:scale-95 lg:hidden"
+          className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
           aria-label="Create Booking Request"
         >
           <Plus className="h-6 w-6" strokeWidth={3} />
@@ -344,10 +347,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
       ) : null}
 
       {canCreateBooking && (
-        <BookingModal
-          open={bookingModalOpen}
-          onClose={() => setBookingModalOpen(false)}
-        />
+        <BookingModal open={bookingModalOpen} onClose={() => setBookingModalOpen(false)} />
       )}
 
       {introOpen && intro ? (

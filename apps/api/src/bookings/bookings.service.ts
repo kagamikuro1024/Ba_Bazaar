@@ -83,7 +83,15 @@ export class BookingsService {
 
     const booking = await this.prisma.booking.create({
       data: {
-        ...normalized,
+        ...(normalized.ba_id ? { ba_id: normalized.ba_id } : {}),
+        project_id: normalized.project_id,
+        title: normalized.title,
+        description: normalized.description,
+        notes: normalized.notes,
+        start_date: normalized.start_date,
+        end_date: normalized.end_date,
+        capacity_percent: normalized.capacity_percent,
+        priority: normalized.priority,
         requester_id: currentUser.id,
         status: BookingStatus.PENDING
       },

@@ -1,26 +1,358 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch, type BAProfile, type Booking } from '@/lib/api';
-import { BAIdentity, StatusBadge } from '@/components/common';
+import {
+  AlertCircle,
+  CalendarRange,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Hash,
+  Layers3,
+  ShieldCheck,
+  Search,
+  SlidersHorizontal,
+  UserRound,
+  UsersRound,
+  Zap
+} from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  apiFetch,
+  getManagerRequestMessage,
+  getManagerRequestState,
+  getRequestType,
+  needsManagerVerification,
+  type BAProfile,
+  type Booking,
+  type BookingPriority,
+  type BookingStatus,
+  type RequestType
+} from '@/lib/api';
+import { formatDate, priorityTone } from '@/lib/format';
+import { Avatar, BAIdentity } from '@/components/common';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
-import { formatDate } from '@/lib/format';
+import { Modal } from '@/components/ui/modal';
+
+type CapacitySummary = {
+  items: Array<{
+    ba_id: string;
+    approved_capacity: number;
+    pending_capacity: number;
+    risk_capacity: number;
+  }>;
+};
+
+type CapacityDetail = {
+  ba_id: string;
+  max_approved_capacity: number;
+  max_pending_capacity: number;
+  max_risk_capacity: number;
+  has_overbook_risk: boolean;
+};
+
+type InboxTab = 'ALL' | 'SPECIFIC_BA' | 'OPEN_REQUEST' | 'URGENT';
+
+type FilterState = {
+  search: string;
+  priority: 'ALL' | BookingPriority;
+  status: 'ALL' | BookingStatus;
+  type: 'ALL' | RequestType;
+  sort: 'NEWEST' | 'OLDEST' | 'PRIORITY';
+  startDate: string;
+  endDate: string;
+  needsVerification: boolean;
+  overbookRisk: boolean;
+};
+
+type DecisionModalState =
+  | {
+    kind: 'reject' | 'cancel';
+    bookingId: string;
+    title: string;
+  }
+  | null;
+
+const stateLabelMap = {
+  PENDING: 'Pending',
+  NEEDS_ASSIGNMENT: 'Needs assignment',
+  NEED_VERIFICATION: 'Need verification',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled'
+} as const;
 
 export function ManagerInboxPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [assignDrafts, setAssignDrafts] = useState<Record<string, string>>({});
-  const pending = useQuery({
-    queryKey: ['manager-inbox'],
-    queryFn: () => apiFetch<Booking[]>('/api/bookings?status=PENDING')
+  const [successMessage, setSuccessMessage] = useState('');
+  const [saveForLaterMessage, setSaveForLaterMessage] = useState('');
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [decisionModal, setDecisionModal] = useState<DecisionModalState>(null);
+  const [decisionReason, setDecisionReason] = useState('');
+  const isMobile = useIsMobile();
+  const pageSize = 6;
+
+  const filters = useMemo<FilterState>(() => {
+    const type = searchParams.get('type');
+    const priority = searchParams.get('priority');
+    const status = searchParams.get('status');
+
+    return {
+      search: searchParams.get('search') ?? '',
+      priority: isBookingPriority(priority) ? priority : 'ALL',
+      status: isBookingStatus(status) ? status : 'ALL',
+      type: isRequestType(type) ? type : 'ALL',
+      sort: isSortOption(searchParams.get('sort')) ? (searchParams.get('sort') as FilterState['sort']) : 'PRIORITY',
+      startDate: searchParams.get('startDate') ?? '',
+      endDate: searchParams.get('endDate') ?? '',
+      needsVerification: searchParams.get('needsVerification') === 'true',
+      overbookRisk: searchParams.get('overbookRisk') === 'true'
+    };
+  }, [searchParams]);
+
+  const activeTab = useMemo<InboxTab>(() => {
+    if (filters.priority === 'URGENT') {
+      return 'URGENT';
+    }
+
+    if (filters.type === 'SPECIFIC_BA') {
+      return 'SPECIFIC_BA';
+    }
+
+    if (filters.type === 'OPEN_REQUEST') {
+      return 'OPEN_REQUEST';
+    }
+
+    return 'ALL';
+  }, [filters.priority, filters.type]);
+
+  const bookings = useQuery({
+    queryKey: ['manager-inbox-bookings'],
+    queryFn: () => apiFetch<Booking[]>('/api/bookings')
   });
   const bas = useQuery({
-    queryKey: ['bookable-bas'],
+    queryKey: ['manager-inbox-bookable-bas'],
     queryFn: () => apiFetch<BAProfile[]>('/api/ba?bookable=true')
   });
+  const summary = useQuery({
+    queryKey: ['manager-inbox-capacity-summary'],
+    queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
+  });
+
+  const filteredBookings = useMemo(() => {
+    const riskBaIds = new Set(
+      (summary.data?.items ?? [])
+        .filter((item) => item.risk_capacity > 100)
+        .map((item) => item.ba_id)
+    );
+
+    return (bookings.data ?? [])
+      .filter((booking) => {
+        const requestType = getRequestType(booking);
+        const requestState = getManagerRequestState(booking);
+        const searchBlob = [
+          booking.title,
+          booking.project.name,
+          booking.requester.full_name,
+          booking.ba?.full_name ?? ''
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        if (filters.search && !searchBlob.includes(filters.search.toLowerCase())) {
+          return false;
+        }
+
+        if (filters.priority !== 'ALL' && booking.priority !== filters.priority) {
+          return false;
+        }
+
+        if (filters.status !== 'ALL' && booking.status !== filters.status) {
+          return false;
+        }
+
+        if (filters.type !== 'ALL' && requestType !== filters.type) {
+          return false;
+        }
+
+        if (filters.needsVerification && requestState !== 'NEED_VERIFICATION') {
+          return false;
+        }
+
+        if (filters.overbookRisk && !(booking.ba_id && riskBaIds.has(booking.ba_id))) {
+          return false;
+        }
+
+        if (filters.startDate && booking.end_date < filters.startDate) {
+          return false;
+        }
+
+        if (filters.endDate && booking.start_date > filters.endDate) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((left, right) => {
+        if (filters.sort === 'NEWEST') {
+          return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+        }
+
+        if (filters.sort === 'OLDEST') {
+          return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+        }
+
+        const leftScore = getInboxPriorityScore(left);
+        const rightScore = getInboxPriorityScore(right);
+        if (leftScore !== rightScore) {
+          return rightScore - leftScore;
+        }
+
+        const byCreatedAt =
+          new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+        if (byCreatedAt !== 0) {
+          return byCreatedAt;
+        }
+
+        return new Date(left.start_date).getTime() - new Date(right.start_date).getTime();
+      });
+  }, [bookings.data, filters, summary.data]);
+
+  const counts = useMemo(
+    () => ({
+      ALL: (bookings.data ?? []).length,
+      SPECIFIC_BA: (bookings.data ?? []).filter((booking) => getRequestType(booking) === 'SPECIFIC_BA')
+        .length,
+      OPEN_REQUEST: (bookings.data ?? []).filter((booking) => getRequestType(booking) === 'OPEN_REQUEST')
+        .length,
+      URGENT: (bookings.data ?? []).filter((booking) => booking.priority === 'URGENT').length
+    }),
+    [bookings.data]
+  );
+
+  const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const visiblePages = useMemo<(number | 'ellipsis-left' | 'ellipsis-right')[]>(() => {
+    if (totalPages <= 2) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (safePage <= 2) {
+      return [1, 2, 'ellipsis-right', totalPages];
+    }
+
+    if (safePage >= totalPages - 1) {
+      return [1, 'ellipsis-left', totalPages - 1, totalPages];
+    }
+
+    return [1, 'ellipsis-left', safePage, 'ellipsis-right', totalPages];
+  }, [safePage, totalPages]);
+  const paginatedBookings = filteredBookings.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
+
+  const selectedRequestId = searchParams.get('requestId');
+  const selectedBooking = useMemo(() => {
+    if (!filteredBookings.length) {
+      return null;
+    }
+
+    if (selectedRequestId) {
+      return (
+        paginatedBookings.find((booking) => booking.id === selectedRequestId) ??
+        filteredBookings.find((booking) => booking.id === selectedRequestId) ??
+        bookings.data?.find((booking) => booking.id === selectedRequestId) ??
+        paginatedBookings[0]
+      );
+    }
+
+    return paginatedBookings[0] ?? filteredBookings[0];
+  }, [bookings.data, filteredBookings, paginatedBookings, selectedRequestId]);
+
+  useEffect(() => {
+    if (!filteredBookings.length) {
+      return;
+    }
+
+    const pageParam = searchParams.get('page');
+
+    if (!selectedRequestId) {
+      if (safePage !== currentPage) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set('page', String(safePage));
+        setSearchParams(nextParams, { replace: true });
+      }
+      return;
+    }
+
+    if (pageParam) {
+      return;
+    }
+
+    const bookingIndex = filteredBookings.findIndex((booking) => booking.id === selectedRequestId);
+    if (bookingIndex === -1) {
+      return;
+    }
+
+    const requestPage = Math.floor(bookingIndex / pageSize) + 1;
+    if (requestPage !== safePage) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('page', String(requestPage));
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [
+    currentPage,
+    filteredBookings,
+    pageSize,
+    safePage,
+    searchParams,
+    selectedRequestId,
+    setSearchParams
+  ]);
+
+  useEffect(() => {
+    if (!selectedBooking) {
+      return;
+    }
+
+    const currentRequestId = searchParams.get('requestId');
+    if (currentRequestId === selectedBooking.id) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('requestId', selectedBooking.id);
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, selectedBooking, setSearchParams]);
+
+  const selectedBaId =
+    (selectedBooking && assignDrafts[selectedBooking.id]) || selectedBooking?.ba_id || '';
+
+  const selectedCapacity = useQuery({
+    queryKey: [
+      'manager-inbox-capacity-detail',
+      selectedBaId,
+      selectedBooking?.start_date,
+      selectedBooking?.end_date
+    ],
+    queryFn: () =>
+      apiFetch<CapacityDetail>(
+        `/api/capacity/ba/${selectedBaId}?start_date=${selectedBooking?.start_date}&end_date=${selectedBooking?.end_date}`
+      ),
+    enabled: Boolean(selectedBaId && selectedBooking?.start_date && selectedBooking?.end_date)
+  });
+
   const approve = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' }),
-    onSuccess: () => void queryClient.invalidateQueries()
+    onSuccess: () => handleMutationSuccess('Request approved.')
   });
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
@@ -28,7 +360,7 @@ export function ManagerInboxPage() {
         method: 'POST',
         body: JSON.stringify({ reject_reason: reason })
       }),
-    onSuccess: () => void queryClient.invalidateQueries()
+    onSuccess: () => handleMutationSuccess('Request rejected.')
   });
   const assign = useMutation({
     mutationFn: ({ id, baId }: { id: string; baId: string }) =>
@@ -36,101 +368,1148 @@ export function ManagerInboxPage() {
         method: 'PATCH',
         body: JSON.stringify({ ba_id: baId })
       }),
-    onSuccess: () => void queryClient.invalidateQueries()
+    onSuccess: () => handleMutationSuccess('BA assigned.')
   });
+  const assignAndApprove = useMutation({
+    mutationFn: async ({ id, baId }: { id: string; baId: string }) => {
+      await apiFetch(`/api/bookings/${id}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ba_id: baId })
+      });
+      return apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' });
+    },
+    onSuccess: () => handleMutationSuccess('BA assigned and request approved.')
+  });
+  const cancel = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      apiFetch(`/api/bookings/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ cancel_reason: reason })
+      }),
+    onSuccess: () => handleMutationSuccess('Request cancelled.')
+  });
+
+  const suggestionList = useMemo(() => {
+    const capacityMap = new Map((summary.data?.items ?? []).map((item) => [item.ba_id, item]));
+
+    return (bas.data ?? [])
+      .map((ba) => {
+        const capacity = capacityMap.get(ba.id);
+        return {
+          ba,
+          approvedCapacity: capacity?.approved_capacity ?? 0,
+          pendingCapacity: capacity?.pending_capacity ?? 0,
+          riskCapacity: capacity?.risk_capacity ?? 0,
+          availability: Math.max(0, 100 - (capacity?.approved_capacity ?? 0))
+        };
+      })
+      .sort((left, right) => left.riskCapacity - right.riskCapacity || right.availability - left.availability)
+      .slice(0, 3);
+  }, [bas.data, summary.data]);
+
+  useEffect(() => {
+    if (!selectedBooking || !isMobile) {
+      return;
+    }
+
+    if (!searchParams.get('requestId')) {
+      setMobileDetailOpen(false);
+    }
+  }, [isMobile, searchParams, selectedBooking]);
+
+  function handleMutationSuccess(message: string) {
+    setSuccessMessage(message);
+    setSaveForLaterMessage('');
+    setMobileDetailOpen(false);
+    void queryClient.invalidateQueries();
+  }
+
+  function setFilter(next: Partial<FilterState>) {
+    const params = new URLSearchParams(searchParams);
+    const merged = { ...filters, ...next };
+
+    setParam(params, 'search', merged.search);
+    setParam(params, 'priority', merged.priority === 'ALL' ? '' : merged.priority);
+    setParam(params, 'status', merged.status === 'ALL' ? '' : merged.status);
+    setParam(params, 'type', merged.type === 'ALL' ? '' : merged.type);
+    setParam(params, 'sort', merged.sort === 'PRIORITY' ? '' : merged.sort);
+    setParam(params, 'startDate', merged.startDate);
+    setParam(params, 'endDate', merged.endDate);
+    setParam(params, 'needsVerification', merged.needsVerification ? 'true' : '');
+    setParam(params, 'overbookRisk', merged.overbookRisk ? 'true' : '');
+    params.delete('requestId');
+    params.delete('page');
+    setSearchParams(params);
+  }
+
+  function setPage(page: number) {
+    const nextPage = Math.max(1, Math.min(page, totalPages));
+    const params = new URLSearchParams(searchParams);
+    params.set('page', String(nextPage));
+    params.delete('requestId');
+    setSearchParams(params);
+  }
+
+  function selectTab(tab: InboxTab) {
+    if (tab === 'ALL') {
+      setFilter({ priority: 'ALL', type: 'ALL' });
+      return;
+    }
+
+    if (tab === 'URGENT') {
+      setFilter({ priority: 'URGENT', type: 'ALL' });
+      return;
+    }
+
+    setFilter({ type: tab, priority: 'ALL' });
+  }
+
+  function openDetail(id: string) {
+    const params = new URLSearchParams(searchParams);
+    params.set('requestId', id);
+    setSearchParams(params);
+    if (isMobile) {
+      setMobileDetailOpen(true);
+    }
+  }
+
+  function closeMobileDetail() {
+    setMobileDetailOpen(false);
+  }
+
+  function handleReject(id: string) {
+    const booking = bookings.data?.find((item) => item.id === id);
+    setDecisionReason('');
+    setDecisionModal({
+      kind: 'reject',
+      bookingId: id,
+      title: booking?.title ?? 'this request'
+    });
+  }
+
+  function handleCancel(id: string) {
+    const booking = bookings.data?.find((item) => item.id === id);
+    setDecisionReason('');
+    setDecisionModal({
+      kind: 'cancel',
+      bookingId: id,
+      title: booking?.title ?? 'this request'
+    });
+  }
+
+  function submitDecision() {
+    const reason = decisionReason.trim();
+    if (!decisionModal || !reason) {
+      return;
+    }
+
+    if (decisionModal.kind === 'reject') {
+      reject.mutate(
+        { id: decisionModal.bookingId, reason },
+        {
+          onSuccess: () => {
+            setDecisionModal(null);
+            setDecisionReason('');
+            handleMutationSuccess('Request rejected.');
+          }
+        }
+      );
+      return;
+    }
+
+    cancel.mutate(
+      { id: decisionModal.bookingId, reason },
+      {
+        onSuccess: () => {
+          setDecisionModal(null);
+          setDecisionReason('');
+          handleMutationSuccess('Request cancelled.');
+        }
+      }
+    );
+  }
 
   return (
     <div className="grid gap-5">
-      {(approve.error || reject.error || assign.error) ? (
-        <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
-          {(approve.error ?? reject.error ?? assign.error)?.message}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-950">Manager Inbox</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Review, prioritize, and resolve booking requests
+        </p>
+      </div>
+
+      {successMessage ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {successMessage}
         </div>
       ) : null}
-      {pending.isLoading ? (
-        <LoadingScreen message="Loading pending requests" />
+      {saveForLaterMessage ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          {saveForLaterMessage}
+        </div>
       ) : null}
-      {pending.error ? (
-        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load manager inbox. Check API connection and retry.</CardContent></Card>
+      {filters.needsVerification || filters.overbookRisk ? (
+        <div
+          className={[
+            'flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 text-sm',
+            filters.overbookRisk
+              ? 'border border-rose-200 bg-rose-50 text-rose-800'
+              : 'border border-amber-200 bg-amber-50 text-amber-900'
+          ].join(' ')}
+        >
+          <span className="font-semibold">Active alert filter:</span>
+          {filters.needsVerification ? (
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 font-medium text-amber-700 ring-1 ring-amber-200">
+              Needs verification
+            </span>
+          ) : null}
+          {filters.overbookRisk ? (
+            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 font-medium text-rose-700 ring-1 ring-rose-200">
+              Overbook risk
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setFilter({ needsVerification: false, overbookRisk: false })}
+            className={[
+              'ml-auto inline-flex items-center rounded-md px-3 py-1.5 text-sm font-semibold transition-colors',
+              filters.overbookRisk
+                ? 'bg-white text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100'
+                : 'bg-white text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100'
+            ].join(' ')}
+          >
+            Clear
+          </button>
+        </div>
       ) : null}
-      <div className="grid gap-4">
-        {(pending.data ?? []).map((booking) => {
-          const selectedBaId = assignDrafts[booking.id] ?? '';
+      {approve.error || reject.error || assign.error || assignAndApprove.error || cancel.error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {(approve.error ?? reject.error ?? assign.error ?? assignAndApprove.error ?? cancel.error)?.message}
+        </div>
+      ) : null}
+      {bookings.isLoading || bas.isLoading || summary.isLoading ? (
+        <Card>
+          <CardContent className="p-5 text-sm text-slate-600">Loading manager inbox...</CardContent>
+        </Card>
+      ) : null}
+      {bookings.error || bas.error || summary.error ? (
+        <Card>
+          <CardContent className="p-5 text-sm text-rose-700">
+            Could not load manager inbox. Check API connection and retry.
+          </CardContent>
+        </Card>
+      ) : null}
 
-          return (
-            <Card key={booking.id}>
-              <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div className="grid gap-3">
-                  <div className="flex flex-wrap items-start gap-3">
-                    <BAIdentity ba={booking.ba} />
-                    <div className="-mt-0.5">
-                      <StatusBadge status={booking.status} />
+      <Card>
+        <CardContent className="grid gap-3 p-4 lg:p-5">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:items-center">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={filters.search}
+                onChange={(event) => setFilter({ search: event.target.value })}
+                placeholder="Search requests, projects, or requesters"
+                className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm"
+              />
+            </label>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[
+                ['ALL', `All (${counts.ALL})`],
+                ['SPECIFIC_BA', `Specific BA (${counts.SPECIFIC_BA})`],
+                ['OPEN_REQUEST', `Open Requests (${counts.OPEN_REQUEST})`],
+                ['URGENT', `Urgent (${counts.URGENT})`]
+              ].map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => selectTab(tab as InboxTab)}
+                  className={[
+                    'whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                    activeTab === tab
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
+                  ].join(' ')}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,180px))_minmax(260px,320px)_auto] xl:items-center">
+            <select
+              value={filters.priority}
+              onChange={(event) =>
+                setFilter({ priority: event.target.value as FilterState['priority'] })
+              }
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            >
+              <option value="ALL">Priority: All</option>
+              <option value="LOW">Priority: Low</option>
+              <option value="MEDIUM">Priority: Medium</option>
+              <option value="HIGH">Priority: High</option>
+              <option value="URGENT">Priority: Urgent</option>
+            </select>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                setFilter({ status: event.target.value as FilterState['status'] })
+              }
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            >
+              <option value="ALL">Status: All</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+            <select
+              value={filters.type}
+              onChange={(event) => setFilter({ type: event.target.value as FilterState['type'] })}
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            >
+              <option value="ALL">Type: All</option>
+              <option value="SPECIFIC_BA">Specific BA</option>
+              <option value="OPEN_REQUEST">Open Request</option>
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(event) => setFilter({ startDate: event.target.value })}
+                className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              />
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(event) => setFilter({ endDate: event.target.value })}
+                className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setFilter({
+                  search: '',
+                  priority: 'ALL',
+                  status: 'ALL',
+                  type: 'ALL',
+                  sort: 'PRIORITY',
+                  startDate: '',
+                  endDate: '',
+                  needsVerification: false,
+                  overbookRisk: false
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Reset filters
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-sm font-medium text-slate-500">
+              Showing {filteredBookings.length} request{filteredBookings.length === 1 ? '' : 's'}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">Sort by</span>
+              <select
+                value={filters.sort}
+                onChange={(event) =>
+                  setFilter({ sort: event.target.value as FilterState['sort'] })
+                }
+                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              >
+                <option value="PRIORITY">Priority</option>
+                <option value="NEWEST">Newest</option>
+                <option value="OLDEST">Oldest</option>
+              </select>
+            </div>
+          </div>
+          {paginatedBookings.map((booking) => {
+            const selected = selectedBooking?.id === booking.id;
+            const type = getRequestType(booking);
+
+            return (
+              <button
+                key={booking.id}
+                type="button"
+                onClick={() => openDetail(booking.id)}
+                className={[
+                  'rounded-xl border bg-white p-4 text-left shadow-sm transition',
+                  selected
+                    ? 'border-blue-300 ring-2 ring-blue-100'
+                    : 'border-slate-200 hover:border-slate-300'
+                ].join(' ')}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
+                      <RequestTypeBadge booking={booking} />
+                      <RequestStateBadge booking={booking} />
                     </div>
+                    <p className="mt-2 text-sm font-medium text-blue-700">
+                      {getManagerRequestMessage(booking)}
+                    </p>
                   </div>
-                  {!booking.ba ? (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      This request was submitted with Auto assign. Assign a BA before approving.
-                    </div>
-                  ) : null}
-                  <div>
-                    <h3 className="font-semibold text-slate-950">{booking.project.name}</h3>
-                    <p className="text-sm text-slate-600">{booking.description}</p>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                </div>
+
+                <div className="mt-4 grid gap-2 text-sm text-slate-500 sm:grid-cols-2">
+                  <div className="flex items-center gap-2">
+                    {type === 'SPECIFIC_BA' ? (
+                      <UserRound className="h-4 w-4 text-slate-400" />
+                    ) : (
+                      <UsersRound className="h-4 w-4 text-slate-400" />
+                    )}
+                    <span>{booking.ba?.full_name ?? 'Unassigned'}</span>
                   </div>
-                  <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-4">
-                    <span>{formatDate(booking.start_date)} - {formatDate(booking.end_date)}</span>
-                    <span>{booking.capacity_percent}% capacity</span>
-                    <span>{booking.priority}</span>
-                    <span>Requester: {booking.requester.full_name}</span>
+                  <div className="flex items-center gap-2">
+                    <CalendarRange className="h-4 w-4 text-slate-400" />
+                    <span>
+                      {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+                    </span>
+                  </div>
+                  <div>Requester: {booking.requester.full_name}</div>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+                    {needsManagerVerification(booking) ? (
+                      <Badge tone="warning">Needs verification</Badge>
+                    ) : null}
                   </div>
                 </div>
-                <div className="grid gap-2 sm:min-w-52">
-                  {!booking.ba ? (
-                    <div className="grid gap-2">
-                      <select
-                        value={selectedBaId}
-                        onChange={(event) =>
-                          setAssignDrafts((current) => ({
-                            ...current,
-                            [booking.id]: event.target.value
-                          }))
-                        }
-                        className="h-9 rounded-md border bg-white px-2 text-sm"
-                        aria-label="Assign BA"
-                      >
-                        <option value="">Select BA</option>
-                        {(bas.data ?? []).map((ba) => (
-                          <option key={ba.id} value={ba.id}>
-                            {ba.full_name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        onClick={() => assign.mutate({ id: booking.id, baId: selectedBaId })}
-                        disabled={!selectedBaId || assign.isPending}
-                      >
-                        Assign BA
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button onClick={() => approve.mutate(booking.id)}>Approve</Button>
-                  )}
+              </button>
+            );
+          })}
+
+          {filteredBookings.length === 0 ? (
+            <Card>
+              <CardContent className="p-5 text-sm text-slate-500">
+                No requests match the current filters.
+              </CardContent>
+            </Card>
+          ) : null}
+          {filteredBookings.length > 0 ? (
+            <Card>
+              <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Showing {(safePage - 1) * pageSize + 1}-
+                  {Math.min(safePage * pageSize, filteredBookings.length)} of {filteredBookings.length}{' '}
+                  requests
+                </span>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <Button
                     variant="secondary"
-                    onClick={() => {
-                      const reason = window.prompt('Reject reason');
-                      if (reason) reject.mutate({ id: booking.id, reason });
-                    }}
+                    size="sm"
+                    onClick={() => setPage(safePage - 1)}
+                    disabled={safePage <= 1}
                   >
-                    Reject
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    {visiblePages.map((page, index) =>
+                      typeof page === 'number' ? (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setPage(page)}
+                          className={[
+                            'inline-flex min-w-9 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors',
+                            page === safePage
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
+                          ].join(' ')}
+                        >
+                          {page}
+                        </button>
+                      ) : (
+                        <span
+                          key={`${page}-${index}`}
+                          className="inline-flex min-w-9 items-center justify-center px-1 text-sm font-semibold text-slate-400"
+                        >
+                          ...
+                        </span>
+                      )
+                    )}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPage(safePage + 1)}
+                    disabled={safePage >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
-        {pending.data?.length === 0 ? (
-          <Card><CardHeader><CardTitle>No pending requests</CardTitle></CardHeader></Card>
+          ) : null}
+        </div>
+
+        {!isMobile && selectedBooking ? (
+          <RequestDetailPanel
+            booking={selectedBooking}
+            suggestionList={suggestionList}
+            selectedBaId={selectedBaId}
+            capacity={selectedCapacity.data}
+            onSelectBa={(baId) =>
+              setAssignDrafts((current) => ({ ...current, [selectedBooking.id]: baId }))
+            }
+            onApprove={() => approve.mutate(selectedBooking.id)}
+            onReject={() => handleReject(selectedBooking.id)}
+            onAssign={() => assign.mutate({ id: selectedBooking.id, baId: selectedBaId })}
+            onAssignAndApprove={() =>
+              assignAndApprove.mutate({ id: selectedBooking.id, baId: selectedBaId })
+            }
+            onCancel={() => handleCancel(selectedBooking.id)}
+            onSaveForLater={() =>
+              setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`)
+            }
+            isSubmitting={
+              approve.isPending ||
+              reject.isPending ||
+              assign.isPending ||
+              assignAndApprove.isPending ||
+              cancel.isPending
+            }
+          />
+        ) : !isMobile ? (
+          <Card>
+            <CardContent className="p-5 text-sm text-slate-500">
+              Select a request to review details.
+            </CardContent>
+          </Card>
         ) : null}
       </div>
+
+      {isMobile && selectedBooking && mobileDetailOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={closeMobileDetail}>
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200" />
+            <RequestDetailPanel
+              booking={selectedBooking}
+              suggestionList={suggestionList}
+              selectedBaId={selectedBaId}
+              capacity={selectedCapacity.data}
+              onSelectBa={(baId) =>
+                setAssignDrafts((current) => ({ ...current, [selectedBooking.id]: baId }))
+              }
+              onApprove={() => approve.mutate(selectedBooking.id)}
+              onReject={() => handleReject(selectedBooking.id)}
+              onAssign={() => assign.mutate({ id: selectedBooking.id, baId: selectedBaId })}
+              onAssignAndApprove={() =>
+                assignAndApprove.mutate({ id: selectedBooking.id, baId: selectedBaId })
+              }
+              onCancel={() => handleCancel(selectedBooking.id)}
+              onSaveForLater={() => {
+                setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`);
+                closeMobileDetail();
+              }}
+              isSubmitting={
+                approve.isPending ||
+                reject.isPending ||
+                assign.isPending ||
+                assignAndApprove.isPending ||
+                cancel.isPending
+              }
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <Modal
+        title={decisionModal?.kind === 'reject' ? 'Reject request' : 'Cancel request'}
+        open={Boolean(decisionModal)}
+        onClose={() => {
+          if (reject.isPending || cancel.isPending) {
+            return;
+          }
+          setDecisionModal(null);
+          setDecisionReason('');
+        }}
+      >
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitDecision();
+          }}
+        >
+          <div className="grid gap-2">
+            <p className="text-sm font-medium text-slate-950">{decisionModal?.title}</p>
+            <p className="text-sm text-slate-500">
+              {decisionModal?.kind === 'reject'
+                ? 'Provide a clear reason so the requester knows what to adjust.'
+                : 'Provide a clear reason for cancelling this approved request.'}
+            </p>
+          </div>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              {decisionModal?.kind === 'reject' ? 'Reject reason' : 'Cancel reason'}
+            </span>
+            <textarea
+              value={decisionReason}
+              onChange={(event) => setDecisionReason(event.target.value)}
+              className="min-h-28 rounded-md border border-slate-200 p-3 text-sm"
+              placeholder={
+                decisionModal?.kind === 'reject'
+                  ? 'Explain why this request is rejected...'
+                  : 'Explain why this request is cancelled...'
+              }
+              autoFocus
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setDecisionModal(null);
+                setDecisionReason('');
+              }}
+              disabled={reject.isPending || cancel.isPending}
+            >
+              Back
+            </Button>
+            <Button
+              type="submit"
+              variant="secondary"
+              className={rejectButtonClassName}
+              disabled={!decisionReason.trim() || reject.isPending || cancel.isPending}
+            >
+              {decisionModal?.kind === 'reject'
+                ? reject.isPending
+                  ? 'Rejecting...'
+                  : 'Confirm reject'
+                : cancel.isPending
+                  ? 'Cancelling...'
+                  : 'Confirm cancel'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
+}
+
+function RequestDetailPanel({
+  booking,
+  suggestionList,
+  selectedBaId,
+  capacity,
+  onSelectBa,
+  onApprove,
+  onReject,
+  onAssign,
+  onAssignAndApprove,
+  onCancel,
+  onSaveForLater,
+  isSubmitting
+}: {
+  booking: Booking;
+  suggestionList: Array<{
+    ba: BAProfile;
+    approvedCapacity: number;
+    pendingCapacity: number;
+    riskCapacity: number;
+    availability: number;
+  }>;
+  selectedBaId: string;
+  capacity?: CapacityDetail;
+  onSelectBa: (baId: string) => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onAssign: () => void;
+  onAssignAndApprove: () => void;
+  onCancel: () => void;
+  onSaveForLater: () => void;
+  isSubmitting: boolean;
+}) {
+  const requestState = getManagerRequestState(booking);
+  const type = getRequestType(booking);
+  const verificationItems = getVerificationItems(booking);
+  const canApproveDirectly = booking.status === 'PENDING' && Boolean(booking.ba_id);
+  const canAssign = booking.status === 'PENDING' && !booking.ba_id;
+  const canReject = booking.status === 'PENDING';
+  const canCancel = booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS';
+
+  return (
+    <Card className="h-fit">
+      <CardHeader className="gap-4 border-b border-slate-200 pb-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>{booking.title}</CardTitle>
+              <RequestTypeBadge booking={booking} />
+              <RequestStateBadge booking={booking} />
+            </div>
+            <p className="mt-2 text-sm text-slate-500">{booking.project.name}</p>
+          </div>
+          <div className="flex gap-2">
+            {canApproveDirectly ? (
+              <Button onClick={onApprove} disabled={isSubmitting}>
+                Approve
+              </Button>
+            ) : null}
+            {canCancel ? (
+              <Button
+                variant="secondary"
+                className={rejectButtonClassName}
+                onClick={onCancel}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            ) : null}
+            {canReject ? (
+              <Button
+                variant="secondary"
+                className={rejectButtonClassName}
+                onClick={onReject}
+                disabled={isSubmitting}
+              >
+                Reject
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <DetailStat
+            label={type === 'SPECIFIC_BA' ? 'Requested BA' : 'Requested BA / Assignment'}
+            value={booking.ba?.full_name ?? 'Unassigned'}
+            hint={booking.ba?.level ?? 'Assign BA'}
+            tone="person"
+            icon={UserRound}
+          />
+          <DetailStat
+            label="Requester"
+            value={booking.requester.full_name}
+            hint={booking.requester.email}
+            tone="requester"
+            icon={UsersRound}
+          />
+          <DetailStat
+            label="Priority"
+            value={booking.priority}
+            hint={`${booking.capacity_percent}% capacity`}
+            tone="priority"
+            icon={Zap}
+          />
+          <DetailStat
+            label="Request ID"
+            value={booking.id.slice(0, 8).toUpperCase()}
+            hint="Booking record"
+            tone="neutral"
+            icon={Hash}
+          />
+        </div>
+      </CardHeader>
+
+      <CardContent className="grid gap-5 p-5">
+        <div className="grid gap-4 xl:grid-cols-3">
+          <InfoCard
+            title="Date range"
+            value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
+            hint="5 working days"
+            tone="date"
+            icon={CalendarRange}
+          />
+          <InfoCard
+            title="Estimated capacity"
+            value={`${booking.capacity_percent}%`}
+            hint={requestState === 'NEED_VERIFICATION' ? 'Needs verification' : 'Requested'}
+            tone="capacity"
+            icon={ShieldCheck}
+          />
+          <InfoCard
+            title="Request type"
+            value={type === 'SPECIFIC_BA' ? 'Specific BA request' : 'Open request'}
+            hint={type === 'SPECIFIC_BA' ? 'Pre-assigned submission' : 'Needs assignment'}
+            tone="type"
+            icon={Layers3}
+          />
+        </div>
+
+        <section className="grid gap-2 rounded-xl border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-950">Project / Business need</p>
+          <p className="text-sm leading-6 text-slate-600">{booking.description}</p>
+          {booking.notes ? <p className="text-sm text-slate-500">Notes: {booking.notes}</p> : null}
+        </section>
+
+        {verificationItems.length > 0 ? (
+          <section className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <p className="text-sm font-semibold text-amber-900">Needs manager verification</p>
+            </div>
+            <div className="grid gap-2 text-sm text-amber-900">
+              {verificationItems.map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-950">Capacity preview</p>
+            <Badge tone={capacity?.has_overbook_risk ? 'danger' : 'success'}>
+              {capacity?.has_overbook_risk ? 'At capacity' : 'Available'}
+            </Badge>
+          </div>
+          <div className="grid gap-2 text-sm text-slate-600">
+            <div className="flex items-center justify-between">
+              <span>Approved capacity</span>
+              <span>{capacity?.max_approved_capacity ?? 0}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Pending capacity</span>
+              <span>{capacity?.max_pending_capacity ?? 0}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Risk capacity</span>
+              <span>{capacity?.max_risk_capacity ?? 0}%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={
+                  (capacity?.max_risk_capacity ?? 0) > 100 ? 'h-full bg-rose-500' : 'h-full bg-blue-600'
+                }
+                style={{ width: `${Math.min(100, capacity?.max_risk_capacity ?? 0)}%` }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {canAssign ? (
+          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-950">Suggested BA</p>
+              <Button variant="ghost" size="sm" asChild>
+                <a href="/crm/ba">View all in BA Directory</a>
+              </Button>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-3">
+              {suggestionList.map((item) => {
+                const selected = selectedBaId === item.ba.id;
+                return (
+                  <button
+                    key={item.ba.id}
+                    type="button"
+                    onClick={() => onSelectBa(item.ba.id)}
+                    className={[
+                      'rounded-xl border p-4 text-left transition',
+                      selected
+                        ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    ].join(' ')}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={item.ba.full_name} url={item.ba.avatar_url} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-950">
+                            {item.ba.full_name}
+                          </p>
+                          <p className="text-xs text-slate-500">{item.ba.level}</p>
+                        </div>
+                      </div>
+                      <span
+                        className={[
+                          'mt-1 h-4 w-4 rounded-full border',
+                          selected ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
+                        ].join(' ')}
+                      >
+                        {selected ? <Check className="h-3 w-3 text-white" /> : null}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-2 text-xs text-slate-500">
+                      <MetricRow label="Availability" value={`${item.availability}%`} />
+                      <MetricRow label="Approved capacity" value={`${item.approvedCapacity}%`} />
+                      <MetricRow label="Current workload" value={`${item.riskCapacity}%`} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-950">Requested BA</p>
+            <BAIdentity ba={booking.ba} />
+          </section>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {canAssign ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={onAssign}
+                disabled={!selectedBaId || isSubmitting}
+              >
+                Assign BA
+              </Button>
+              <Button onClick={onAssignAndApprove} disabled={!selectedBaId || isSubmitting}>
+                Assign + Approve
+              </Button>
+              <Button variant="secondary" onClick={onSaveForLater} disabled={isSubmitting}>
+                Save for later
+              </Button>
+              <Button
+                variant="secondary"
+                className={rejectButtonClassName}
+                onClick={onReject}
+                disabled={isSubmitting}
+              >
+                Reject
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DetailStat({
+  label,
+  value,
+  hint,
+  tone,
+  icon: Icon
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone: 'person' | 'requester' | 'priority' | 'neutral';
+  icon: typeof UserRound;
+}) {
+  const styles = {
+    person: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    },
+    requester: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    },
+    priority: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    },
+    neutral: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-400',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    }
+  } as const;
+  const style = styles[tone];
+
+  return (
+    <div className={`rounded-xl border p-3 ${style.wrapper}`}>
+      <div className="flex items-center gap-2">
+        <Icon className="h-3.5 w-3.5 text-slate-400" />
+        <p className={`text-xs uppercase tracking-wide ${style.label}`}>{label}</p>
+      </div>
+      <p className={`mt-3 text-sm font-semibold ${style.value}`}>{value}</p>
+      <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
+    </div>
+  );
+}
+
+function InfoCard({
+  title,
+  value,
+  hint,
+  tone,
+  icon: Icon
+}: {
+  title: string;
+  value: string;
+  hint: string;
+  tone: 'date' | 'capacity' | 'type';
+  icon: typeof CalendarRange;
+}) {
+  const styles = {
+    date: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    },
+    capacity: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    },
+    type: {
+      wrapper: 'border-slate-200 bg-white',
+      label: 'text-slate-500',
+      value: 'text-slate-950',
+      hint: 'text-slate-500'
+    }
+  } as const;
+  const style = styles[tone];
+
+  return (
+    <div className={`rounded-xl border p-4 ${style.wrapper}`}>
+      <div className="flex items-center gap-2">
+        <Icon className="h-3.5 w-3.5 text-slate-400" />
+        <p className={`text-xs uppercase tracking-wide ${style.label}`}>{title}</p>
+      </div>
+      <p className={`mt-3 text-sm font-semibold ${style.value}`}>{value}</p>
+      <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span>{label}</span>
+      <span className="font-semibold text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+function RequestTypeBadge({ booking }: { booking: Booking }) {
+  return (
+    <Badge tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}>
+      {getRequestType(booking) === 'SPECIFIC_BA' ? 'Specific BA' : 'Open Request'}
+    </Badge>
+  );
+}
+
+function RequestStateBadge({ booking }: { booking: Booking }) {
+  const state = getManagerRequestState(booking);
+  const tone =
+    state === 'PENDING'
+      ? 'warning'
+      : state === 'NEEDS_ASSIGNMENT' || state === 'NEED_VERIFICATION'
+        ? 'warning'
+        : state === 'APPROVED' || state === 'COMPLETED'
+          ? 'success'
+          : state === 'REJECTED' || state === 'CANCELLED'
+            ? 'danger'
+            : 'neutral';
+
+  return <Badge tone={tone}>{stateLabelMap[state]}</Badge>;
+}
+
+const rejectButtonClassName =
+  'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-950';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === 'undefined' ? false : window.innerWidth < 1280
+  );
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 1280);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  return isMobile;
+}
+
+function getVerificationItems(booking: Booking) {
+  const items: string[] = [];
+
+  if (!booking.ba_id) {
+    items.push('BA not assigned');
+  }
+
+  if (booking.capacity_percent >= 100) {
+    items.push('Capacity needs verification');
+  }
+
+  if (needsManagerVerification(booking)) {
+    items.push('Business context needs manager verification');
+  }
+
+  return Array.from(new Set(items));
+}
+
+function setParam(params: URLSearchParams, key: string, value: string) {
+  if (value) {
+    params.set(key, value);
+    return;
+  }
+
+  params.delete(key);
+}
+
+function isRequestType(value: string | null): value is RequestType {
+  return value === 'SPECIFIC_BA' || value === 'OPEN_REQUEST';
+}
+
+function isBookingPriority(value: string | null): value is BookingPriority {
+  return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH' || value === 'URGENT';
+}
+
+function isBookingStatus(value: string | null): value is BookingStatus {
+  return (
+    value === 'PENDING' ||
+    value === 'APPROVED' ||
+    value === 'REJECTED' ||
+    value === 'IN_PROGRESS' ||
+    value === 'COMPLETED' ||
+    value === 'CANCELLED'
+  );
+}
+
+function isSortOption(value: string | null): value is FilterState['sort'] {
+  return value === 'NEWEST' || value === 'OLDEST' || value === 'PRIORITY';
+}
+
+function getInboxPriorityScore(booking: Booking) {
+  const state = getManagerRequestState(booking);
+  let score = 0;
+
+  if (booking.status === 'PENDING') score += 100;
+  if (state === 'NEED_VERIFICATION') score += 40;
+  if (state === 'NEEDS_ASSIGNMENT') score += 30;
+  if (getRequestType(booking) === 'OPEN_REQUEST') score += 10;
+
+  switch (booking.priority) {
+    case 'URGENT':
+      score += 50;
+      break;
+    case 'HIGH':
+      score += 30;
+      break;
+    case 'MEDIUM':
+      score += 15;
+      break;
+    default:
+      score += 5;
+      break;
+  }
+
+  return score;
 }

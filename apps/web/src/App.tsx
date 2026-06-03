@@ -17,7 +17,15 @@ export function App() {
   return (
     <LayoutShell>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<HomeRedirect />} />
+        <Route
+          path="/manager/dashboard"
+          element={
+            <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
+              <DashboardPage />
+            </RequireRole>
+          }
+        />
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/my-schedule" element={<MySchedulePage />} />
         <Route path="/my-requests" element={<MyRequestsPage />} />
@@ -44,6 +52,20 @@ export function App() {
       </Routes>
     </LayoutShell>
   );
+}
+
+function HomeRedirect() {
+  const role = getMockRole();
+
+  if (role === 'BA_MANAGER' || role === 'ADMIN') {
+    return <Navigate to="/manager/dashboard" replace />;
+  }
+
+  if (role === 'PM_PO') {
+    return <Navigate to="/my-requests" replace />;
+  }
+
+  return <Navigate to="/my-schedule" replace />;
 }
 
 function RequireRole({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
