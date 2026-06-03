@@ -3,11 +3,16 @@ export function parseDateOnly(value: string | Date): Date {
     return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  const trimmed = value.trim();
+  const dateOnlyMatch = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+  const isoDateTimeMatch = /^\d{4}-\d{2}-\d{2}[T\s]/.test(trimmed);
+
+  if (!dateOnlyMatch && !isoDateTimeMatch) {
     throw new Error('Date must use YYYY-MM-DD format');
   }
 
-  return new Date(`${value}T00:00:00.000Z`);
+  const dateKey = trimmed.slice(0, 10);
+  return new Date(`${dateKey}T00:00:00.000Z`);
 }
 
 export function toDateKey(value: string | Date): string {
