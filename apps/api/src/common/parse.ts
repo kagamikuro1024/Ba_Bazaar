@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { parseDateOnly } from '../domain/date';
 
+export const allowedCapacityPercents = [25, 50, 75, 100] as const;
+
 export function requireString(value: unknown, field: string) {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new BadRequestException(`${field} is required`);
@@ -24,8 +26,12 @@ export function requireDate(value: unknown, field: string) {
 export function requireCapacityPercent(value: unknown) {
   const numericValue = Number(value);
 
-  if (numericValue !== 50 && numericValue !== 100) {
-    throw new BadRequestException('capacity_percent must be 50 or 100');
+  if (
+    !allowedCapacityPercents.includes(
+      numericValue as (typeof allowedCapacityPercents)[number]
+    )
+  ) {
+    throw new BadRequestException('capacity_percent must be 25, 50, 75, or 100');
   }
 
   return numericValue;

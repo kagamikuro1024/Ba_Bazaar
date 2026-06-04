@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type BAProfile, type BookingPriority, type Project } from '@/lib/api';
+import { CAPACITY_OPTIONS } from '@/lib/capacity';
 import { Field } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -18,7 +19,7 @@ export function BookingModal({
   initialBaId = '',
   initialProjectId = '',
   initialStartDate = '',
-  initialEndDate = '',
+  initialEndDate = ''
 }: {
   open: boolean;
   onClose: () => void;
@@ -32,13 +33,13 @@ export function BookingModal({
   const role = user?.role ?? 'BA';
   const isManagerRole = role === 'BA_MANAGER';
   const queryClient = useQueryClient();
-  
+
   const bas = useQuery({
     queryKey: ['bookable-bas', role],
     queryFn: () => apiFetch<BAProfile[]>('/api/ba?bookable=true'),
     enabled: open
   });
-  
+
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: () => apiFetch<Project[]>('/api/projects'),
@@ -63,7 +64,7 @@ export function BookingModal({
   useEffect(() => {
     if (open) {
       const autoAssign = !initialBaId;
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         ba_id: initialBaId,
         project_id: initialProjectId,
@@ -148,7 +149,9 @@ export function BookingModal({
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-slate-500">Leave unassigned for BA Manager to assign later.</p>
+              <p className="text-xs text-slate-500">
+                Leave unassigned for BA Manager to assign later.
+              </p>
             </Field>
             <Field label="Project">
               <select
@@ -170,7 +173,9 @@ export function BookingModal({
                 <input
                   type="date"
                   value={form.start_date}
-                  onChange={(event) => setForm({ ...form, start_date: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, start_date: event.target.value })
+                  }
                   className="h-10 rounded-md border px-3"
                   required
                 />
@@ -196,7 +201,9 @@ export function BookingModal({
             <Field label="Description">
               <textarea
                 value={form.description}
-                onChange={(event) => setForm({ ...form, description: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, description: event.target.value })
+                }
                 className="min-h-24 rounded-md border p-3"
                 required
               />
@@ -212,17 +219,24 @@ export function BookingModal({
               <Field label="Capacity">
                 <select
                   value={form.capacity_percent}
-                  onChange={(event) => setForm({ ...form, capacity_percent: Number(event.target.value) })}
+                  onChange={(event) =>
+                    setForm({ ...form, capacity_percent: Number(event.target.value) })
+                  }
                   className="h-10 rounded-md border px-3"
                 >
-                  <option value={50}>50%</option>
-                  <option value={100}>100%</option>
+                  {CAPACITY_OPTIONS.map((capacityPercent) => (
+                    <option key={capacityPercent} value={capacityPercent}>
+                      {capacityPercent}%
+                    </option>
+                  ))}
                 </select>
               </Field>
               <Field label="Priority">
                 <select
                   value={form.priority}
-                  onChange={(event) => setForm({ ...form, priority: event.target.value as BookingPriority })}
+                  onChange={(event) =>
+                    setForm({ ...form, priority: event.target.value as BookingPriority })
+                  }
                   className="h-10 rounded-md border px-3"
                 >
                   <option value="LOW">Low</option>
@@ -244,7 +258,8 @@ export function BookingModal({
             ) : null}
             {capacityCheck.data?.has_overbook_risk_after_request ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                Overbook risk: selected range may exceed 100% capacity when pending requests are included.
+                Overbook risk: selected range may exceed 100% capacity when pending
+                requests are included.
               </div>
             ) : null}
             {localError ? (
@@ -257,7 +272,9 @@ export function BookingModal({
                 {mutation.error.message}
               </div>
             ) : null}
-            <Button type="submit">{mutation.isPending ? 'Submitting...' : 'Submit Request'}</Button>
+            <Button type="submit">
+              {mutation.isPending ? 'Submitting...' : 'Submit Request'}
+            </Button>
           </>
         )}
       </form>

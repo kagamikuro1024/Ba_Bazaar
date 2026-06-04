@@ -1,7 +1,13 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable
+} from '@nestjs/common';
 import { BAStatus, User, UserRole } from '@prisma/client';
 import { getRangeCapacity } from '../domain/capacity';
 import { parseDateOnly, toDateKey } from '../domain/date';
+import { requireCapacityPercent } from '../common/parse';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -57,7 +63,12 @@ export class CapacityService {
     };
   }
 
-  async baCapacity(currentUser: User, baId: string, start = '2026-06-01', end = '2026-06-30') {
+  async baCapacity(
+    currentUser: User,
+    baId: string,
+    start = '2026-06-01',
+    end = '2026-06-30'
+  ) {
     const ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
     if (!ba) {
       throw new BadRequestException('BA not found');
@@ -91,7 +102,7 @@ export class CapacityService {
 
     const startDate = parseDateOnly(query.start_date ?? '');
     const endDate = parseDateOnly(query.end_date ?? '');
-    const requestedCapacity = Number(query.capacity_percent ?? 0);
+    const requestedCapacity = requireCapacityPercent(query.capacity_percent);
     const bookings = await this.prisma.booking.findMany({
       where: {
         ba_id: baId,
@@ -109,7 +120,9 @@ export class CapacityService {
     return {
       ...capacity,
       requested_capacity: requestedCapacity,
-      has_overbook_risk_after_request: riskDays.some((day) => day.risk_after_request > 100),
+      has_overbook_risk_after_request: riskDays.some(
+        (day) => day.risk_after_request > 100
+      ),
       daily: riskDays
     };
   }

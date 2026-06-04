@@ -28,6 +28,7 @@ import {
   type BookingStatus,
   type RequestType
 } from '@/lib/api';
+import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { formatDate, priorityTone } from '@/lib/format';
 import { Avatar, BAIdentity } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,12 @@ type CapacitySummary = {
 
 type CapacityDetail = {
   ba_id: string;
+  daily: Array<{
+    date: string;
+    approved_capacity: number;
+    pending_capacity: number;
+    risk_capacity: number;
+  }>;
   max_approved_capacity: number;
   max_pending_capacity: number;
   max_risk_capacity: number;
@@ -66,13 +73,11 @@ type FilterState = {
   overbookRisk: boolean;
 };
 
-type DecisionModalState =
-  | {
-    kind: 'reject' | 'cancel';
-    bookingId: string;
-    title: string;
-  }
-  | null;
+type DecisionModalState = {
+  kind: 'reject' | 'cancel';
+  bookingId: string;
+  title: string;
+} | null;
 
 const stateLabelMap = {
   PENDING: 'Pending',
@@ -91,6 +96,7 @@ export function ManagerInboxPage() {
   const canManageInbox = user?.role === 'BA_MANAGER';
   const [searchParams, setSearchParams] = useSearchParams();
   const [assignDrafts, setAssignDrafts] = useState<Record<string, string>>({});
+  const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
   const [saveForLaterMessage, setSaveForLaterMessage] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -109,7 +115,9 @@ export function ManagerInboxPage() {
       priority: isBookingPriority(priority) ? priority : 'ALL',
       status: isBookingStatus(status) ? status : 'ALL',
       type: isRequestType(type) ? type : 'ALL',
-      sort: isSortOption(searchParams.get('sort')) ? (searchParams.get('sort') as FilterState['sort']) : 'PRIORITY',
+      sort: isSortOption(searchParams.get('sort'))
+        ? (searchParams.get('sort') as FilterState['sort'])
+        : 'PRIORITY',
       startDate: searchParams.get('startDate') ?? '',
       endDate: searchParams.get('endDate') ?? '',
       needsVerification: searchParams.get('needsVerification') === 'true',
@@ -202,11 +210,15 @@ export function ManagerInboxPage() {
       })
       .sort((left, right) => {
         if (filters.sort === 'NEWEST') {
-          return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+          return (
+            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+          );
         }
 
         if (filters.sort === 'OLDEST') {
-          return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+          return (
+            new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+          );
         }
 
         const leftScore = getInboxPriorityScore(left);
@@ -228,11 +240,14 @@ export function ManagerInboxPage() {
   const counts = useMemo(
     () => ({
       ALL: (bookings.data ?? []).length,
-      SPECIFIC_BA: (bookings.data ?? []).filter((booking) => getRequestType(booking) === 'SPECIFIC_BA')
-        .length,
-      OPEN_REQUEST: (bookings.data ?? []).filter((booking) => getRequestType(booking) === 'OPEN_REQUEST')
-        .length,
-      URGENT: (bookings.data ?? []).filter((booking) => booking.priority === 'URGENT').length
+      SPECIFIC_BA: (bookings.data ?? []).filter(
+        (booking) => getRequestType(booking) === 'SPECIFIC_BA'
+      ).length,
+      OPEN_REQUEST: (bookings.data ?? []).filter(
+        (booking) => getRequestType(booking) === 'OPEN_REQUEST'
+      ).length,
+      URGENT: (bookings.data ?? []).filter((booking) => booking.priority === 'URGENT')
+        .length
     }),
     [bookings.data]
   );
@@ -298,7 +313,9 @@ export function ManagerInboxPage() {
       return;
     }
 
-    const bookingIndex = filteredBookings.findIndex((booking) => booking.id === selectedRequestId);
+    const bookingIndex = filteredBookings.findIndex(
+      (booking) => booking.id === selectedRequestId
+    );
     if (bookingIndex === -1) {
       return;
     }
@@ -336,6 +353,15 @@ export function ManagerInboxPage() {
 
   const selectedBaId =
     (selectedBooking && assignDrafts[selectedBooking.id]) || selectedBooking?.ba_id || '';
+  const selectedCapacityDraft = selectedBooking
+    ? (capacityDrafts[selectedBooking.id] ?? String(selectedBooking.capacity_percent))
+    : '';
+  const selectedCapacityPercent =
+    parseCapacityPercent(selectedCapacityDraft) ??
+    selectedBooking?.capacity_percent ??
+    50;
+  const selectedBookingId = selectedBooking?.id;
+  const selectedBookingCapacity = selectedBooking?.capacity_percent;
 
   const selectedCapacity = useQuery({
     queryKey: [
@@ -348,11 +374,35 @@ export function ManagerInboxPage() {
       apiFetch<CapacityDetail>(
         `/api/capacity/ba/${selectedBaId}?start_date=${selectedBooking?.start_date}&end_date=${selectedBooking?.end_date}`
       ),
-    enabled: Boolean(selectedBaId && selectedBooking?.start_date && selectedBooking?.end_date)
+    enabled: Boolean(
+      selectedBaId && selectedBooking?.start_date && selectedBooking?.end_date
+    )
   });
 
+  useEffect(() => {
+    if (!selectedBookingId || selectedBookingCapacity === undefined) {
+      return;
+    }
+
+    setCapacityDrafts((current) => ({
+      ...current,
+      [selectedBookingId]: String(selectedBookingCapacity)
+    }));
+  }, [selectedBookingId, selectedBookingCapacity]);
+
   const approve = useMutation({
-    mutationFn: (id: string) => apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' }),
+    mutationFn: async ({
+      id,
+      capacityPercent,
+      currentCapacityPercent
+    }: {
+      id: string;
+      capacityPercent: number;
+      currentCapacityPercent: number;
+    }) => {
+      await saveCapacityIfChanged(id, capacityPercent, currentCapacityPercent);
+      return apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' });
+    },
     onSuccess: () => handleMutationSuccess('Request approved.')
   });
   const reject = useMutation({
@@ -364,15 +414,38 @@ export function ManagerInboxPage() {
     onSuccess: () => handleMutationSuccess('Request rejected.')
   });
   const assign = useMutation({
-    mutationFn: ({ id, baId }: { id: string; baId: string }) =>
-      apiFetch(`/api/bookings/${id}/assign`, {
+    mutationFn: async ({
+      id,
+      baId,
+      capacityPercent,
+      currentCapacityPercent
+    }: {
+      id: string;
+      baId: string;
+      capacityPercent: number;
+      currentCapacityPercent: number;
+    }) => {
+      await saveCapacityIfChanged(id, capacityPercent, currentCapacityPercent);
+      return apiFetch(`/api/bookings/${id}/assign`, {
         method: 'PATCH',
         body: JSON.stringify({ ba_id: baId })
-      }),
+      });
+    },
     onSuccess: () => handleMutationSuccess('BA assigned.')
   });
   const assignAndApprove = useMutation({
-    mutationFn: async ({ id, baId }: { id: string; baId: string }) => {
+    mutationFn: async ({
+      id,
+      baId,
+      capacityPercent,
+      currentCapacityPercent
+    }: {
+      id: string;
+      baId: string;
+      capacityPercent: number;
+      currentCapacityPercent: number;
+    }) => {
+      await saveCapacityIfChanged(id, capacityPercent, currentCapacityPercent);
       await apiFetch(`/api/bookings/${id}/assign`, {
         method: 'PATCH',
         body: JSON.stringify({ ba_id: baId })
@@ -389,8 +462,14 @@ export function ManagerInboxPage() {
       }),
     onSuccess: () => handleMutationSuccess('Request cancelled.')
   });
-
-
+  const updateCapacity = useMutation({
+    mutationFn: ({ id, capacityPercent }: { id: string; capacityPercent: number }) =>
+      apiFetch(`/api/bookings/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ capacity_percent: capacityPercent })
+      }),
+    onSuccess: () => handleMutationSuccess('Capacity updated.', false)
+  });
 
   useEffect(() => {
     if (!selectedBooking || !isMobile) {
@@ -402,10 +481,27 @@ export function ManagerInboxPage() {
     }
   }, [isMobile, searchParams, selectedBooking]);
 
-  function handleMutationSuccess(message: string) {
+  async function saveCapacityIfChanged(
+    id: string,
+    capacityPercent: number,
+    currentCapacityPercent: number
+  ) {
+    if (capacityPercent === currentCapacityPercent) {
+      return;
+    }
+
+    await apiFetch(`/api/bookings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ capacity_percent: capacityPercent })
+    });
+  }
+
+  function handleMutationSuccess(message: string, closeDetail = true) {
     setSuccessMessage(message);
     setSaveForLaterMessage('');
-    setMobileDetailOpen(false);
+    if (closeDetail) {
+      setMobileDetailOpen(false);
+    }
     void queryClient.invalidateQueries();
   }
 
@@ -567,19 +663,36 @@ export function ManagerInboxPage() {
           </button>
         </div>
       ) : null}
-      {approve.error || reject.error || assign.error || assignAndApprove.error || cancel.error ? (
+      {approve.error ||
+      reject.error ||
+      assign.error ||
+      assignAndApprove.error ||
+      cancel.error ||
+      updateCapacity.error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {(approve.error ?? reject.error ?? assign.error ?? assignAndApprove.error ?? cancel.error)?.message}
+          {
+            (
+              approve.error ??
+              reject.error ??
+              assign.error ??
+              assignAndApprove.error ??
+              cancel.error ??
+              updateCapacity.error
+            )?.message
+          }
         </div>
       ) : null}
       {!canManageInbox ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Admin support role can review this inbox but cannot approve, reject, cancel, or assign bookings.
+          Admin support role can review this inbox but cannot approve, reject, cancel, or
+          assign bookings.
         </div>
       ) : null}
       {bookings.isLoading || bas.isLoading || summary.isLoading ? (
         <Card>
-          <CardContent className="p-5 text-sm text-slate-600">Loading manager inbox...</CardContent>
+          <CardContent className="p-5 text-sm text-slate-600">
+            Loading manager inbox...
+          </CardContent>
         </Card>
       ) : null}
       {bookings.error || bas.error || summary.error ? (
@@ -657,7 +770,9 @@ export function ManagerInboxPage() {
             </select>
             <select
               value={filters.type}
-              onChange={(event) => setFilter({ type: event.target.value as FilterState['type'] })}
+              onChange={(event) =>
+                setFilter({ type: event.target.value as FilterState['type'] })
+              }
               className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
             >
               <option value="ALL">Type: All</option>
@@ -706,7 +821,8 @@ export function ManagerInboxPage() {
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-sm font-medium text-slate-500">
-              Showing {filteredBookings.length} request{filteredBookings.length === 1 ? '' : 's'}
+              Showing {filteredBookings.length} request
+              {filteredBookings.length === 1 ? '' : 's'}
             </p>
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500">Sort by</span>
@@ -742,8 +858,12 @@ export function ManagerInboxPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <p className="truncate text-lg font-semibold text-slate-900">{booking.title}</p>
-                      <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+                      <p className="truncate text-lg font-semibold text-slate-900">
+                        {booking.title}
+                      </p>
+                      <Badge tone={priorityTone(booking.priority)}>
+                        {booking.priority}
+                      </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       <RequestTypeBadge booking={booking} />
@@ -763,7 +883,9 @@ export function ManagerInboxPage() {
                     ) : (
                       <UsersRound className="h-4 w-4 shrink-0 text-slate-400" />
                     )}
-                    <span className="truncate">{booking.ba?.full_name ?? 'Unassigned'}</span>
+                    <span className="truncate">
+                      {booking.ba?.full_name ?? 'Unassigned'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 truncate">
                     <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
@@ -772,7 +894,9 @@ export function ManagerInboxPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 truncate sm:col-span-2">
-                    <span className="truncate">Requester: {booking.requester.full_name}</span>
+                    <span className="truncate">
+                      Requester: {booking.requester.full_name}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -791,8 +915,8 @@ export function ManagerInboxPage() {
               <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   Showing {(safePage - 1) * pageSize + 1}-
-                  {Math.min(safePage * pageSize, filteredBookings.length)} of {filteredBookings.length}{' '}
-                  requests
+                  {Math.min(safePage * pageSize, filteredBookings.length)} of{' '}
+                  {filteredBookings.length} requests
                 </span>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
                   <Button
@@ -850,14 +974,45 @@ export function ManagerInboxPage() {
             capacitySummary={summary.data}
             selectedBaId={selectedBaId}
             capacity={selectedCapacity.data}
+            capacityPercent={selectedCapacityPercent}
             onSelectBa={(baId) =>
               setAssignDrafts((current) => ({ ...current, [selectedBooking.id]: baId }))
             }
-            onApprove={() => approve.mutate(selectedBooking.id)}
+            onCapacityChange={(capacityPercent) =>
+              setCapacityDrafts((current) => ({
+                ...current,
+                [selectedBooking.id]: String(capacityPercent)
+              }))
+            }
+            onSaveCapacity={() =>
+              updateCapacity.mutate({
+                id: selectedBooking.id,
+                capacityPercent: selectedCapacityPercent
+              })
+            }
+            onApprove={() =>
+              approve.mutate({
+                id: selectedBooking.id,
+                capacityPercent: selectedCapacityPercent,
+                currentCapacityPercent: selectedBooking.capacity_percent
+              })
+            }
             onReject={() => handleReject(selectedBooking.id)}
-            onAssign={() => assign.mutate({ id: selectedBooking.id, baId: selectedBaId })}
+            onAssign={() =>
+              assign.mutate({
+                id: selectedBooking.id,
+                baId: selectedBaId,
+                capacityPercent: selectedCapacityPercent,
+                currentCapacityPercent: selectedBooking.capacity_percent
+              })
+            }
             onAssignAndApprove={() =>
-              assignAndApprove.mutate({ id: selectedBooking.id, baId: selectedBaId })
+              assignAndApprove.mutate({
+                id: selectedBooking.id,
+                baId: selectedBaId,
+                capacityPercent: selectedCapacityPercent,
+                currentCapacityPercent: selectedBooking.capacity_percent
+              })
             }
             onCancel={() => handleCancel(selectedBooking.id)}
             onSaveForLater={() =>
@@ -869,7 +1024,8 @@ export function ManagerInboxPage() {
               reject.isPending ||
               assign.isPending ||
               assignAndApprove.isPending ||
-              cancel.isPending
+              cancel.isPending ||
+              updateCapacity.isPending
             }
           />
         ) : !isMobile ? (
@@ -894,18 +1050,51 @@ export function ManagerInboxPage() {
               capacitySummary={summary.data}
               selectedBaId={selectedBaId}
               capacity={selectedCapacity.data}
+              capacityPercent={selectedCapacityPercent}
               onSelectBa={(baId) =>
                 setAssignDrafts((current) => ({ ...current, [selectedBooking.id]: baId }))
               }
-              onApprove={() => approve.mutate(selectedBooking.id)}
+              onCapacityChange={(capacityPercent) =>
+                setCapacityDrafts((current) => ({
+                  ...current,
+                  [selectedBooking.id]: String(capacityPercent)
+                }))
+              }
+              onSaveCapacity={() =>
+                updateCapacity.mutate({
+                  id: selectedBooking.id,
+                  capacityPercent: selectedCapacityPercent
+                })
+              }
+              onApprove={() =>
+                approve.mutate({
+                  id: selectedBooking.id,
+                  capacityPercent: selectedCapacityPercent,
+                  currentCapacityPercent: selectedBooking.capacity_percent
+                })
+              }
               onReject={() => handleReject(selectedBooking.id)}
-              onAssign={() => assign.mutate({ id: selectedBooking.id, baId: selectedBaId })}
+              onAssign={() =>
+                assign.mutate({
+                  id: selectedBooking.id,
+                  baId: selectedBaId,
+                  capacityPercent: selectedCapacityPercent,
+                  currentCapacityPercent: selectedBooking.capacity_percent
+                })
+              }
               onAssignAndApprove={() =>
-                assignAndApprove.mutate({ id: selectedBooking.id, baId: selectedBaId })
+                assignAndApprove.mutate({
+                  id: selectedBooking.id,
+                  baId: selectedBaId,
+                  capacityPercent: selectedCapacityPercent,
+                  currentCapacityPercent: selectedBooking.capacity_percent
+                })
               }
               onCancel={() => handleCancel(selectedBooking.id)}
               onSaveForLater={() => {
-                setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`);
+                setSaveForLaterMessage(
+                  `Saved ${selectedBooking.title} for later review.`
+                );
                 closeMobileDetail();
               }}
               canManageActions={canManageInbox}
@@ -914,7 +1103,8 @@ export function ManagerInboxPage() {
                 reject.isPending ||
                 assign.isPending ||
                 assignAndApprove.isPending ||
-                cancel.isPending
+                cancel.isPending ||
+                updateCapacity.isPending
               }
             />
           </div>
@@ -1002,7 +1192,10 @@ function RequestDetailPanel({
   capacitySummary,
   selectedBaId,
   capacity,
+  capacityPercent,
   onSelectBa,
+  onCapacityChange,
+  onSaveCapacity,
   onApprove,
   onReject,
   onAssign,
@@ -1017,7 +1210,10 @@ function RequestDetailPanel({
   capacitySummary?: CapacitySummary;
   selectedBaId: string;
   capacity?: CapacityDetail;
+  capacityPercent: number;
   onSelectBa: (baId: string) => void;
+  onCapacityChange: (capacityPercent: number) => void;
+  onSaveCapacity: () => void;
   onApprove: () => void;
   onReject: () => void;
   onAssign: () => void;
@@ -1031,7 +1227,20 @@ function RequestDetailPanel({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const requestState = getManagerRequestState(booking);
   const type = getRequestType(booking);
-  const verificationItems = getVerificationItems(booking);
+  const canEditCapacity = canManageActions && booking.status === 'PENDING';
+  const capacityChanged = capacityPercent !== booking.capacity_percent;
+  const capacityPreview = getAdjustedCapacityPreview(
+    capacity,
+    booking,
+    selectedBaId,
+    capacityPercent
+  );
+  const capacityCheckReady = !selectedBaId || Boolean(capacity);
+  const blocksCapacityDecision =
+    canEditCapacity &&
+    Boolean(selectedBaId) &&
+    (!capacityCheckReady || capacityPreview.hasApprovalRisk);
+  const verificationItems = getVerificationItems(booking, capacityPercent);
   const canApproveDirectly = booking.status === 'PENDING' && Boolean(booking.ba_id);
   const canAssign = booking.status === 'PENDING' && !booking.ba_id;
   const canReject = booking.status === 'PENDING';
@@ -1039,7 +1248,9 @@ function RequestDetailPanel({
 
   const filteredBas = useMemo(() => {
     const search = baSearch.toLowerCase().trim();
-    const capacityMap = new Map((capacitySummary?.items ?? []).map((item) => [item.ba_id, item]));
+    const capacityMap = new Map(
+      (capacitySummary?.items ?? []).map((item) => [item.ba_id, item])
+    );
 
     return allBas
       .map((ba) => {
@@ -1070,8 +1281,11 @@ function RequestDetailPanel({
           </div>
           <div className="flex gap-2">
             {canManageActions && canApproveDirectly ? (
-              <Button onClick={onApprove} disabled={isSubmitting}>
-                Approve
+              <Button
+                onClick={onApprove}
+                disabled={isSubmitting || blocksCapacityDecision}
+              >
+                {capacityChanged ? 'Save + approve' : 'Approve'}
               </Button>
             ) : null}
             {canManageActions && canCancel ? (
@@ -1115,7 +1329,7 @@ function RequestDetailPanel({
           <DetailStat
             label="Priority"
             value={booking.priority}
-            hint={`${booking.capacity_percent}% capacity`}
+            hint={`${capacityPercent}% capacity`}
             tone="priority"
             icon={Zap}
           />
@@ -1140,8 +1354,14 @@ function RequestDetailPanel({
           />
           <InfoCard
             title="Estimated capacity"
-            value={`${booking.capacity_percent}%`}
-            hint={requestState === 'NEED_VERIFICATION' ? 'Needs verification' : 'Requested'}
+            value={`${capacityPercent}%`}
+            hint={
+              capacityChanged
+                ? `PM/PO requested ${booking.capacity_percent}%`
+                : requestState === 'NEED_VERIFICATION'
+                  ? 'Needs verification'
+                  : 'Requested'
+            }
             tone="capacity"
             icon={ShieldCheck}
           />
@@ -1157,14 +1377,18 @@ function RequestDetailPanel({
         <section className="grid gap-2 rounded-xl border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-950">Project / Business need</p>
           <p className="text-sm leading-6 text-slate-600">{booking.description}</p>
-          {booking.notes ? <p className="text-sm text-slate-500">Notes: {booking.notes}</p> : null}
+          {booking.notes ? (
+            <p className="text-sm text-slate-500">Notes: {booking.notes}</p>
+          ) : null}
         </section>
 
         {verificationItems.length > 0 ? (
           <section className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-amber-600" />
-              <p className="text-sm font-semibold text-amber-900">Needs manager verification</p>
+              <p className="text-sm font-semibold text-amber-900">
+                Needs manager verification
+              </p>
             </div>
             <div className="grid gap-2 text-sm text-amber-900">
               {verificationItems.map((item) => (
@@ -1177,32 +1401,106 @@ function RequestDetailPanel({
           </section>
         ) : null}
 
+        {canEditCapacity ? (
+          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Capacity decision</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Requested: {booking.capacity_percent}%
+                </p>
+              </div>
+              {capacityChanged ? (
+                <Badge tone="warning">Edited</Badge>
+              ) : (
+                <Badge tone="neutral">Current</Badge>
+              )}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+                {CAPACITY_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onCapacityChange(option)}
+                    className={[
+                      'h-9 rounded-md text-sm font-semibold transition-colors',
+                      capacityPercent === option
+                        ? 'bg-white text-slate-950 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-950'
+                    ].join(' ')}
+                    disabled={isSubmitting}
+                  >
+                    {option}%
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onSaveCapacity}
+                disabled={!capacityChanged || isSubmitting}
+              >
+                Save capacity
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
         <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-950">Capacity preview</p>
-            <Badge tone={capacity?.has_overbook_risk ? 'danger' : 'success'}>
-              {capacity?.has_overbook_risk ? 'At capacity' : 'Available'}
+            <Badge
+              tone={
+                !selectedBaId || !capacityCheckReady
+                  ? 'neutral'
+                  : capacityPreview.hasApprovalRisk
+                    ? 'danger'
+                    : 'success'
+              }
+            >
+              {!selectedBaId
+                ? 'Needs BA'
+                : !capacityCheckReady
+                  ? 'Checking'
+                  : capacityPreview.hasApprovalRisk
+                    ? 'Over capacity'
+                    : 'Approvable'}
             </Badge>
           </div>
           <div className="grid gap-2 text-sm text-slate-600">
             <div className="flex items-center justify-between">
               <span>Approved capacity</span>
-              <span>{capacity?.max_approved_capacity ?? 0}%</span>
+              <span>{capacityPreview.approvedCapacity}%</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Pending capacity</span>
-              <span>{capacity?.max_pending_capacity ?? 0}%</span>
+              <span>{capacityPreview.pendingCapacity}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Approval load</span>
+              <span
+                className={
+                  capacityPreview.hasApprovalRisk
+                    ? 'font-semibold text-rose-600'
+                    : undefined
+                }
+              >
+                {capacityPreview.approvalLoad}%
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span>Risk capacity</span>
-              <span>{capacity?.max_risk_capacity ?? 0}%</span>
+              <span>{capacityPreview.riskCapacity}%</span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
               <div
                 className={
-                  (capacity?.max_risk_capacity ?? 0) > 100 ? 'h-full bg-rose-500' : 'h-full bg-blue-600'
+                  capacityPreview.hasApprovalRisk
+                    ? 'h-full bg-rose-500'
+                    : 'h-full bg-blue-600'
                 }
-                style={{ width: `${Math.min(100, capacity?.max_risk_capacity ?? 0)}%` }}
+                style={{ width: `${Math.min(100, capacityPreview.approvalLoad)}%` }}
               />
             </div>
           </div>
@@ -1211,14 +1509,16 @@ function RequestDetailPanel({
         {canManageActions && canAssign ? (
           <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-950">Select BA for Assignment</p>
+              <p className="text-sm font-semibold text-slate-950">
+                Select BA for Assignment
+              </p>
               <Button variant="ghost" size="sm" asChild>
                 <a href="/crm/ba">BA Directory</a>
               </Button>
             </div>
-            
+
             <div className="relative">
-              <div 
+              <div
                 className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               >
@@ -1226,23 +1526,27 @@ function RequestDetailPanel({
                   <div className="flex items-center gap-3">
                     <Avatar name={selectedBa.full_name} url={selectedBa.avatar_url} />
                     <div>
-                      <p className="text-sm font-semibold text-slate-950">{selectedBa.full_name}</p>
+                      <p className="text-sm font-semibold text-slate-950">
+                        {selectedBa.full_name}
+                      </p>
                       <p className="text-xs text-slate-500">{selectedBa.level}</p>
                     </div>
                   </div>
                 ) : (
                   <p className="text-sm text-slate-500">Choose a BA...</p>
                 )}
-                <ChevronDown className={`h-4 w-4 text-slate-400 transition ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  className={`h-4 w-4 text-slate-400 transition ${isDropdownOpen ? 'rotate-180' : ''}`}
+                />
               </div>
 
               {isDropdownOpen && (
                 <div className="absolute left-0 right-0 top-full z-10 mt-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                   <div className="flex items-center gap-2 border-b border-slate-100 p-3">
                     <Search className="h-4 w-4 text-slate-400" />
-                    <input 
+                    <input
                       autoFocus
-                      className="w-full text-sm outline-none" 
+                      className="w-full text-sm outline-none"
                       placeholder="Search BAs..."
                       value={baSearch}
                       onChange={(e) => setBaSearch(e.target.value)}
@@ -1250,7 +1554,7 @@ function RequestDetailPanel({
                   </div>
                   <div className="max-h-[300px] overflow-y-auto">
                     {filteredBas.map((item) => (
-                      <div 
+                      <div
                         key={item.ba.id}
                         className="flex cursor-pointer items-center justify-between gap-3 p-3 hover:bg-slate-50"
                         onClick={() => {
@@ -1261,12 +1565,16 @@ function RequestDetailPanel({
                         <div className="flex items-center gap-3">
                           <Avatar name={item.ba.full_name} url={item.ba.avatar_url} />
                           <div>
-                            <p className="text-sm font-medium text-slate-950">{item.ba.full_name}</p>
+                            <p className="text-sm font-medium text-slate-950">
+                              {item.ba.full_name}
+                            </p>
                             <p className="text-xs text-slate-500">{item.ba.level}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`text-xs font-semibold ${item.availability < 20 ? 'text-rose-600' : 'text-slate-600'}`}>
+                          <p
+                            className={`text-xs font-semibold ${item.availability < 20 ? 'text-rose-600' : 'text-slate-600'}`}
+                          >
                             {item.availability}% Avail.
                           </p>
                           <p className="text-[10px] text-slate-400">
@@ -1276,7 +1584,9 @@ function RequestDetailPanel({
                       </div>
                     ))}
                     {filteredBas.length === 0 && (
-                      <p className="p-4 text-center text-sm text-slate-500">No BAs found.</p>
+                      <p className="p-4 text-center text-sm text-slate-500">
+                        No BAs found.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1301,14 +1611,21 @@ function RequestDetailPanel({
               <Button
                 variant="secondary"
                 onClick={onAssign}
-                disabled={!selectedBaId || isSubmitting}
+                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision}
               >
-                Assign BA
+                {capacityChanged ? 'Save + assign' : 'Assign BA'}
               </Button>
-              <Button onClick={onAssignAndApprove} disabled={!selectedBaId || isSubmitting}>
-                Assign + Approve
+              <Button
+                onClick={onAssignAndApprove}
+                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision}
+              >
+                {capacityChanged ? 'Save + assign + approve' : 'Assign + Approve'}
               </Button>
-              <Button variant="secondary" onClick={onSaveForLater} disabled={isSubmitting}>
+              <Button
+                variant="secondary"
+                onClick={onSaveForLater}
+                disabled={isSubmitting}
+              >
                 Save for later
               </Button>
               <Button
@@ -1427,8 +1744,6 @@ function InfoCard({
   );
 }
 
-
-
 function RequestTypeBadge({ booking }: { booking: Booking }) {
   return (
     <Badge tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}>
@@ -1470,14 +1785,77 @@ function useIsMobile() {
   return isMobile;
 }
 
-function getVerificationItems(booking: Booking) {
+function getAdjustedCapacityPreview(
+  capacity: CapacityDetail | undefined,
+  booking: Booking,
+  selectedBaId: string,
+  capacityPercent: number
+) {
+  const shouldPreviewDraft = booking.status === 'PENDING' && Boolean(selectedBaId);
+  const includesCurrentPending =
+    booking.status === 'PENDING' &&
+    Boolean(booking.ba_id) &&
+    selectedBaId === booking.ba_id;
+
+  if (capacity?.daily.length) {
+    const ownPendingCapacity = includesCurrentPending ? booking.capacity_percent : 0;
+    const daily = capacity.daily.map((day) => {
+      const pendingCapacity = shouldPreviewDraft
+        ? Math.max(0, day.pending_capacity - ownPendingCapacity) + capacityPercent
+        : day.pending_capacity;
+      const approvalLoad = shouldPreviewDraft
+        ? day.approved_capacity + capacityPercent
+        : day.approved_capacity;
+
+      return {
+        approvedCapacity: day.approved_capacity,
+        pendingCapacity,
+        approvalLoad,
+        riskCapacity: day.approved_capacity + pendingCapacity
+      };
+    });
+
+    return {
+      approvedCapacity: Math.max(0, ...daily.map((day) => day.approvedCapacity)),
+      pendingCapacity: Math.max(0, ...daily.map((day) => day.pendingCapacity)),
+      approvalLoad: Math.max(0, ...daily.map((day) => day.approvalLoad)),
+      riskCapacity: Math.max(0, ...daily.map((day) => day.riskCapacity)),
+      hasApprovalRisk: daily.some((day) => day.approvalLoad > 100)
+    };
+  }
+
+  const approvedCapacity = capacity?.max_approved_capacity ?? 0;
+  const pendingCapacity = shouldPreviewDraft
+    ? Math.max(
+        0,
+        (capacity?.max_pending_capacity ?? 0) -
+          (includesCurrentPending ? booking.capacity_percent : 0)
+      ) + capacityPercent
+    : (capacity?.max_pending_capacity ?? 0);
+  const approvalLoad = shouldPreviewDraft
+    ? approvedCapacity + capacityPercent
+    : approvedCapacity;
+
+  return {
+    approvedCapacity,
+    pendingCapacity,
+    approvalLoad,
+    riskCapacity: approvedCapacity + pendingCapacity,
+    hasApprovalRisk: approvalLoad > 100
+  };
+}
+
+function getVerificationItems(
+  booking: Booking,
+  capacityPercent = booking.capacity_percent
+) {
   const items: string[] = [];
 
   if (!booking.ba_id) {
     items.push('BA not assigned');
   }
 
-  if (booking.capacity_percent >= 100) {
+  if (capacityPercent >= 100) {
     items.push('Capacity needs verification');
   }
 

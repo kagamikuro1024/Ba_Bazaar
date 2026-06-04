@@ -66,17 +66,16 @@ async function main() {
   });
 
   const pmUsers = await Promise.all(
-    ['Minh Tran', 'Hoa Nguyen', 'Quang Pham', 'Linh Do', 'Khanh Vo'].map(
-      (name, index) =>
-        prisma.user.create({
-          data: {
-            full_name: name,
-            email: `pm${index + 1}@ba-bazaar.local`,
-            role: UserRole.PM_PO,
-            password_hash: pmPasswordHash,
-            avatar_url: pravatar(21 + index)
-          }
-        })
+    ['Minh Tran', 'Hoa Nguyen', 'Quang Pham', 'Linh Do', 'Khanh Vo'].map((name, index) =>
+      prisma.user.create({
+        data: {
+          full_name: name,
+          email: `pm${index + 1}@ba-bazaar.local`,
+          role: UserRole.PM_PO,
+          password_hash: pmPasswordHash,
+          avatar_url: pravatar(21 + index)
+        }
+      })
     )
   );
 
@@ -126,17 +125,32 @@ async function main() {
   );
 
   const baInputs = [
-    ['Pham Ngoc Chi', BALevel.SENIOR, BAStatus.ACTIVE, ['Fintech', 'BPMN', 'API Specification']],
+    [
+      'Pham Ngoc Chi',
+      BALevel.SENIOR,
+      BAStatus.ACTIVE,
+      ['Fintech', 'BPMN', 'API Specification']
+    ],
     ['Do Anh Dung', BALevel.MIDDLE, BAStatus.ACTIVE, ['Logistics', 'Data Analysis']],
     ['Nguyen Bao An', BALevel.JUNIOR, BAStatus.ACTIVE, ['HR Tech', 'User Story Mapping']],
     ['Le Dang Khoa', BALevel.MIDDLE, BAStatus.ACTIVE, ['CRM', 'Stakeholder Workshop']],
     ['Bui Phuong Thao', BALevel.SENIOR, BAStatus.ACTIVE, ['CRM', 'Data Analysis']],
     ['Hoang Minh Chau', BALevel.LEAD, BAStatus.ACTIVE, ['Fintech', 'CRM', 'BPMN']],
-    ['Tran Gia Huy', BALevel.MIDDLE, BAStatus.ACTIVE, ['E-commerce', 'API Specification']],
+    [
+      'Tran Gia Huy',
+      BALevel.MIDDLE,
+      BAStatus.ACTIVE,
+      ['E-commerce', 'API Specification']
+    ],
     ['Vo Thanh Tam', BALevel.SENIOR, BAStatus.ACTIVE, ['Logistics', 'BPMN']],
     ['Dang Thu Ha', BALevel.JUNIOR, BAStatus.ACTIVE, ['CRM', 'User Story Mapping']],
     ['Nguyen Mai Linh', BALevel.MIDDLE, BAStatus.ACTIVE, ['Fintech', 'Data Analysis']],
-    ['Pham Quoc Bao', BALevel.SENIOR, BAStatus.ACTIVE, ['E-commerce', 'Stakeholder Workshop']],
+    [
+      'Pham Quoc Bao',
+      BALevel.SENIOR,
+      BAStatus.ACTIVE,
+      ['E-commerce', 'Stakeholder Workshop']
+    ],
     ['Do Minh Tue', BALevel.MIDDLE, BAStatus.ACTIVE, ['HR Tech', 'BPMN']],
     ['Le Hoai Nam', BALevel.LEAD, BAStatus.ON_LEAVE, ['CRM', 'API Specification']],
     ['Vu Nhat Vy', BALevel.SENIOR, BAStatus.ON_LEAVE, ['Fintech', 'Data Analysis']],
@@ -196,44 +210,424 @@ async function main() {
   const projectByName = new Map(projects.map((project) => [project.name, project]));
 
   const bookingInputs = [
-    [0, 'Payment Refund Flow', 0, 'Refund analysis sprint', '2026-06-01', '2026-06-05', 50, BookingStatus.APPROVED, BookingPriority.HIGH],
-    [0, 'CRM Revamp', 1, 'Pending CRM dependency mapping', '2026-06-03', '2026-06-06', 50, BookingStatus.PENDING, BookingPriority.MEDIUM],
-    [1, 'Logistics Tracking', 1, 'Shipment exception flow', '2026-06-01', '2026-06-06', 100, BookingStatus.APPROVED, BookingPriority.HIGH],
-    [2, 'HR Approval Workflow', 2, 'HR request rules', '2026-06-03', '2026-06-04', 100, BookingStatus.APPROVED, BookingPriority.LOW],
-    [4, 'BI Dashboard', 3, 'Dashboard requirements', '2026-06-01', '2026-06-05', 50, BookingStatus.APPROVED, BookingPriority.MEDIUM],
-    [4, 'Internal Portal', 4, 'Portal request risk', '2026-06-01', '2026-06-06', 100, BookingStatus.PENDING, BookingPriority.URGENT],
-    [5, 'CRM Revamp', 0, 'Lead BA CRM review', '2026-06-02', '2026-06-07', 100, BookingStatus.IN_PROGRESS, BookingPriority.HIGH],
-    [6, 'Mobile Onboarding', 1, 'Onboarding discovery', '2026-06-09', '2026-06-13', 50, BookingStatus.PENDING, BookingPriority.MEDIUM],
-    [7, 'Logistics Tracking', 2, 'Carrier integration analysis', '2026-06-10', '2026-06-14', 50, BookingStatus.APPROVED, BookingPriority.HIGH],
-    [8, 'CRM Revamp', 3, 'Customer profile grooming', '2026-06-09', '2026-06-10', 100, BookingStatus.REJECTED, BookingPriority.LOW],
-    [10, 'BI Dashboard', 1, 'Completed onboarding metric wrap-up', '2026-06-02', '2026-06-03', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'Internal Portal', 1, 'Portal backlog walkthrough', '2026-05-21', '2026-05-23', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'BI Dashboard', 4, 'CRM metrics mapping', '2026-05-12', '2026-05-16', 50, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [8, 'Payment Refund Flow', 0, 'Refund contact-center scenarios', '2026-04-22', '2026-04-25', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'Mobile Onboarding', 2, 'Onboarding support fallback', '2026-04-08', '2026-04-10', 50, BookingStatus.CANCELLED, BookingPriority.LOW],
-    [8, 'HR Approval Workflow', 1, 'Policy intake notes', '2026-03-17', '2026-03-20', 50, BookingStatus.COMPLETED, BookingPriority.LOW],
-    [8, 'CRM Revamp', 0, 'Legacy contact merge review', '2026-02-10', '2026-02-13', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'Logistics Tracking', 2, 'Returned-order exception analysis', '2026-01-19', '2026-01-23', 100, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [8, 'Payment Refund Flow', 4, 'Refund SLA gap mapping', '2025-12-08', '2025-12-12', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'BI Dashboard', 3, 'Retention metrics workshop', '2025-11-17', '2025-11-21', 100, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [8, 'Internal Portal', 1, 'Service request taxonomy cleanup', '2025-10-06', '2025-10-10', 50, BookingStatus.COMPLETED, BookingPriority.LOW],
-    [8, 'CRM Revamp', 0, 'Lead intake form simplification', '2025-09-15', '2025-09-19', 100, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [8, 'HR Approval Workflow', 4, 'Escalation ladder discovery', '2025-08-11', '2025-08-15', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'Mobile Onboarding', 2, 'Activation funnel notes', '2025-07-07', '2025-07-11', 100, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [8, 'Payment Refund Flow', 3, 'Refund reasons catalog', '2025-06-09', '2025-06-13', 50, BookingStatus.COMPLETED, BookingPriority.LOW],
-    [8, 'BI Dashboard', 1, 'Customer health score definition', '2025-05-12', '2025-05-16', 100, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [8, 'CRM Revamp', 4, 'Duplicate profile cleanup rules', '2025-04-14', '2025-04-18', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [9, 'Payment Refund Flow', 4, 'Refund report review', '2026-06-11', '2026-06-15', 50, BookingStatus.APPROVED, BookingPriority.MEDIUM],
-    [10, 'Mobile Onboarding', 0, 'KYC rules', '2026-06-16', '2026-06-20', 100, BookingStatus.PENDING, BookingPriority.URGENT],
-    [11, 'HR Approval Workflow', 1, 'Approval matrix', '2026-06-16', '2026-06-18', 50, BookingStatus.APPROVED, BookingPriority.MEDIUM],
-    [0, 'Payment Refund Flow', 2, 'Completed refund baseline', '2026-05-04', '2026-05-08', 50, BookingStatus.COMPLETED, BookingPriority.MEDIUM],
-    [1, 'Logistics Tracking', 3, 'Cancelled logistics support', '2026-05-11', '2026-05-13', 50, BookingStatus.CANCELLED, BookingPriority.LOW],
-    [2, 'HR Approval Workflow', 4, 'Completed HR interviews', '2026-05-18', '2026-05-22', 100, BookingStatus.COMPLETED, BookingPriority.HIGH],
-    [3, 'CRM Revamp', 0, 'Free-capacity pending demo', '2026-06-04', '2026-06-10', 50, BookingStatus.PENDING, BookingPriority.HIGH],
-    [5, 'BI Dashboard', 1, 'Approved full capacity block', '2026-06-10', '2026-06-14', 100, BookingStatus.APPROVED, BookingPriority.URGENT],
-    [5, 'Mobile Onboarding', 2, 'Should be blocked if approved', '2026-06-11', '2026-06-12', 50, BookingStatus.PENDING, BookingPriority.HIGH],
-    [12, 'CRM Revamp', 3, 'Historical on-leave booking', '2026-05-01', '2026-05-03', 50, BookingStatus.COMPLETED, BookingPriority.LOW],
-    [14, 'Logistics Tracking', 4, 'Historical resigned BA booking', '2026-04-01', '2026-04-05', 100, BookingStatus.COMPLETED, BookingPriority.MEDIUM]
+    [
+      0,
+      'Payment Refund Flow',
+      0,
+      'Refund analysis sprint',
+      '2026-06-01',
+      '2026-06-05',
+      50,
+      BookingStatus.APPROVED,
+      BookingPriority.HIGH
+    ],
+    [
+      0,
+      'CRM Revamp',
+      1,
+      'Pending CRM dependency mapping',
+      '2026-06-03',
+      '2026-06-06',
+      25,
+      BookingStatus.PENDING,
+      BookingPriority.MEDIUM
+    ],
+    [
+      1,
+      'Logistics Tracking',
+      1,
+      'Shipment exception flow',
+      '2026-06-01',
+      '2026-06-06',
+      100,
+      BookingStatus.APPROVED,
+      BookingPriority.HIGH
+    ],
+    [
+      2,
+      'HR Approval Workflow',
+      2,
+      'HR request rules',
+      '2026-06-03',
+      '2026-06-04',
+      75,
+      BookingStatus.APPROVED,
+      BookingPriority.LOW
+    ],
+    [
+      4,
+      'BI Dashboard',
+      3,
+      'Dashboard requirements',
+      '2026-06-01',
+      '2026-06-05',
+      50,
+      BookingStatus.APPROVED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      4,
+      'Internal Portal',
+      4,
+      'Portal request risk',
+      '2026-06-01',
+      '2026-06-06',
+      100,
+      BookingStatus.PENDING,
+      BookingPriority.URGENT
+    ],
+    [
+      5,
+      'CRM Revamp',
+      0,
+      'Lead BA CRM review',
+      '2026-06-02',
+      '2026-06-07',
+      100,
+      BookingStatus.IN_PROGRESS,
+      BookingPriority.HIGH
+    ],
+    [
+      6,
+      'Mobile Onboarding',
+      1,
+      'Onboarding discovery',
+      '2026-06-09',
+      '2026-06-13',
+      50,
+      BookingStatus.PENDING,
+      BookingPriority.MEDIUM
+    ],
+    [
+      7,
+      'Logistics Tracking',
+      2,
+      'Carrier integration analysis',
+      '2026-06-10',
+      '2026-06-14',
+      50,
+      BookingStatus.APPROVED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'CRM Revamp',
+      3,
+      'Customer profile grooming',
+      '2026-06-09',
+      '2026-06-10',
+      100,
+      BookingStatus.REJECTED,
+      BookingPriority.LOW
+    ],
+    [
+      10,
+      'BI Dashboard',
+      1,
+      'Completed onboarding metric wrap-up',
+      '2026-06-02',
+      '2026-06-03',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'Internal Portal',
+      1,
+      'Portal backlog walkthrough',
+      '2026-05-21',
+      '2026-05-23',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'BI Dashboard',
+      4,
+      'CRM metrics mapping',
+      '2026-05-12',
+      '2026-05-16',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'Payment Refund Flow',
+      0,
+      'Refund contact-center scenarios',
+      '2026-04-22',
+      '2026-04-25',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'Mobile Onboarding',
+      2,
+      'Onboarding support fallback',
+      '2026-04-08',
+      '2026-04-10',
+      50,
+      BookingStatus.CANCELLED,
+      BookingPriority.LOW
+    ],
+    [
+      8,
+      'HR Approval Workflow',
+      1,
+      'Policy intake notes',
+      '2026-03-17',
+      '2026-03-20',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.LOW
+    ],
+    [
+      8,
+      'CRM Revamp',
+      0,
+      'Legacy contact merge review',
+      '2026-02-10',
+      '2026-02-13',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'Logistics Tracking',
+      2,
+      'Returned-order exception analysis',
+      '2026-01-19',
+      '2026-01-23',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'Payment Refund Flow',
+      4,
+      'Refund SLA gap mapping',
+      '2025-12-08',
+      '2025-12-12',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'BI Dashboard',
+      3,
+      'Retention metrics workshop',
+      '2025-11-17',
+      '2025-11-21',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'Internal Portal',
+      1,
+      'Service request taxonomy cleanup',
+      '2025-10-06',
+      '2025-10-10',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.LOW
+    ],
+    [
+      8,
+      'CRM Revamp',
+      0,
+      'Lead intake form simplification',
+      '2025-09-15',
+      '2025-09-19',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'HR Approval Workflow',
+      4,
+      'Escalation ladder discovery',
+      '2025-08-11',
+      '2025-08-15',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'Mobile Onboarding',
+      2,
+      'Activation funnel notes',
+      '2025-07-07',
+      '2025-07-11',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      8,
+      'Payment Refund Flow',
+      3,
+      'Refund reasons catalog',
+      '2025-06-09',
+      '2025-06-13',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.LOW
+    ],
+    [
+      8,
+      'BI Dashboard',
+      1,
+      'Customer health score definition',
+      '2025-05-12',
+      '2025-05-16',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      8,
+      'CRM Revamp',
+      4,
+      'Duplicate profile cleanup rules',
+      '2025-04-14',
+      '2025-04-18',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      9,
+      'Payment Refund Flow',
+      4,
+      'Refund report review',
+      '2026-06-11',
+      '2026-06-15',
+      50,
+      BookingStatus.APPROVED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      10,
+      'Mobile Onboarding',
+      0,
+      'KYC rules',
+      '2026-06-16',
+      '2026-06-20',
+      100,
+      BookingStatus.PENDING,
+      BookingPriority.URGENT
+    ],
+    [
+      11,
+      'HR Approval Workflow',
+      1,
+      'Approval matrix',
+      '2026-06-16',
+      '2026-06-18',
+      50,
+      BookingStatus.APPROVED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      0,
+      'Payment Refund Flow',
+      2,
+      'Completed refund baseline',
+      '2026-05-04',
+      '2026-05-08',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ],
+    [
+      1,
+      'Logistics Tracking',
+      3,
+      'Cancelled logistics support',
+      '2026-05-11',
+      '2026-05-13',
+      50,
+      BookingStatus.CANCELLED,
+      BookingPriority.LOW
+    ],
+    [
+      2,
+      'HR Approval Workflow',
+      4,
+      'Completed HR interviews',
+      '2026-05-18',
+      '2026-05-22',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.HIGH
+    ],
+    [
+      3,
+      'CRM Revamp',
+      0,
+      'Free-capacity pending demo',
+      '2026-06-04',
+      '2026-06-10',
+      50,
+      BookingStatus.PENDING,
+      BookingPriority.HIGH
+    ],
+    [
+      5,
+      'BI Dashboard',
+      1,
+      'Approved full capacity block',
+      '2026-06-10',
+      '2026-06-14',
+      100,
+      BookingStatus.APPROVED,
+      BookingPriority.URGENT
+    ],
+    [
+      5,
+      'Mobile Onboarding',
+      2,
+      'Should be blocked if approved',
+      '2026-06-11',
+      '2026-06-12',
+      50,
+      BookingStatus.PENDING,
+      BookingPriority.HIGH
+    ],
+    [
+      12,
+      'CRM Revamp',
+      3,
+      'Historical on-leave booking',
+      '2026-05-01',
+      '2026-05-03',
+      50,
+      BookingStatus.COMPLETED,
+      BookingPriority.LOW
+    ],
+    [
+      14,
+      'Logistics Tracking',
+      4,
+      'Historical resigned BA booking',
+      '2026-04-01',
+      '2026-04-05',
+      100,
+      BookingStatus.COMPLETED,
+      BookingPriority.MEDIUM
+    ]
   ] as const;
 
   const createdBookings = [];
@@ -270,7 +664,9 @@ async function main() {
         capacity_percent: capacityPercent,
         priority,
         status,
-        reject_reason: rejected ? 'BA has conflicting priority work in this period.' : null,
+        reject_reason: rejected
+          ? 'BA has conflicting priority work in this period.'
+          : null,
         cancel_reason: cancelled ? 'Project scope changed before kickoff.' : null,
         manager_comment: approved ? 'Approved in seed data.' : null,
         approved_at: approved ? date(startDate) : null,
@@ -304,7 +700,7 @@ async function main() {
       notes: 'BA not assigned yet.',
       start_date: date('2026-06-03'),
       end_date: date('2026-06-06'),
-      capacity_percent: 50,
+      capacity_percent: 25,
       priority: BookingPriority.MEDIUM,
       status: BookingStatus.PENDING
     },
@@ -330,7 +726,7 @@ async function main() {
       notes: 'Requested BA: Le Dang Khoa',
       start_date: date('2026-06-07'),
       end_date: date('2026-06-11'),
-      capacity_percent: 50,
+      capacity_percent: 75,
       priority: BookingPriority.MEDIUM,
       status: BookingStatus.PENDING
     },
@@ -343,7 +739,7 @@ async function main() {
       notes: 'Requested BA: Nguyen Mai Linh',
       start_date: date('2026-06-08'),
       end_date: date('2026-06-13'),
-      capacity_percent: 50,
+      capacity_percent: 25,
       priority: BookingPriority.HIGH,
       status: BookingStatus.PENDING
     },

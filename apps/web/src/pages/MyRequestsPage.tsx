@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, type Booking } from '@/lib/api';
+import { CAPACITY_OPTIONS } from '@/lib/capacity';
 import { StatusBadge } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -38,16 +39,33 @@ export function MyRequestsPage() {
   return (
     <div className="grid gap-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border px-3 text-sm">
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          className="h-10 rounded-md border px-3 text-sm"
+        >
           <option value="">All status</option>
-          {['PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((item) => <option key={item} value={item}>{item}</option>)}
+          {[
+            'PENDING',
+            'APPROVED',
+            'REJECTED',
+            'IN_PROGRESS',
+            'COMPLETED',
+            'CANCELLED'
+          ].map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
         </select>
       </div>
-      {requests.isLoading ? (
-        <LoadingScreen message="Loading your requests" />
-      ) : null}
+      {requests.isLoading ? <LoadingScreen message="Loading your requests" /> : null}
       {requests.error ? (
-        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load requests. Check API connection and retry.</CardContent></Card>
+        <Card>
+          <CardContent className="p-5 text-sm text-rose-700">
+            Could not load requests. Check API connection and retry.
+          </CardContent>
+        </Card>
       ) : null}
       <div className="grid gap-4">
         {(requests.data ?? []).map((booking) => (
@@ -56,15 +74,26 @@ export function MyRequestsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-slate-950">{booking.project.name}</h3>
-                  <p className="text-sm text-slate-600">{booking.ba?.full_name ?? 'Auto assign'}</p>
+                  <p className="text-sm text-slate-600">
+                    {booking.ba?.full_name ?? 'Auto assign'}
+                  </p>
                 </div>
                 <StatusBadge status={booking.status} />
               </div>
               <p className="text-sm text-slate-600">
-                {formatDate(booking.start_date)} - {formatDate(booking.end_date)} · {booking.capacity_percent}% · {booking.priority}
+                {formatDate(booking.start_date)} - {formatDate(booking.end_date)} ·{' '}
+                {booking.capacity_percent}% · {booking.priority}
               </p>
-              {booking.reject_reason ? <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">Reject reason: {booking.reject_reason}</p> : null}
-              {booking.cancel_reason ? <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">Cancel reason: {booking.cancel_reason}</p> : null}
+              {booking.reject_reason ? (
+                <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+                  Reject reason: {booking.reject_reason}
+                </p>
+              ) : null}
+              {booking.cancel_reason ? (
+                <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                  Cancel reason: {booking.cancel_reason}
+                </p>
+              ) : null}
               {editing?.id === booking.id ? (
                 <ResubmitForm
                   booking={booking}
@@ -82,7 +111,11 @@ export function MyRequestsPage() {
           </Card>
         ))}
         {requests.data?.length === 0 ? (
-          <Card><CardContent className="p-5 text-sm text-slate-600">No requests match the selected status.</CardContent></Card>
+          <Card>
+            <CardContent className="p-5 text-sm text-slate-600">
+              No requests match the selected status.
+            </CardContent>
+          </Card>
         ) : null}
       </div>
     </div>
@@ -168,8 +201,11 @@ function ResubmitForm({
           onChange={(event) => setCapacity(Number(event.target.value))}
           className="h-10 rounded-md border px-3 text-sm"
         >
-          <option value={50}>50%</option>
-          <option value={100}>100%</option>
+          {CAPACITY_OPTIONS.map((capacityPercent) => (
+            <option key={capacityPercent} value={capacityPercent}>
+              {capacityPercent}%
+            </option>
+          ))}
         </select>
       </div>
       {localError || error ? (

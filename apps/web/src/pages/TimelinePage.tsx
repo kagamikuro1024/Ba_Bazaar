@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type WheelEvent
+} from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addDays,
@@ -14,12 +21,8 @@ import {
 } from 'date-fns';
 import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
-import {
-  apiFetch,
-  type BAProfile,
-  type Booking,
-  type Project
-} from '@/lib/api';
+import { apiFetch, type BAProfile, type Booking, type Project } from '@/lib/api';
+import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { BAIdentity, StatusBadge } from '@/components/common';
 import { BookingModal } from '@/components/BookingModal';
 import { Button } from '@/components/ui/button';
@@ -28,7 +31,6 @@ import { Modal } from '@/components/ui/modal';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { capacityColor, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
-
 
 type RequestDraft = {
   ba_id: string;
@@ -47,7 +49,6 @@ type DraftSelection = {
 type ActiveDraftSelection = DraftSelection & {
   pointerId: number;
 };
-
 
 type DragScrollState = {
   pointerId: number;
@@ -203,7 +204,9 @@ export function TimelinePage() {
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
-  const [activeSelection, setActiveSelection] = useState<ActiveDraftSelection | null>(null);
+  const [activeSelection, setActiveSelection] = useState<ActiveDraftSelection | null>(
+    null
+  );
   const [successMessage, setSuccessMessage] = useState('');
   const [compactMobileInfo, setCompactMobileInfo] = useState(false);
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
@@ -247,7 +250,12 @@ export function TimelinePage() {
   });
   const summary = useQuery({
     queryKey: ['capacity-summary', role],
-    queryFn: () => apiFetch<{ average_capacity: number; counts: Record<string, number>; items: Array<{ ba_id: string; approved_capacity: number; risk_capacity: number }> }>('/api/capacity/summary')
+    queryFn: () =>
+      apiFetch<{
+        average_capacity: number;
+        counts: Record<string, number>;
+        items: Array<{ ba_id: string; approved_capacity: number; risk_capacity: number }>;
+      }>('/api/capacity/summary')
   });
 
   const visibleBas = (bas.data ?? []).filter((ba) => !baFilter || ba.id === baFilter);
@@ -261,7 +269,12 @@ export function TimelinePage() {
         return {
           ba,
           bookings: baBookings,
-          desktopRowMinHeight: computeRowMinHeight(days, baBookings, desktopBarBaseTop, 72),
+          desktopRowMinHeight: computeRowMinHeight(
+            days,
+            baBookings,
+            desktopBarBaseTop,
+            72
+          ),
           mobileRowMinHeight: computeRowMinHeight(days, baBookings, mobileBarBaseTop, 120)
         };
       }),
@@ -270,7 +283,9 @@ export function TimelinePage() {
 
   const move = (direction: number) =>
     setAnchorDate((current) =>
-      viewMode === 'week' ? addDays(current, direction * 7) : addMonths(current, direction)
+      viewMode === 'week'
+        ? addDays(current, direction * 7)
+        : addMonths(current, direction)
     );
 
   function handleTimelineScroll() {
@@ -292,7 +307,8 @@ export function TimelinePage() {
       return;
     }
 
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    const delta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
     if (delta === 0) {
       return;
     }
@@ -307,7 +323,8 @@ export function TimelinePage() {
 
   function updateSelection(baId: string, day: Date, pointerId: number) {
     setActiveSelection((current) => {
-      if (!current || current.pointerId !== pointerId || current.ba_id !== baId) return current;
+      if (!current || current.pointerId !== pointerId || current.ba_id !== baId)
+        return current;
       if (isSameDay(current.end, day)) return current;
       return { ...current, end: day };
     });
@@ -336,9 +353,15 @@ export function TimelinePage() {
   }
 
   function updateDragScroll(event: PointerEvent<HTMLDivElement>) {
-    if (!dragScroll || dragScroll.pointerId !== event.pointerId || isSelecting(event.pointerId)) return;
+    if (
+      !dragScroll ||
+      dragScroll.pointerId !== event.pointerId ||
+      isSelecting(event.pointerId)
+    )
+      return;
     event.preventDefault();
-    event.currentTarget.scrollLeft = dragScroll.startScrollLeft - (event.clientX - dragScroll.startX);
+    event.currentTarget.scrollLeft =
+      dragScroll.startScrollLeft - (event.clientX - dragScroll.startX);
   }
 
   function endDragScroll(pointerId: number) {
@@ -367,7 +390,11 @@ export function TimelinePage() {
         <LoadingScreen message="Loading timeline" />
       ) : null}
       {bas.error || bookings.error || projects.error || summary.error ? (
-        <Card><CardContent className="p-5 text-sm text-rose-700">Could not load timeline data. Check API connection and retry.</CardContent></Card>
+        <Card>
+          <CardContent className="p-5 text-sm text-rose-700">
+            Could not load timeline data. Check API connection and retry.
+          </CardContent>
+        </Card>
       ) : null}
       <div>
         <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-full lg:flex-nowrap lg:items-center">
@@ -396,135 +423,131 @@ export function TimelinePage() {
             ))}
           </select>
           {canCreateBooking ? (
-            <Button className="hidden lg:ml-auto lg:inline-flex" onClick={openCreateBooking}>
+            <Button
+              className="hidden lg:ml-auto lg:inline-flex"
+              onClick={openCreateBooking}
+            >
               <Plus className="h-4 w-4" /> Create booking
             </Button>
           ) : null}
         </div>
       </div>
       <Card className="overflow-hidden">
-          <CardHeader className="gap-0 p-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
-              <div className="flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start">
-                <Button variant="secondary" size="icon" onClick={() => move(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="secondary" className="flex-1 px-3 sm:flex-none" onClick={() => setAnchorDate(initialWeek)}>
-                  Today
-                </Button>
-                <Button variant="secondary" size="icon" onClick={() => move(1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
-                <span className="hidden sm:inline">View mode</span>
-                <div className="grid w-full grid-cols-2 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
-                  {(['week', 'month'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setViewMode(mode)}
-                      className={cn(
-                        'w-full rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
-                        viewMode === mode
-                          ? 'bg-white text-slate-950 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-950'
-                      )}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="w-full border-b border-slate-200 bg-slate-50/50 px-6 py-3">
-              <button
-                type="button"
-                onClick={() => setLegendCollapsed((current) => !current)}
-                className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-600"
+        <CardHeader className="gap-0 p-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
+            <div className="flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start">
+              <Button variant="secondary" size="icon" onClick={() => move(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1 px-3 sm:flex-none"
+                onClick={() => setAnchorDate(initialWeek)}
               >
-                <span>Legend</span>
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 transition-transform',
-                    legendCollapsed && '-rotate-90'
-                  )}
-                />
-              </button>
-              {!legendCollapsed ? (
-                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded border border-emerald-200 bg-emerald-100/90" /> Completed
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" /> Pending
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" /> Rejected
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded border border-rose-200 bg-rose-100/80" /> Cancelled
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-4 w-9 rounded border border-dashed bg-slate-50" /> Available
-                  </div>
-                </div>
-              ) : null}
+                Today
+              </Button>
+              <Button variant="secondary" size="icon" onClick={() => move(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-          </CardHeader>
-          <CardContent className="relative p-0">
-            <div
-              ref={timelineScrollRef}
-              data-timeline-scroll="true"
-              className={cn(
-                'overflow-x-auto',
-                !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
-                activeSelection && 'select-none touch-none'
-              )}
-              onScroll={handleTimelineScroll}
-              onWheel={handleTimelineWheel}
-              onPointerDown={beginDragScroll}
-              onPointerMove={updateDragScroll}
-              onPointerUp={(event) => endDragScroll(event.pointerId)}
-              onPointerCancel={(event) => endDragScroll(event.pointerId)}
+            <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
+              <span className="hidden sm:inline">View mode</span>
+              <div className="grid w-full grid-cols-2 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
+                {(['week', 'month'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    className={cn(
+                      'w-full rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                      viewMode === mode
+                        ? 'bg-white text-slate-950 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-950'
+                    )}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="w-full border-b border-slate-200 bg-slate-50/50 px-6 py-3">
+            <button
+              type="button"
+              onClick={() => setLegendCollapsed((current) => !current)}
+              className="flex w-full items-center justify-between text-left text-sm font-medium text-slate-600"
             >
-              <div
-                className={cn('grid', !isMobile && 'min-w-[980px]')}
-                style={{
-                  gridTemplateColumns: isMobile
-                    ? `repeat(${days.length}, minmax(${mobileDayMinWidth}px, 1fr))`
-                    : `${baInfoColumnWidth}px repeat(${days.length}, minmax(92px, 1fr))`
-                }}
-              >
-                {!isMobile && (
-                  <>
-                    <div className="h-14 border-b border-r bg-white" aria-hidden="true" />
-                    {days.map((day) => (
-                      <div
-                        key={day.toISOString()}
-                        className={cn(
-                          'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
-                          isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
-                        )}
-                      >
-                        <div>
-                          <div>{format(day, 'EEE')}</div>
-                          <div>{format(day, 'dd/MM')}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </>
+              <span>Legend</span>
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform',
+                  legendCollapsed && '-rotate-90'
                 )}
-                {isMobile &&
-                  days.map((day) => (
+              />
+            </button>
+            {!legendCollapsed ? (
+              <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded border border-emerald-200 bg-emerald-100/90" />{' '}
+                  Completed
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" />{' '}
+                  Pending
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" />{' '}
+                  Rejected
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded border border-rose-200 bg-rose-100/80" />{' '}
+                  Cancelled
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-4 w-9 rounded border border-dashed bg-slate-50" />{' '}
+                  Available
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="relative p-0">
+          <div
+            ref={timelineScrollRef}
+            data-timeline-scroll="true"
+            className={cn(
+              'overflow-x-auto',
+              !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
+              activeSelection && 'select-none touch-none'
+            )}
+            onScroll={handleTimelineScroll}
+            onWheel={handleTimelineWheel}
+            onPointerDown={beginDragScroll}
+            onPointerMove={updateDragScroll}
+            onPointerUp={(event) => endDragScroll(event.pointerId)}
+            onPointerCancel={(event) => endDragScroll(event.pointerId)}
+          >
+            <div
+              className={cn('grid', !isMobile && 'min-w-[980px]')}
+              style={{
+                gridTemplateColumns: isMobile
+                  ? `repeat(${days.length}, minmax(${mobileDayMinWidth}px, 1fr))`
+                  : `${baInfoColumnWidth}px repeat(${days.length}, minmax(92px, 1fr))`
+              }}
+            >
+              {!isMobile && (
+                <>
+                  <div className="h-14 border-b border-r bg-white" aria-hidden="true" />
+                  {days.map((day) => (
                     <div
                       key={day.toISOString()}
                       className={cn(
-                        'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
-                        isSameDay(day, currentDate) && 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                        'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
+                        isSameDay(day, currentDate) &&
+                          'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
                       )}
                     >
                       <div>
@@ -533,7 +556,29 @@ export function TimelinePage() {
                       </div>
                     </div>
                   ))}
-                {rowData.map(({ ba, bookings: baBookings, desktopRowMinHeight, mobileRowMinHeight }, index) => {
+                </>
+              )}
+              {isMobile &&
+                days.map((day) => (
+                  <div
+                    key={day.toISOString()}
+                    className={cn(
+                      'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
+                      isSameDay(day, currentDate) &&
+                        'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                    )}
+                  >
+                    <div>
+                      <div>{format(day, 'EEE')}</div>
+                      <div>{format(day, 'dd/MM')}</div>
+                    </div>
+                  </div>
+                ))}
+              {rowData.map(
+                (
+                  { ba, bookings: baBookings, desktopRowMinHeight, mobileRowMinHeight },
+                  index
+                ) => {
                   const isAlternateRow = index % 2 === 1;
 
                   return isMobile ? (
@@ -564,7 +609,9 @@ export function TimelinePage() {
                       rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
-                      activeSelection={activeSelection?.ba_id === ba.id ? activeSelection : null}
+                      activeSelection={
+                        activeSelection?.ba_id === ba.id ? activeSelection : null
+                      }
                       onSelectionStart={beginSelection}
                       onSelectionMove={updateSelection}
                       onSelectionEnd={finishSelection}
@@ -579,15 +626,18 @@ export function TimelinePage() {
                       onBookingClick={setSelectedBooking}
                     />
                   );
-                })}
-              </div>
+                }
+              )}
             </div>
-            {isMobile ? (
-              <div className="pointer-events-none absolute left-0 top-12 z-20">
-                {(() => {
-                  let topOffset = 0;
-                  return rowData.map(({ ba, mobileRowMinHeight }) => {
-                  const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+          </div>
+          {isMobile ? (
+            <div className="pointer-events-none absolute left-0 top-12 z-20">
+              {(() => {
+                let topOffset = 0;
+                return rowData.map(({ ba, mobileRowMinHeight }) => {
+                  const capacity = summary.data?.items.find(
+                    (item) => item.ba_id === ba.id
+                  );
                   const rowTop = topOffset;
                   topOffset += mobileRowMinHeight;
 
@@ -616,39 +666,44 @@ export function TimelinePage() {
                     </div>
                   );
                 });
-                })()}
+              })()}
+            </div>
+          ) : (
+            <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
+              <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
+                BA
               </div>
-            ) : (
-              <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
-                <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
-                  BA
-                </div>
-                {rowData.map(({ ba, desktopRowMinHeight }, index) => {
-                  const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
-                  const isAlternateRow = index % 2 === 1;
+              {rowData.map(({ ba, desktopRowMinHeight }, index) => {
+                const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
+                const isAlternateRow = index % 2 === 1;
 
-                  return (
-                    <div
-                      key={ba.id}
+                return (
+                  <div
+                    key={ba.id}
+                    className={cn(
+                      'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                      isAlternateRow ? 'bg-sky-50' : 'bg-white'
+                    )}
+                    style={{ height: desktopRowMinHeight }}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <BAIdentity ba={ba} />
+                    <span
                       className={cn(
-                        'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
-                        isAlternateRow ? 'bg-sky-50' : 'bg-white'
+                        'text-sm font-bold',
+                        capacityColor(capacity?.risk_capacity ?? 0)
                       )}
-                      style={{ height: desktopRowMinHeight }}
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
                     >
-                      <BAIdentity ba={ba} />
-                      <span className={cn('text-sm font-bold', capacityColor(capacity?.risk_capacity ?? 0))}>
-                        {capacity?.risk_capacity ?? 0}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      {capacity?.risk_capacity ?? 0}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <BookingModal
         open={Boolean(draft)}
@@ -708,10 +763,7 @@ function TimelineRow({
   return (
     <>
       <div
-        className={cn(
-          'border-b border-r',
-          isAlternateRow ? 'bg-sky-50' : 'bg-white'
-        )}
+        className={cn('border-b border-r', isAlternateRow ? 'bg-sky-50' : 'bg-white')}
         style={{ height: rowMinHeight }}
         aria-hidden="true"
       />
@@ -722,42 +774,46 @@ function TimelineRow({
         );
 
         return (
-        <button
-          key={`${ba.id}-${day.toISOString()}`}
-          className={cn(
-            'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
-            dayCellBackground(isAlternateRow),
-            canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
-            isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
-          )}
-          style={{ minHeight: rowMinHeight }}
-          onPointerDown={(event) => {
-            if (!canCreateBooking || event.button !== 0) return;
-            onSelectionStart(ba.id, day, event.pointerId);
-          }}
-          onPointerEnter={(event) => {
-            if (canCreateBooking && event.buttons === 1) onSelectionMove(ba.id, day, event.pointerId);
-          }}
-          onPointerUp={(event) => {
-            if (canCreateBooking) onSelectionEnd(event.pointerId);
-          }}
-          onPointerCancel={(event) => onSelectionEnd(event.pointerId)}
-          onClick={(event) => {
-            if (canCreateBooking && event.detail === 0) onEmptyClick(day);
-          }}
-          aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
-        >
-          {canCreateBooking ? (
-            <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
-          ) : null}
-        </button>
+          <button
+            key={`${ba.id}-${day.toISOString()}`}
+            className={cn(
+              'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
+              dayCellBackground(isAlternateRow),
+              canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
+              isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
+            )}
+            style={{ minHeight: rowMinHeight }}
+            onPointerDown={(event) => {
+              if (!canCreateBooking || event.button !== 0) return;
+              onSelectionStart(ba.id, day, event.pointerId);
+            }}
+            onPointerEnter={(event) => {
+              if (canCreateBooking && event.buttons === 1)
+                onSelectionMove(ba.id, day, event.pointerId);
+            }}
+            onPointerUp={(event) => {
+              if (canCreateBooking) onSelectionEnd(event.pointerId);
+            }}
+            onPointerCancel={(event) => onSelectionEnd(event.pointerId)}
+            onClick={(event) => {
+              if (canCreateBooking && event.detail === 0) onEmptyClick(day);
+            }}
+            aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
+          >
+            {canCreateBooking ? (
+              <Plus className="mt-5 h-4 w-4 opacity-0 transition group-hover:opacity-100" />
+            ) : null}
+          </button>
         );
       })}
       <div
         className="pointer-events-none relative grid"
         style={{ gridColumn: `2 / span ${days.length}` }}
       >
-        <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
+        <div
+          className="relative"
+          style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
+        >
           {layouts.map(({ booking, left, span, lane }) => {
             return (
               <button
@@ -830,7 +886,10 @@ function MobileTimelineRow({
         className="pointer-events-none relative grid"
         style={{ gridColumn: `1 / span ${days.length}` }}
       >
-        <div className="relative" style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}>
+        <div
+          className="relative"
+          style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
+        >
           {layouts.map(({ booking, left, span, lane }) => {
             return (
               <button
@@ -897,7 +956,9 @@ function MobileBAIdentity({
       <span
         className={cn(
           'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
-          compact ? 'max-w-0 translate-x-2 opacity-0' : 'max-w-20 translate-x-0 opacity-100'
+          compact
+            ? 'max-w-0 translate-x-2 opacity-0'
+            : 'max-w-20 translate-x-0 opacity-100'
         )}
       >
         - {ba.level}
@@ -905,8 +966,6 @@ function MobileBAIdentity({
     </button>
   );
 }
-
-
 
 function BookingDetailModal({
   booking,
@@ -920,8 +979,52 @@ function BookingDetailModal({
   const { user } = useAuth();
   const role = user?.role ?? 'BA';
   const isManagerRole = role === 'BA_MANAGER';
+  const [capacityDraft, setCapacityDraft] = useState('50');
+  const bookingId = booking?.id;
+  const bookingCapacity = booking?.capacity_percent;
+
+  useEffect(() => {
+    if (!bookingId || bookingCapacity === undefined) {
+      return;
+    }
+
+    setCapacityDraft(String(bookingCapacity));
+  }, [bookingId, bookingCapacity]);
+
+  const capacityPercent =
+    parseCapacityPercent(capacityDraft) ?? booking?.capacity_percent ?? 50;
+  const canEditCapacity = isManagerRole && booking?.status === 'PENDING';
+  const capacityChanged = Boolean(
+    booking && canEditCapacity && capacityPercent !== booking.capacity_percent
+  );
+  const updateCapacity = useMutation({
+    mutationFn: () => {
+      if (!booking) {
+        return Promise.resolve(null);
+      }
+
+      return apiFetch(`/api/bookings/${booking.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ capacity_percent: capacityPercent })
+      });
+    },
+    onSuccess: onDone
+  });
   const approve = useMutation({
-    mutationFn: () => apiFetch(`/api/bookings/${booking?.id}/approve`, { method: 'POST' }),
+    mutationFn: async () => {
+      if (!booking) {
+        return null;
+      }
+
+      if (capacityPercent !== booking.capacity_percent) {
+        await apiFetch(`/api/bookings/${booking.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ capacity_percent: capacityPercent })
+        });
+      }
+
+      return apiFetch(`/api/bookings/${booking.id}/approve`, { method: 'POST' });
+    },
     onSuccess: onDone
   });
   const reject = useMutation({
@@ -958,16 +1061,75 @@ function BookingDetailModal({
             <p>
               Date: {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
             </p>
-            <p>Capacity: {booking.capacity_percent}%</p>
+            <p>
+              Capacity: {canEditCapacity ? capacityPercent : booking.capacity_percent}%
+            </p>
             <p>Requester: {booking.requester.full_name}</p>
             {booking.notes ? <p>Notes: {booking.notes}</p> : null}
             {booking.reject_reason ? <p>Reject reason: {booking.reject_reason}</p> : null}
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
+        {canEditCapacity ? (
+          <div className="grid gap-3 rounded-md border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-slate-950">Capacity decision</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Requested: {booking.capacity_percent}%
+                </p>
+              </div>
+              <span
+                className={[
+                  'rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset',
+                  capacityChanged
+                    ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                    : 'bg-gray-100 text-gray-700 ring-gray-200'
+                ].join(' ')}
+              >
+                {capacityChanged ? 'Edited' : 'Current'}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+                {CAPACITY_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setCapacityDraft(String(option))}
+                    className={[
+                      'h-9 rounded-md text-sm font-semibold transition-colors',
+                      capacityPercent === option
+                        ? 'bg-white text-slate-950 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-950'
+                    ].join(' ')}
+                    disabled={approve.isPending || updateCapacity.isPending}
+                  >
+                    {option}%
+                  </button>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => updateCapacity.mutate()}
+                disabled={
+                  !capacityChanged || approve.isPending || updateCapacity.isPending
+                }
+              >
+                Save capacity
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {isManagerRole && booking.status === 'PENDING' ? (
           <div className="flex gap-2">
-            <Button onClick={() => approve.mutate()}>Approve</Button>
+            <Button
+              onClick={() => approve.mutate()}
+              disabled={approve.isPending || updateCapacity.isPending}
+            >
+              {capacityChanged ? 'Save + approve' : 'Approve'}
+            </Button>
             <Button
               variant="secondary"
               onClick={() => {
@@ -993,9 +1155,12 @@ function BookingDetailModal({
             </Button>
           </div>
         ) : null}
-        {approve.error || reject.error || cancel.error ? (
+        {approve.error || reject.error || cancel.error || updateCapacity.error ? (
           <div className="rounded-md bg-rose-50 p-3 text-rose-700">
-            {(approve.error ?? reject.error ?? cancel.error)?.message}
+            {
+              (approve.error ?? reject.error ?? cancel.error ?? updateCapacity.error)
+                ?.message
+            }
           </div>
         ) : null}
       </div>
