@@ -132,7 +132,43 @@ cat backups/ba-bazaar-YYYY-MM-DD.sql | \
   psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
-## 14) Add domain + HTTPS (Caddy)
+## 14) Seed production database
+
+Only run this when you want to reset production to demo/seed data. The seed script
+deletes existing users, BA profiles, projects, bookings, notifications, audit logs,
+and related records before recreating sample data.
+
+Back up first:
+
+```bash
+mkdir -p backups
+
+docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres \
+  sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  > backups/ba-bazaar-before-seed-$(date +%F-%H%M%S).sql
+```
+
+Make sure the latest migrations are applied:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+Run seed inside the API container:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec api \
+  sh -lc 'cd /app/apps/api && ./node_modules/.bin/tsx prisma/seed.ts'
+```
+
+Verify:
+
+```bash
+curl http://localhost:3001/health
+docker compose -f docker-compose.prod.yml logs api --tail=100
+```
+
+## 15) Add domain + HTTPS (Caddy)
 
 1. Point your domain A record to the VPS IP.
 2. Edit Caddyfile:

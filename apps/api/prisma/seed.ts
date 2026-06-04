@@ -9,10 +9,11 @@ import {
   UserRole
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { hashPassword } from '../src/auth/password';
+import { hash } from 'bcryptjs';
 
 const localDevDatabaseUrl =
   'postgresql://ba_bazaar:change_me@localhost:5432/ba_bazaar?schema=public';
+const passwordRounds = 10;
 
 process.env.DATABASE_URL ??= localDevDatabaseUrl;
 
@@ -24,6 +25,10 @@ const prisma = new PrismaClient({
 
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const pravatar = (imageId: number) => `https://i.pravatar.cc/300?img=${imageId}`;
+
+function hashPassword(password: string) {
+  return hash(password, passwordRounds);
+}
 
 async function resetDatabase() {
   await prisma.auditLog.deleteMany();
