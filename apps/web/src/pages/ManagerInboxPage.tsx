@@ -16,6 +16,7 @@ import {
   Zap
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
 import {
   apiFetch,
   getManagerRequestState,
@@ -86,6 +87,8 @@ const stateLabelMap = {
 
 export function ManagerInboxPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManageInbox = user?.role === 'BA_MANAGER';
   const [searchParams, setSearchParams] = useSearchParams();
   const [assignDrafts, setAssignDrafts] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
@@ -569,6 +572,11 @@ export function ManagerInboxPage() {
           {(approve.error ?? reject.error ?? assign.error ?? assignAndApprove.error ?? cancel.error)?.message}
         </div>
       ) : null}
+      {!canManageInbox ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Admin support role can review this inbox but cannot approve, reject, cancel, or assign bookings.
+        </div>
+      ) : null}
       {bookings.isLoading || bas.isLoading || summary.isLoading ? (
         <Card>
           <CardContent className="p-5 text-sm text-slate-600">Loading manager inbox...</CardContent>
@@ -855,6 +863,7 @@ export function ManagerInboxPage() {
             onSaveForLater={() =>
               setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`)
             }
+            canManageActions={canManageInbox}
             isSubmitting={
               approve.isPending ||
               reject.isPending ||
@@ -899,6 +908,7 @@ export function ManagerInboxPage() {
                 setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`);
                 closeMobileDetail();
               }}
+              canManageActions={canManageInbox}
               isSubmitting={
                 approve.isPending ||
                 reject.isPending ||
@@ -999,6 +1009,7 @@ function RequestDetailPanel({
   onAssignAndApprove,
   onCancel,
   onSaveForLater,
+  canManageActions,
   isSubmitting
 }: {
   booking: Booking;
@@ -1013,6 +1024,7 @@ function RequestDetailPanel({
   onAssignAndApprove: () => void;
   onCancel: () => void;
   onSaveForLater: () => void;
+  canManageActions: boolean;
   isSubmitting: boolean;
 }) {
   const [baSearch, setBaSearch] = useState('');
@@ -1057,12 +1069,12 @@ function RequestDetailPanel({
             <p className="mt-2 text-sm text-slate-500">{booking.project.name}</p>
           </div>
           <div className="flex gap-2">
-            {canApproveDirectly ? (
+            {canManageActions && canApproveDirectly ? (
               <Button onClick={onApprove} disabled={isSubmitting}>
                 Approve
               </Button>
             ) : null}
-            {canCancel ? (
+            {canManageActions && canCancel ? (
               <Button
                 variant="secondary"
                 className={rejectButtonClassName}
@@ -1072,7 +1084,7 @@ function RequestDetailPanel({
                 Cancel
               </Button>
             ) : null}
-            {canReject ? (
+            {canManageActions && canReject ? (
               <Button
                 variant="secondary"
                 className={rejectButtonClassName}
@@ -1196,7 +1208,7 @@ function RequestDetailPanel({
           </div>
         </section>
 
-        {canAssign ? (
+        {canManageActions && canAssign ? (
           <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-950">Select BA for Assignment</p>
@@ -1273,13 +1285,18 @@ function RequestDetailPanel({
           </section>
         ) : (
           <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-semibold text-slate-950">Assigned BA</p>
+            <p className="text-sm font-semibold text-slate-950">
+              {canAssign ? 'Requested BA / Assignment' : 'Assigned BA'}
+            </p>
             <BAIdentity ba={booking.ba} />
+            {!canManageActions ? (
+              <p className="text-sm text-slate-500">View only</p>
+            ) : null}
           </section>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {canAssign ? (
+          {canManageActions && canAssign ? (
             <>
               <Button
                 variant="secondary"

@@ -122,7 +122,7 @@ export function setMockRole() {
 }
 
 function allowMockAuth() {
-  return import.meta.env.VITE_ALLOW_MOCK_AUTH === 'true';
+  return import.meta.env.MODE !== 'production' && import.meta.env.VITE_ALLOW_MOCK_AUTH === 'true';
 }
 
 async function refreshAccessToken() {

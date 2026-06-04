@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
 import { calculateBookedWorkingDays } from '../domain/capacity';
 import { optionalString, requireDate, requireString } from '../common/parse';
-import { isManagerRole } from '../auth/rbac';
+import { canReadPrivateNotes, canViewPrivateBaFields, isManagerRole } from '../auth/rbac';
 import { hashPassword } from '../auth/password';
 
 type DirectoryQuery = {
@@ -32,6 +32,16 @@ type CreateBAInput = {
   avatar_url?: string;
   status?: BAStatus;
 };
+
+const safeUserSelect = {
+  id: true,
+  full_name: true,
+  email: true,
+  role: true,
+  avatar_url: true,
+  created_at: true,
+  updated_at: true
+} as const;
 
 @Injectable()
 export class BAService {
@@ -61,7 +71,7 @@ export class BAService {
       ...(currentUser.role === UserRole.BA
         ? { user_id: currentUser.id, status: { not: BAStatus.RESIGNED } }
         : {}),
-      ...(statusFilter && isManagerRole(currentUser.role) ? { status: statusFilter } : {}),
+      ...(statusFilter && canViewPrivateBaFields(currentUser.role) ? { status: statusFilter } : {}),
       ...(levelFilter ? { level: levelFilter } : {}),
       ...(search
         ? {
@@ -159,7 +169,11 @@ export class BAService {
       include: {
         skill_tags: { include: { tag: true } },
         bookings: {
-          include: { project: true, requester: true, manager: true },
+          include: {
+            project: true,
+            requester: { select: safeUserSelect },
+            manager: { select: safeUserSelect }
+          },
           orderBy: { start_date: 'desc' }
         }
       }
@@ -181,7 +195,7 @@ export class BAService {
       throw new ForbiddenException('Resigned BA profile is not available for self-view');
     }
 
-    if (!isManagerRole(currentUser.role)) {
+    if (!canViewPrivateBaFields(currentUser.role)) {
       return this.toPublicProfile(ba);
     }
 
@@ -297,7 +311,11 @@ export class BAService {
 
     return this.prisma.booking.findMany({
       where: { ba_id: id },
-      include: { project: true, requester: true, manager: true },
+      include: {
+        project: true,
+        requester: { select: safeUserSelect },
+        manager: { select: safeUserSelect }
+      },
       orderBy: { start_date: 'desc' }
     });
   }
@@ -390,20 +408,20 @@ export class BAService {
 
     return this.prisma.auditLog.findMany({
       where: { target_type: 'BAProfile', target_id: id },
-      include: { actor: true },
+      include: { actor: { select: safeUserSelect } },
       orderBy: { created_at: 'desc' }
     });
   }
 
   async listNotes(currentUser: User, baId: string) {
-    if (!isManagerRole(currentUser.role)) {
+    if (!canReadPrivateNotes(currentUser.role)) {
       await this.auditDenied(currentUser, 'READ_PRIVATE_NOTES', 'BAProfile', baId);
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('Manager or Admin support role required');
     }
 
     return this.prisma.privateNote.findMany({
       where: { ba_id: baId },
-      include: { creator: true },
+      include: { creator: { select: safeUserSelect } },
       orderBy: { created_at: 'desc' }
     });
   }
@@ -411,7 +429,7 @@ export class BAService {
   async appendNote(currentUser: User, baId: string, input: { content?: string }) {
     if (!isManagerRole(currentUser.role)) {
       await this.auditDenied(currentUser, 'APPEND_PRIVATE_NOTE', 'BAProfile', baId);
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('BA Manager role required');
     }
 
     const content = requireString(input.content, 'content');
@@ -425,7 +443,7 @@ export class BAService {
         content,
         created_by: currentUser.id
       },
-      include: { creator: true }
+      include: { creator: { select: safeUserSelect } }
     });
 
     await this.audit(currentUser, 'APPEND_PRIVATE_NOTE', 'BAProfile', baId, null, {
@@ -436,7 +454,7 @@ export class BAService {
 
   private ensureManager(user: User) {
     if (!isManagerRole(user.role)) {
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('BA Manager role required');
     }
   }
 

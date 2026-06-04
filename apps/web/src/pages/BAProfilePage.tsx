@@ -31,6 +31,7 @@ export function BAProfilePage() {
   const { user } = useAuth();
   const role = user?.role ?? 'BA';
   const isManagerView = role === 'BA_MANAGER' || role === 'ADMIN';
+  const canManageBa = role === 'BA_MANAGER';
   const queryClient = useQueryClient();
   const [note, setNote] = useState('');
   const [tagId, setTagId] = useState('');
@@ -209,7 +210,7 @@ export function BAProfilePage() {
           <BAIdentity ba={ba.data} />
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={ba.data.status} />
-            {isManagerView ? (
+            {canManageBa ? (
               <select
                 value={ba.data.status}
                 onChange={(event) => changeStatus.mutate(event.target.value)}
@@ -320,7 +321,7 @@ export function BAProfilePage() {
                   return <Badge key={tag.id} tone="info">{tag.name}</Badge>;
                 })}
               </div>
-              {isManagerView ? (
+              {canManageBa ? (
                 <div className="flex gap-2">
                   <select value={tagId} onChange={(event) => setTagId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border px-2 text-sm">
                     <option value="">Add tag</option>
@@ -336,10 +337,14 @@ export function BAProfilePage() {
             <Card>
               <CardHeader><CardTitle>Private Notes</CardTitle></CardHeader>
               <CardContent className="grid gap-3">
-                <Field label="Append note">
-                  <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-24 rounded-md border p-3" maxLength={5000} />
-                </Field>
-                <Button onClick={() => appendNote.mutate()} disabled={!note}>Append Note</Button>
+                {canManageBa ? (
+                  <>
+                    <Field label="Append note">
+                      <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-24 rounded-md border p-3" maxLength={5000} />
+                    </Field>
+                    <Button onClick={() => appendNote.mutate()} disabled={!note}>Append Note</Button>
+                  </>
+                ) : null}
                 {(notes.data ?? []).map((item) => (
                   <div key={item.id} className="rounded-md border bg-slate-50 p-3 text-sm">
                     <p>{item.content}</p>

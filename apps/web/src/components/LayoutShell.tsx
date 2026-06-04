@@ -113,7 +113,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const recentNotifications = (notifications.data ?? []).slice(0, 5);
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
-  const canCreateBooking = role !== 'BA';
+  const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
   const mobileNavigation = useMemo(() => {
     if (role === 'BA_MANAGER' || role === 'ADMIN') {
       return visibleNavigation.filter((item) => item.to !== '/reports');

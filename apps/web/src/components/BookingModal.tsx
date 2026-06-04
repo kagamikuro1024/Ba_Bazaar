@@ -30,7 +30,7 @@ export function BookingModal({
 }) {
   const { user } = useAuth();
   const role = user?.role ?? 'BA';
-  const isManagerRole = role === 'BA_MANAGER' || role === 'ADMIN';
+  const isManagerRole = role === 'BA_MANAGER';
   const queryClient = useQueryClient();
   
   const bas = useQuery({

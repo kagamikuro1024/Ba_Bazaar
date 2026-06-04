@@ -11,6 +11,16 @@ const reportBookingStatuses = [
   BookingStatus.COMPLETED
 ] as const;
 
+const safeUserSelect = {
+  id: true,
+  full_name: true,
+  email: true,
+  role: true,
+  avatar_url: true,
+  created_at: true,
+  updated_at: true
+} as const;
+
 @Injectable()
 export class ReportsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -34,7 +44,7 @@ export class ReportsService {
             end_date: { gte: startDate },
             status: { in: reportBookingStatuses as unknown as BookingStatus[] }
           },
-          include: { project: true, requester: true }
+          include: { project: true, requester: { select: safeUserSelect } }
         }
       },
       orderBy: { full_name: 'asc' }

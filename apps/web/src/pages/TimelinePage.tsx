@@ -209,7 +209,7 @@ export function TimelinePage() {
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const canCreateBooking = role !== 'BA';
+  const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const currentDate = useMemo(() => new Date(), []);
 
@@ -919,7 +919,7 @@ function BookingDetailModal({
 }) {
   const { user } = useAuth();
   const role = user?.role ?? 'BA';
-  const isManagerRole = role === 'BA_MANAGER' || role === 'ADMIN';
+  const isManagerRole = role === 'BA_MANAGER';
   const approve = useMutation({
     mutationFn: () => apiFetch(`/api/bookings/${booking?.id}/approve`, { method: 'POST' }),
     onSuccess: onDone

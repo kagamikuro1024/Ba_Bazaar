@@ -15,6 +15,7 @@ export function BADirectoryPage() {
   const { user } = useAuth();
   const role = user?.role ?? 'BA';
   const isManagerView = role === 'BA_MANAGER' || role === 'ADMIN';
+  const canManageBa = role === 'BA_MANAGER';
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('');
   const [status, setStatus] = useState('');
@@ -43,7 +44,7 @@ export function BADirectoryPage() {
   return (
     <div className="grid gap-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-        {isManagerView ? (
+        {canManageBa ? (
           <Button onClick={() => setShowCreate((value) => !value)}>
             <Plus className="h-4 w-4" /> Create BA
           </Button>

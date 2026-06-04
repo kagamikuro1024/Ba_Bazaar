@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { User } from '@prisma/client';
-import { isManagerRole } from '../auth/rbac';
+import { canManageBaProfile } from '../auth/rbac';
 import { optionalString, requireString } from '../common/parse';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,8 +13,8 @@ export class ProjectsService {
   }
 
   async create(currentUser: User, input: Record<string, unknown>) {
-    if (!isManagerRole(currentUser.role)) {
-      throw new ForbiddenException('Manager role required to create project');
+    if (!canManageBaProfile(currentUser.role)) {
+      throw new ForbiddenException('BA Manager role required to create project');
     }
 
     const project = await this.prisma.project.create({
