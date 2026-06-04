@@ -10,7 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
 import { calculateBookedWorkingDays } from '../domain/capacity';
 import { optionalString, requireDate, requireString } from '../common/parse';
-import { isManagerRole } from '../auth/rbac';
+import { canReadPrivateNotes, canViewPrivateBaFields, isManagerRole } from '../auth/rbac';
+import { hashPassword } from '../auth/password';
 
 type DirectoryQuery = {
   search?: string;
@@ -24,12 +25,23 @@ type DirectoryQuery = {
 type CreateBAInput = {
   full_name?: string;
   email?: string;
+  password?: string;
   phone?: string;
   level?: BALevel;
   joined_date?: string;
   avatar_url?: string;
   status?: BAStatus;
 };
+
+const safeUserSelect = {
+  id: true,
+  full_name: true,
+  email: true,
+  role: true,
+  avatar_url: true,
+  created_at: true,
+  updated_at: true
+} as const;
 
 @Injectable()
 export class BAService {
@@ -59,7 +71,7 @@ export class BAService {
       ...(currentUser.role === UserRole.BA
         ? { user_id: currentUser.id, status: { not: BAStatus.RESIGNED } }
         : {}),
-      ...(statusFilter && isManagerRole(currentUser.role) ? { status: statusFilter } : {}),
+      ...(statusFilter && canViewPrivateBaFields(currentUser.role) ? { status: statusFilter } : {}),
       ...(levelFilter ? { level: levelFilter } : {}),
       ...(search
         ? {
@@ -102,27 +114,50 @@ export class BAService {
     this.ensureManager(currentUser);
 
     const email = requireString(input.email, 'email').toLowerCase();
+    const password = this.readInitialPassword(input.password);
     const existing = await this.prisma.bAProfile.findUnique({ where: { email } });
     if (existing) {
       throw new BadRequestException('BA email already exists');
     }
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new BadRequestException('User email already exists');
+    }
 
-    const created = await this.prisma.bAProfile.create({
-      data: {
-        full_name: requireString(input.full_name, 'full_name'),
-        email,
-        phone: optionalString(input.phone),
-        level: input.level ?? BALevel.MIDDLE,
-        joined_date: input.joined_date ? requireDate(input.joined_date, 'joined_date') : new Date(),
-        avatar_url: optionalString(input.avatar_url),
-        status: input.status ?? BAStatus.ACTIVE
-      },
-      include: { skill_tags: { include: { tag: true } } }
+    const fullName = requireString(input.full_name, 'full_name');
+    const joinedDate = input.joined_date ? requireDate(input.joined_date, 'joined_date') : new Date();
+    const avatarUrl = optionalString(input.avatar_url);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          full_name: fullName,
+          email,
+          role: UserRole.BA,
+          password_hash: await hashPassword(password),
+          avatar_url: avatarUrl
+        }
+      });
+
+      return tx.bAProfile.create({
+        data: {
+          user_id: user.id,
+          full_name: fullName,
+          email,
+          phone: optionalString(input.phone),
+          level: input.level ?? BALevel.MIDDLE,
+          joined_date: joinedDate,
+          avatar_url: avatarUrl,
+          status: input.status ?? BAStatus.ACTIVE
+        },
+        include: { skill_tags: { include: { tag: true } } }
+      });
     });
 
-    await this.audit(currentUser, 'CREATE_BA_PROFILE', 'BAProfile', created.id, null, {
+    await this.audit(currentUser, 'CREATE_BA_ACCOUNT', 'BAProfile', created.id, null, {
       id: created.id,
-      email: created.email
+      email: created.email,
+      user_id: created.user_id
     });
 
     return created;
@@ -134,7 +169,11 @@ export class BAService {
       include: {
         skill_tags: { include: { tag: true } },
         bookings: {
-          include: { project: true, requester: true, manager: true },
+          include: {
+            project: true,
+            requester: { select: safeUserSelect },
+            manager: { select: safeUserSelect }
+          },
           orderBy: { start_date: 'desc' }
         }
       }
@@ -156,7 +195,7 @@ export class BAService {
       throw new ForbiddenException('Resigned BA profile is not available for self-view');
     }
 
-    if (!isManagerRole(currentUser.role)) {
+    if (!canViewPrivateBaFields(currentUser.role)) {
       return this.toPublicProfile(ba);
     }
 
@@ -272,7 +311,11 @@ export class BAService {
 
     return this.prisma.booking.findMany({
       where: { ba_id: id },
-      include: { project: true, requester: true, manager: true },
+      include: {
+        project: true,
+        requester: { select: safeUserSelect },
+        manager: { select: safeUserSelect }
+      },
       orderBy: { start_date: 'desc' }
     });
   }
@@ -365,20 +408,20 @@ export class BAService {
 
     return this.prisma.auditLog.findMany({
       where: { target_type: 'BAProfile', target_id: id },
-      include: { actor: true },
+      include: { actor: { select: safeUserSelect } },
       orderBy: { created_at: 'desc' }
     });
   }
 
   async listNotes(currentUser: User, baId: string) {
-    if (!isManagerRole(currentUser.role)) {
+    if (!canReadPrivateNotes(currentUser.role)) {
       await this.auditDenied(currentUser, 'READ_PRIVATE_NOTES', 'BAProfile', baId);
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('Manager or Admin support role required');
     }
 
     return this.prisma.privateNote.findMany({
       where: { ba_id: baId },
-      include: { creator: true },
+      include: { creator: { select: safeUserSelect } },
       orderBy: { created_at: 'desc' }
     });
   }
@@ -386,7 +429,7 @@ export class BAService {
   async appendNote(currentUser: User, baId: string, input: { content?: string }) {
     if (!isManagerRole(currentUser.role)) {
       await this.auditDenied(currentUser, 'APPEND_PRIVATE_NOTE', 'BAProfile', baId);
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('BA Manager role required');
     }
 
     const content = requireString(input.content, 'content');
@@ -400,7 +443,7 @@ export class BAService {
         content,
         created_by: currentUser.id
       },
-      include: { creator: true }
+      include: { creator: { select: safeUserSelect } }
     });
 
     await this.audit(currentUser, 'APPEND_PRIVATE_NOTE', 'BAProfile', baId, null, {
@@ -411,8 +454,17 @@ export class BAService {
 
   private ensureManager(user: User) {
     if (!isManagerRole(user.role)) {
-      throw new ForbiddenException('Manager or Admin role required');
+      throw new ForbiddenException('BA Manager role required');
     }
+  }
+
+  private readInitialPassword(value: unknown) {
+    const password = requireString(value, 'password');
+    if (password.length < 8) {
+      throw new BadRequestException('password must be at least 8 characters.');
+    }
+
+    return password;
   }
 
   private async getExisting(id: string) {

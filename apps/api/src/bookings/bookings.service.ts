@@ -29,6 +29,16 @@ type BookingInput = {
   manager_comment?: string;
 };
 
+const safeUserSelect = {
+  id: true,
+  full_name: true,
+  email: true,
+  role: true,
+  avatar_url: true,
+  created_at: true,
+  updated_at: true
+} as const;
+
 @Injectable()
 export class BookingsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -83,7 +93,7 @@ export class BookingsService {
 
     const booking = await this.prisma.booking.create({
       data: {
-        ...(normalized.ba_id ? { ba_id: normalized.ba_id } : {}),
+        ba_id: normalized.ba_id,
         project_id: normalized.project_id,
         title: normalized.title,
         description: normalized.description,
@@ -503,14 +513,14 @@ export class BookingsService {
     return {
       ba: { include: { skill_tags: { include: { tag: true } } } },
       project: true,
-      requester: true,
-      manager: true
+      requester: { select: safeUserSelect },
+      manager: { select: safeUserSelect }
     } as const;
   }
 
   private async notifyManagers(type: string, title: string, booking: { id: string; title: string }) {
     const managers = await this.prisma.user.findMany({
-      where: { role: { in: [UserRole.BA_MANAGER, UserRole.ADMIN] } }
+      where: { role: UserRole.BA_MANAGER }
     });
 
     if (managers.length === 0) {

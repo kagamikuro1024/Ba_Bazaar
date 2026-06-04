@@ -6,6 +6,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const nodeEnv = configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? 'development';
+  const isProduction = nodeEnv === 'production';
 
   const webPort = configService.get<string>('WEB_PORT') ?? '5173';
   const corsOriginEnv = configService.get<string>('CORS_ORIGIN');
@@ -29,7 +31,7 @@ async function bootstrap() {
         return;
       }
 
-      if (configuredOrigins.includes(origin) || isAllowedLanOrigin(origin)) {
+      if (configuredOrigins.includes(origin) || (!isProduction && isAllowedLanOrigin(origin))) {
         callback(null, true);
         return;
       }

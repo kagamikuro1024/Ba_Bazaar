@@ -1,4 +1,4 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { Request } from 'express';
@@ -207,5 +207,51 @@ describe('AuthService', () => {
 
     expect(prisma.refreshToken.updateMany).toHaveBeenCalled();
     expect(result).toEqual({ success: true });
+  });
+
+  it('fails token issuance when JWT_SECRET is missing', async () => {
+    const { prisma, service, configService } = createService();
+    const password_hash = await hashPassword('Password@123');
+    configService.get.mockImplementation((key: string) => {
+      const values: Record<string, string | undefined> = {
+        JWT_SECRET: '',
+        JWT_ACCESS_TTL: '15m',
+        JWT_REFRESH_TTL_DAYS: '14',
+        ALLOW_MOCK_AUTH: 'false'
+      };
+      return values[key] ?? '';
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      full_name: 'Test PM',
+      email: 'pm@test.local',
+      role: UserRole.PM_PO,
+      password_hash,
+      avatar_url: null,
+      last_login_at: null,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'user-1',
+      full_name: 'Test PM',
+      email: 'pm@test.local',
+      role: UserRole.PM_PO,
+      password_hash,
+      avatar_url: null,
+      last_login_at: new Date(),
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+
+    await expect(
+      service.login(
+        {
+          email: 'pm@test.local',
+          password: 'Password@123'
+        },
+        requestWithHeaders()
+      )
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 });

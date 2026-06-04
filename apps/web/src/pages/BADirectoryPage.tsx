@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
-import { apiFetch, getMockRole, type BAProfile, type BALevel, type SkillTag } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { apiFetch, type BAProfile, type BALevel, type SkillTag } from '@/lib/api';
 import { BAIdentity, Field, StatusBadge } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,15 +12,18 @@ import { LoadingScreen } from '@/components/ui/loading-screen';
 
 export function BADirectoryPage() {
   const queryClient = useQueryClient();
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
+  const isManagerView = role === 'BA_MANAGER' || role === 'ADMIN';
+  const canManageBa = role === 'BA_MANAGER';
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('');
   const [status, setStatus] = useState('');
   const [tag, setTag] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const visibleStatuses = useMemo(
-    () => (role === 'BA_MANAGER' || role === 'ADMIN' ? ['ACTIVE', 'ON_LEAVE', 'RESIGNED'] : ['ACTIVE']),
-    [role]
+    () => (isManagerView ? ['ACTIVE', 'ON_LEAVE', 'RESIGNED'] : ['ACTIVE']),
+    [isManagerView]
   );
   const safeStatus = status && visibleStatuses.includes(status) ? status : '';
   const query = new URLSearchParams();
@@ -40,7 +44,7 @@ export function BADirectoryPage() {
   return (
     <div className="grid gap-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-        {role === 'BA_MANAGER' ? (
+        {canManageBa ? (
           <Button onClick={() => setShowCreate((value) => !value)}>
             <Plus className="h-4 w-4" /> Create BA
           </Button>
@@ -125,15 +129,25 @@ function CreateBACard({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({
     full_name: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     phone: '',
     level: 'MIDDLE' as BALevel,
     joined_date: '2026-06-01'
   });
+  const [localError, setLocalError] = useState('');
   const create = useMutation({
     mutationFn: () =>
       apiFetch('/api/ba', {
         method: 'POST',
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          full_name: form.full_name,
+          email: form.email,
+          password: form.password,
+          phone: form.phone,
+          level: form.level,
+          joined_date: form.joined_date
+        })
       }),
     onSuccess: onDone
   });
@@ -141,13 +155,19 @@ function CreateBACard({ onDone }: { onDone: () => void }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create BA Profile</CardTitle>
+        <CardTitle>Create BA Account</CardTitle>
       </CardHeader>
       <CardContent>
         <form
-          className="grid gap-3 md:grid-cols-5"
+          className="grid gap-3 md:grid-cols-6"
           onSubmit={(event) => {
             event.preventDefault();
+            if (form.password !== form.confirmPassword) {
+              setLocalError('Password confirmation does not match.');
+              return;
+            }
+
+            setLocalError('');
             create.mutate();
           }}
         >
@@ -156,6 +176,12 @@ function CreateBACard({ onDone }: { onDone: () => void }) {
           </Field>
           <Field label="Email">
             <input type="email" className="h-10 rounded-md border px-3" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
+          </Field>
+          <Field label="Initial password">
+            <input type="password" className="h-10 rounded-md border px-3" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={8} required />
+          </Field>
+          <Field label="Confirm password">
+            <input type="password" className="h-10 rounded-md border px-3" value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} minLength={8} required />
           </Field>
           <Field label="Phone">
             <input className="h-10 rounded-md border px-3" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
@@ -172,6 +198,7 @@ function CreateBACard({ onDone }: { onDone: () => void }) {
             <Button type="submit" className="w-full">{create.isPending ? 'Creating...' : 'Create'}</Button>
           </div>
         </form>
+        {localError ? <p className="mt-3 text-sm text-rose-600">{localError}</p> : null}
         {create.error ? <p className="mt-3 text-sm text-rose-600">{create.error.message}</p> : null}
       </CardContent>
     </Card>

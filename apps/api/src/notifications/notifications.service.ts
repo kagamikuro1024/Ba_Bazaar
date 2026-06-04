@@ -1,11 +1,26 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { BookingStatus, User, UserRole } from '@prisma/client';
+import { BookingStatus, User } from '@prisma/client';
+import { canRunReminderJobs } from '../auth/rbac';
 import { addDays, parseDateOnly, toDateKey } from '../domain/date';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  private readonly reminderBookingSelect = {
+    id: true,
+    title: true,
+    start_date: true,
+    end_date: true,
+    requester_id: true,
+    ba: {
+      select: {
+        full_name: true,
+        user_id: true
+      }
+    }
+  } as const;
 
   async list(currentUser: User) {
     return this.prisma.notification.findMany({
@@ -22,8 +37,8 @@ export class NotificationsService {
   }
 
   async runReminders(currentUser: User, date = toDateKey(new Date())) {
-    if (currentUser.role !== UserRole.BA_MANAGER && currentUser.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Manager or Admin role required');
+    if (!canRunReminderJobs(currentUser.role)) {
+      throw new ForbiddenException('BA Manager role required');
     }
 
     const runDate = parseDateOnly(date);
@@ -40,14 +55,14 @@ export class NotificationsService {
           status: { in: reminderStatuses as unknown as BookingStatus[] },
           start_date: startReminderDate
         },
-        include: { ba: true, requester: true, project: true }
+        select: this.reminderBookingSelect
       }),
       this.prisma.booking.findMany({
         where: {
           status: { in: reminderStatuses as unknown as BookingStatus[] },
           end_date: endReminderDate
         },
-        include: { ba: true, requester: true, project: true }
+        select: this.reminderBookingSelect
       })
     ]);
 

@@ -13,9 +13,9 @@ import {
   startOfMonth
 } from 'date-fns';
 import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useAuth } from '@/auth/AuthProvider';
 import {
   apiFetch,
-  getMockRole,
   type BAProfile,
   type Booking,
   type Project
@@ -188,7 +188,8 @@ function useIsMobile() {
 
 export function TimelinePage() {
   const queryClient = useQueryClient();
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
   const [viewMode, setViewMode] = useState<'week' | 'month'>(() => {
     if (typeof window === 'undefined') {
       return 'week';
@@ -208,7 +209,7 @@ export function TimelinePage() {
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const canCreateBooking = role !== 'BA';
+  const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const currentDate = useMemo(() => new Date(), []);
 
@@ -916,7 +917,9 @@ function BookingDetailModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
+  const isManagerRole = role === 'BA_MANAGER';
   const approve = useMutation({
     mutationFn: () => apiFetch(`/api/bookings/${booking?.id}/approve`, { method: 'POST' }),
     onSuccess: onDone
@@ -962,7 +965,7 @@ function BookingDetailModal({
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
-        {role === 'BA_MANAGER' && booking.status === 'PENDING' ? (
+        {isManagerRole && booking.status === 'PENDING' ? (
           <div className="flex gap-2">
             <Button onClick={() => approve.mutate()}>Approve</Button>
             <Button
@@ -976,7 +979,7 @@ function BookingDetailModal({
             </Button>
           </div>
         ) : null}
-        {role === 'BA_MANAGER' &&
+        {isManagerRole &&
         (booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS') ? (
           <div className="flex gap-2">
             <Button

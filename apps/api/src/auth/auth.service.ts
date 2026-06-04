@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Inject,
+  InternalServerErrorException,
   Injectable,
   UnauthorizedException
 } from '@nestjs/common';
@@ -247,7 +248,13 @@ export class AuthService {
   }
 
   private getJwtSecret() {
-    return this.configService.get<string>('JWT_SECRET') ?? 'replace_with_a_long_random_secret';
+    const secret = this.configService.get<string>('JWT_SECRET')?.trim();
+
+    if (!secret || secret === 'replace_with_a_long_random_secret') {
+      throw new InternalServerErrorException('JWT_SECRET must be configured.');
+    }
+
+    return secret;
   }
 
   private getAccessTokenTtl() {
@@ -328,6 +335,14 @@ export class AuthService {
   }
 
   private allowMockAuth() {
+    const isProduction =
+      (this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? 'development') ===
+      'production';
+
+    if (isProduction) {
+      return false;
+    }
+
     return (this.configService.get<string>('ALLOW_MOCK_AUTH') ?? 'false').toLowerCase() === 'true';
   }
 
