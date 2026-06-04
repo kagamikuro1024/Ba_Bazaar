@@ -29,9 +29,9 @@ type PageIntro = {
 };
 
 const pageIntros: Record<string, PageIntro> = {
-  '/manager/dashboard': {
-    title: 'Manager Dashboard',
-    body: 'Review high-priority requests, scan what needs action, and jump into Manager Inbox for resolution.'
+  '/': {
+    title: 'Dashboard',
+    body: 'Use this overview to monitor BA capacity, utilization rules, and shortcuts into the main booking workflow.'
   },
   '/timeline': {
     title: 'Timeline',
@@ -69,12 +69,12 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-    { to: '/manager/dashboard', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
+    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
     { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
     { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
     { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA'] },
+    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
     { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
     { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] }
   ];

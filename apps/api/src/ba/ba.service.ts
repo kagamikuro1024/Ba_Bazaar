@@ -11,6 +11,7 @@ import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
 import { calculateBookedWorkingDays } from '../domain/capacity';
 import { optionalString, requireDate, requireString } from '../common/parse';
 import { isManagerRole } from '../auth/rbac';
+import { hashPassword } from '../auth/password';
 
 type DirectoryQuery = {
   search?: string;
@@ -24,6 +25,7 @@ type DirectoryQuery = {
 type CreateBAInput = {
   full_name?: string;
   email?: string;
+  password?: string;
   phone?: string;
   level?: BALevel;
   joined_date?: string;
@@ -102,27 +104,50 @@ export class BAService {
     this.ensureManager(currentUser);
 
     const email = requireString(input.email, 'email').toLowerCase();
+    const password = this.readInitialPassword(input.password);
     const existing = await this.prisma.bAProfile.findUnique({ where: { email } });
     if (existing) {
       throw new BadRequestException('BA email already exists');
     }
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new BadRequestException('User email already exists');
+    }
 
-    const created = await this.prisma.bAProfile.create({
-      data: {
-        full_name: requireString(input.full_name, 'full_name'),
-        email,
-        phone: optionalString(input.phone),
-        level: input.level ?? BALevel.MIDDLE,
-        joined_date: input.joined_date ? requireDate(input.joined_date, 'joined_date') : new Date(),
-        avatar_url: optionalString(input.avatar_url),
-        status: input.status ?? BAStatus.ACTIVE
-      },
-      include: { skill_tags: { include: { tag: true } } }
+    const fullName = requireString(input.full_name, 'full_name');
+    const joinedDate = input.joined_date ? requireDate(input.joined_date, 'joined_date') : new Date();
+    const avatarUrl = optionalString(input.avatar_url);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          full_name: fullName,
+          email,
+          role: UserRole.BA,
+          password_hash: await hashPassword(password),
+          avatar_url: avatarUrl
+        }
+      });
+
+      return tx.bAProfile.create({
+        data: {
+          user_id: user.id,
+          full_name: fullName,
+          email,
+          phone: optionalString(input.phone),
+          level: input.level ?? BALevel.MIDDLE,
+          joined_date: joinedDate,
+          avatar_url: avatarUrl,
+          status: input.status ?? BAStatus.ACTIVE
+        },
+        include: { skill_tags: { include: { tag: true } } }
+      });
     });
 
-    await this.audit(currentUser, 'CREATE_BA_PROFILE', 'BAProfile', created.id, null, {
+    await this.audit(currentUser, 'CREATE_BA_ACCOUNT', 'BAProfile', created.id, null, {
       id: created.id,
-      email: created.email
+      email: created.email,
+      user_id: created.user_id
     });
 
     return created;
@@ -413,6 +438,15 @@ export class BAService {
     if (!isManagerRole(user.role)) {
       throw new ForbiddenException('Manager or Admin role required');
     }
+  }
+
+  private readInitialPassword(value: unknown) {
+    const password = requireString(value, 'password');
+    if (password.length < 8) {
+      throw new BadRequestException('password must be at least 8 characters.');
+    }
+
+    return password;
   }
 
   private async getExisting(id: string) {

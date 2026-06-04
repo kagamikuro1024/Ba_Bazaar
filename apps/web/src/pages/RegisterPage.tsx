@@ -22,7 +22,7 @@ export function RegisterPage() {
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">BA Bazaar</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950">Register</h1>
           <p className="mt-2 text-sm text-slate-600">
-            New self-registered accounts are created as PM/PO until mentor confirms broader role registration.
+            Self-registration is available only for PM/PO accounts.
           </p>
         </div>
         <Card>

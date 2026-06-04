@@ -12,7 +12,8 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { useParams } from 'react-router-dom';
-import { apiFetch, getMockRole, type BAProfile, type Booking, type SkillTag } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { apiFetch, type BAProfile, type Booking, type SkillTag } from '@/lib/api';
 import { BAIdentity, Field, StatusBadge } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,9 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Filler
 
 export function BAProfilePage() {
   const { id = '' } = useParams();
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
+  const isManagerView = role === 'BA_MANAGER' || role === 'ADMIN';
   const queryClient = useQueryClient();
   const [note, setNote] = useState('');
   const [tagId, setTagId] = useState('');
@@ -61,7 +64,7 @@ export function BAProfilePage() {
       apiFetch<Array<{ id: string; content: string; created_at: string; creator: { full_name: string } }>>(
         `/api/ba/${id}/notes`
       ),
-    enabled: role === 'BA_MANAGER' && Boolean(id)
+    enabled: isManagerView && Boolean(id)
   });
   const appendNote = useMutation({
     mutationFn: () =>
@@ -206,7 +209,7 @@ export function BAProfilePage() {
           <BAIdentity ba={ba.data} />
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={ba.data.status} />
-            {role === 'BA_MANAGER' ? (
+            {isManagerView ? (
               <select
                 value={ba.data.status}
                 onChange={(event) => changeStatus.mutate(event.target.value)}
@@ -226,8 +229,8 @@ export function BAProfilePage() {
           <Card>
             <CardHeader><CardTitle>Basic Info</CardTitle></CardHeader>
             <CardContent className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-              <p>Email: {role === 'BA_MANAGER' ? ba.data.email : 'Hidden by policy'}</p>
-              <p>Phone: {role === 'BA_MANAGER' ? ba.data.phone : 'Hidden by policy'}</p>
+              <p>Email: {isManagerView ? ba.data.email : 'Hidden by policy'}</p>
+              <p>Phone: {isManagerView ? ba.data.phone : 'Hidden by policy'}</p>
               <p>Level: {ba.data.level}</p>
               {ba.data.joined_date ? <p>Joined: {formatDate(ba.data.joined_date)}</p> : null}
             </CardContent>
@@ -317,7 +320,7 @@ export function BAProfilePage() {
                   return <Badge key={tag.id} tone="info">{tag.name}</Badge>;
                 })}
               </div>
-              {role === 'BA_MANAGER' ? (
+              {isManagerView ? (
                 <div className="flex gap-2">
                   <select value={tagId} onChange={(event) => setTagId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border px-2 text-sm">
                     <option value="">Add tag</option>
@@ -329,7 +332,7 @@ export function BAProfilePage() {
             </CardContent>
           </Card>
 
-          {role === 'BA_MANAGER' ? (
+          {isManagerView ? (
             <Card>
               <CardHeader><CardTitle>Private Notes</CardTitle></CardHeader>
               <CardContent className="grid gap-3">

@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type NotificationItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
-import { getMockRole } from '@/lib/api';
 
 export function NotificationsPage() {
   const queryClient = useQueryClient();
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
   const notifications = useQuery({
     queryKey: ['notifications-page'],
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications')

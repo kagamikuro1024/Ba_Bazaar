@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { apiFetch, getMockRole, type BAProfile, type BookingPriority, type Project } from '@/lib/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { apiFetch, type BAProfile, type BookingPriority, type Project } from '@/lib/api';
 import { Field } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
@@ -27,7 +28,9 @@ export function BookingModal({
   initialStartDate?: string;
   initialEndDate?: string;
 }) {
-  const role = getMockRole();
+  const { user } = useAuth();
+  const role = user?.role ?? 'BA';
+  const isManagerRole = role === 'BA_MANAGER' || role === 'ADMIN';
   const queryClient = useQueryClient();
   
   const bas = useQuery({
@@ -229,7 +232,7 @@ export function BookingModal({
                 </select>
               </Field>
             </div>
-            {role === 'BA_MANAGER' ? (
+            {isManagerRole ? (
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
