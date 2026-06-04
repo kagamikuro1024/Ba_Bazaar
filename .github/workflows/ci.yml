@@ -75,6 +75,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://ba_bazaar:change_me@localhost:5432/ba_bazaar?schema=public
       API_PORT: 3000
+      JWT_SECRET: ci-functional-jwt-secret
 
     steps:
       - name: Checkout
