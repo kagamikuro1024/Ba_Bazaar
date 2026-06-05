@@ -1541,7 +1541,7 @@ function RequestDetailPanel({
               </div>
 
               {isDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full z-10 mt-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                <div className="absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                   <div className="flex items-center gap-2 border-b border-slate-100 p-3">
                     <Search className="h-4 w-4 text-slate-400" />
                     <input
