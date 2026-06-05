@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useAuth } from '@/auth/AuthProvider';
@@ -40,6 +40,25 @@ export function BookingModal({
     enabled: open
   });
 
+  const allBas = useQuery({
+    queryKey: ['ba-directory', role],
+    queryFn: () => apiFetch<BAProfile[]>('/api/ba'),
+    enabled: Boolean(open && initialBaId)
+  });
+
+  const modalBas = useMemo(() => {
+    const options = [...(bas.data ?? [])];
+    const selectedBa = initialBaId
+      ? allBas.data?.find((ba) => ba.id === initialBaId)
+      : undefined;
+
+    if (selectedBa && !options.some((ba) => ba.id === selectedBa.id)) {
+      options.unshift(selectedBa);
+    }
+
+    return options;
+  }, [allBas.data, bas.data, initialBaId]);
+
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: () => apiFetch<Project[]>('/api/projects'),
@@ -49,6 +68,7 @@ export function BookingModal({
   const [form, setForm] = useState({
     ba_id: initialBaId,
     project_id: initialProjectId,
+    project_name: '',
     title: '',
     description: '',
     notes: '',
@@ -64,17 +84,21 @@ export function BookingModal({
   useEffect(() => {
     if (open) {
       const autoAssign = !initialBaId;
+      const initialProjectName = initialProjectId
+        ? projects.data?.find((project) => project.id === initialProjectId)?.name ?? ''
+        : '';
       setForm((prev) => ({
         ...prev,
         ba_id: initialBaId,
         project_id: initialProjectId,
+        project_name: initialProjectName,
         start_date: initialStartDate || format(new Date(), 'yyyy-MM-dd'),
         end_date: initialEndDate || format(new Date(), 'yyyy-MM-dd'),
         auto_assign: autoAssign
       }));
       setLocalError('');
     }
-  }, [open, initialBaId, initialProjectId, initialStartDate, initialEndDate]);
+  }, [open, initialBaId, initialProjectId, initialStartDate, initialEndDate, projects.data]);
 
   const capacityCheck = useQuery({
     queryKey: [
@@ -126,7 +150,7 @@ export function BookingModal({
           mutation.mutate();
         }}
       >
-        {bas.isLoading || projects.isLoading ? (
+        {bas.isLoading || allBas.isLoading || projects.isLoading ? (
           <div className="p-4 text-center text-sm text-slate-500">Loading data...</div>
         ) : (
           <>
@@ -143,7 +167,7 @@ export function BookingModal({
                 className="h-10 rounded-md border px-3"
               >
                 <option value="">Auto assign</option>
-                {(bas.data ?? []).map((ba) => (
+                {modalBas.map((ba) => (
                   <option key={ba.id} value={ba.id}>
                     {ba.full_name}
                   </option>
@@ -153,20 +177,16 @@ export function BookingModal({
                 Leave unassigned for BA Manager to assign later.
               </p>
             </Field>
-            <Field label="Project">
-              <select
-                value={form.project_id}
-                onChange={(event) => setForm({ ...form, project_id: event.target.value })}
+            <Field label="Project name">
+              <input
+                value={form.project_name}
+                onChange={(event) =>
+                  setForm({ ...form, project_id: '', project_name: event.target.value })
+                }
                 className="h-10 rounded-md border px-3"
+                placeholder="Enter project name"
                 required
-              >
-                <option value="">Select project</option>
-                {(projects.data ?? []).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+              />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start date">

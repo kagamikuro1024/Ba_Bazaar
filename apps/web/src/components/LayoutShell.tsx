@@ -74,7 +74,7 @@ const navigation: Array<{
     { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
     { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
     { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
+    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'BA', 'ADMIN'] },
     { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
     { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] }
   ];
@@ -87,7 +87,7 @@ function getIntroKey(pathname: string) {
 export function LayoutShell({ children }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
-  const role = user?.role ?? 'BA_MANAGER';
+  const role = user?.role;
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -100,7 +100,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const [introOpen, setIntroOpen] = useState(false);
   const notifications = useQuery({
     queryKey: ['notifications', user?.id],
-    queryFn: () => apiFetch<NotificationItem[]>('/api/notifications')
+    queryFn: () => apiFetch<NotificationItem[]>('/api/notifications'),
+    enabled: Boolean(user)
   });
   const markRead = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
@@ -108,12 +109,14 @@ export function LayoutShell({ children }: LayoutShellProps) {
   });
   const me = useQuery({
     queryKey: ['me', user?.id],
-    queryFn: () => apiFetch<{ user: { full_name: string; role: UserRole } }>('/api/me')
+    queryFn: () => apiFetch<{ user: { full_name: string; role: UserRole } }>('/api/me'),
+    enabled: Boolean(user)
   });
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const recentNotifications = (notifications.data ?? []).slice(0, 5);
-  const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
+  const visibleNavigation = role ? navigation.filter((item) => item.roles.includes(role)) : [];
   const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
+  const displayRole = role?.replace('_', ' ') ?? '';
   const mobileNavigation = useMemo(() => {
     if (role === 'BA_MANAGER' || role === 'ADMIN') {
       return visibleNavigation.filter((item) => item.to !== '/reports');
@@ -256,7 +259,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
               <p className="font-semibold text-slate-700">
                 {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
               </p>
-              <p>{role.replace('_', ' ')}</p>
+              <p>{displayRole}</p>
             </div>
             <div ref={userMenuRef} className="relative">
               <button
@@ -285,7 +288,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                       <p className="truncate text-sm font-semibold text-slate-950">
                         {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
                       </p>
-                      <p className="text-xs text-slate-500">{role.replace('_', ' ')}</p>
+                      <p className="text-xs text-slate-500">{displayRole}</p>
                     </div>
                     <Button
                       variant="ghost"

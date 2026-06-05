@@ -34,6 +34,7 @@ import { Avatar, BAIdentity } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { Modal } from '@/components/ui/modal';
 
 type CapacitySummary = {
@@ -689,11 +690,7 @@ export function ManagerInboxPage() {
         </div>
       ) : null}
       {bookings.isLoading || bas.isLoading || summary.isLoading ? (
-        <Card>
-          <CardContent className="p-5 text-sm text-slate-600">
-            Loading manager inbox...
-          </CardContent>
-        </Card>
+        <LoadingScreen message="Loading manager inbox..." />
       ) : null}
       {bookings.error || bas.error || summary.error ? (
         <Card>

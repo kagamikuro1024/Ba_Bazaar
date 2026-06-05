@@ -333,7 +333,7 @@ export function TimelinePage() {
   function finishSelection(pointerId: number) {
     setActiveSelection((current) => {
       if (!current || current.pointerId !== pointerId) return current;
-      setDraft({ ...selectionToDraft(current), ba_id: '' });
+      setDraft(selectionToDraft(current));
       return null;
     });
   }
@@ -592,7 +592,7 @@ export function TimelinePage() {
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: '',
+                          ba_id: ba.id,
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false
@@ -617,7 +617,7 @@ export function TimelinePage() {
                       onSelectionEnd={finishSelection}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: '',
+                          ba_id: ba.id,
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false
@@ -980,6 +980,8 @@ function BookingDetailModal({
   const role = user?.role ?? 'BA';
   const isManagerRole = role === 'BA_MANAGER';
   const [capacityDraft, setCapacityDraft] = useState('50');
+  const [decisionKind, setDecisionKind] = useState<'reject' | 'cancel' | null>(null);
+  const [decisionReason, setDecisionReason] = useState('');
   const bookingId = booking?.id;
   const bookingCapacity = booking?.capacity_percent;
 
@@ -989,6 +991,8 @@ function BookingDetailModal({
     }
 
     setCapacityDraft(String(bookingCapacity));
+    setDecisionKind(null);
+    setDecisionReason('');
   }, [bookingId, bookingCapacity]);
 
   const capacityPercent =
@@ -1043,6 +1047,18 @@ function BookingDetailModal({
       }),
     onSuccess: onDone
   });
+
+  function submitDecision() {
+    const reason = decisionReason.trim();
+    if (!decisionKind || !reason) return;
+
+    if (decisionKind === 'reject') {
+      reject.mutate(reason);
+      return;
+    }
+
+    cancel.mutate(reason);
+  }
 
   if (!booking) return null;
 
@@ -1133,9 +1149,10 @@ function BookingDetailModal({
             <Button
               variant="secondary"
               onClick={() => {
-                const reason = window.prompt('Reject reason');
-                if (reason) reject.mutate(reason);
+                setDecisionKind((current) => (current === 'reject' ? null : 'reject'));
+                setDecisionReason('');
               }}
+              disabled={reject.isPending}
             >
               Reject
             </Button>
@@ -1147,13 +1164,66 @@ function BookingDetailModal({
             <Button
               variant="secondary"
               onClick={() => {
-                const reason = window.prompt('Cancel reason');
-                if (reason) cancel.mutate(reason);
+                setDecisionKind((current) => (current === 'cancel' ? null : 'cancel'));
+                setDecisionReason('');
               }}
+              disabled={cancel.isPending}
             >
               Cancel booking
             </Button>
           </div>
+        ) : null}
+        {decisionKind ? (
+          <form
+            className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitDecision();
+            }}
+          >
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-slate-700">
+                {decisionKind === 'reject' ? 'Reject reason' : 'Cancel reason'}
+              </span>
+              <textarea
+                value={decisionReason}
+                onChange={(event) => setDecisionReason(event.target.value)}
+                className="min-h-24 rounded-md border border-slate-200 bg-white p-3 text-sm"
+                placeholder={
+                  decisionKind === 'reject'
+                    ? 'Explain why this pending schedule is rejected...'
+                    : 'Explain why this schedule is cancelled...'
+                }
+                autoFocus
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setDecisionKind(null);
+                  setDecisionReason('');
+                }}
+                disabled={reject.isPending || cancel.isPending}
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={!decisionReason.trim() || reject.isPending || cancel.isPending}
+              >
+                {decisionKind === 'reject'
+                  ? reject.isPending
+                    ? 'Rejecting...'
+                    : 'Confirm reject'
+                  : cancel.isPending
+                    ? 'Cancelling...'
+                    : 'Confirm cancel'}
+              </Button>
+            </div>
+          </form>
         ) : null}
         {approve.error || reject.error || cancel.error || updateCapacity.error ? (
           <div className="rounded-md bg-rose-50 p-3 text-rose-700">
