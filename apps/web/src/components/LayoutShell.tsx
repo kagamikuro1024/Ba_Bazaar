@@ -417,7 +417,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
         className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/12 lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="flex items-stretch justify-around gap-1">
+        <div className="flex items-stretch justify-around gap-2">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
@@ -425,7 +425,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 key={item.to}
                 to={item.to}
                 end
-                className="min-w-0 flex-1"
+                className={({ isActive }) =>
+                  [
+                    'min-w-0 transition-[flex] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    isActive ? 'flex-[1.9]' : 'flex-1'
+                  ].join(' ')
+                }
                 onClick={(event) => {
                   if (inboxDirty.dirty && item.to !== location.pathname) {
                     event.preventDefault();
@@ -436,19 +441,34 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 {({ isActive }) => (
                   <div
                     className={[
-                      'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
+                      'relative flex h-full min-w-0 items-center justify-center overflow-hidden rounded-2xl px-3 py-2 text-left transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
                       isActive
-                        ? 'text-blue-600'
+                        ? 'bg-blue-50 text-blue-600'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
                     ].join(' ')}
                   >
-                    <div className="relative flex h-8 w-12 items-center justify-center">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                      {item.to === '/notifications' && unreadCount > 0 ? (
-                        <span className="absolute right-1.5 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
-                          {unreadCount}
-                        </span>
-                      ) : null}
+                    <div
+                      className={[
+                        'flex min-w-0 items-center overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                        isActive ? 'w-[124px]' : 'w-8'
+                      ].join(' ')}
+                    >
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                        {item.to === '/notifications' && unreadCount > 0 ? (
+                          <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                            {unreadCount}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span
+                        className={[
+                          'overflow-hidden whitespace-nowrap text-sm font-semibold leading-none transition-[max-width,margin,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                          isActive ? 'ml-2 max-w-[88px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+                        ].join(' ')}
+                      >
+                        {item.label}
+                      </span>
                     </div>
                   </div>
                 )}
