@@ -1641,9 +1641,8 @@ export function RequestDetailPanel({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const requestState = getManagerRequestState(booking);
   const type = getRequestType(booking);
-  const canEditManagerFields =
-    canManageActions && booking.status !== 'COMPLETED' && booking.status !== 'CANCELLED';
-  const canEditCapacity = canEditManagerFields;
+  const canEditPendingRequest = canManageActions && booking.status === 'PENDING';
+  const canEditCapacity = canEditPendingRequest;
   const capacityChanged = capacityPercent !== booking.capacity_percent;
   const capacityPreview = getAdjustedCapacityPreview(
     capacity,
@@ -1658,8 +1657,8 @@ export function RequestDetailPanel({
     (!capacityCheckReady || capacityPreview.hasApprovalRisk);
   const verificationItems = getVerificationItems(booking, capacityPercent);
   const canApproveDirectly = booking.status === 'PENDING' && Boolean(booking.ba_id);
-  const canAssign = canEditManagerFields;
-  const canReject = booking.status === 'PENDING';
+  const canAssign = canEditPendingRequest;
+  const canReject = canEditPendingRequest;
   const canCancel = booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS';
   const pendingChangeEntries = getPendingChangeEntries(booking);
   const hasPendingChanges = pendingChangeEntries.length > 0;
