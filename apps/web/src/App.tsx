@@ -8,6 +8,7 @@ import { type UserRole } from './lib/api';
 import { BADirectoryPage } from './pages/BADirectoryPage';
 import { BAProfilePage } from './pages/BAProfilePage';
 import { DashboardPage } from './pages/DashboardPage';
+import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { ManagerInboxPage } from './pages/ManagerInboxPage';
 import { MyRequestsPage } from './pages/MyRequestsPage';
@@ -37,7 +38,8 @@ export function App() {
             </PublicOnlyRoute>
           }
         />
-        <Route path="/" element={<ProtectedPage><LayoutShell><DashboardPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/dashboard" element={<ProtectedPage><LayoutShell><DashboardPage /></LayoutShell></ProtectedPage>} />
         <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />

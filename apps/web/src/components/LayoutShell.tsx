@@ -29,7 +29,7 @@ type PageIntro = {
 };
 
 const pageIntros: Record<string, PageIntro> = {
-  '/': {
+  '/dashboard': {
     title: 'Dashboard',
     body: 'Use this overview to monitor BA capacity, utilization rules, and shortcuts into the main booking workflow.'
   },
@@ -69,7 +69,7 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-    { to: '/', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
+    { to: '/dashboard', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
     { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
     { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
     { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
