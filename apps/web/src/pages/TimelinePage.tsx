@@ -56,6 +56,29 @@ type DragScrollState = {
   startScrollLeft: number;
 };
 
+function usePrefersCoarsePointer() {
+  const [isCoarsePointer, setIsCoarsePointer] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : window.matchMedia('(pointer: coarse)').matches
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(pointer: coarse)');
+    const handleChange = () => setIsCoarsePointer(mediaQuery.matches);
+    handleChange();
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  return isCoarsePointer;
+}
+
 const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
 const mobileDayMinWidth = 70;
@@ -214,6 +237,8 @@ export function TimelinePage() {
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
+  const prefersCoarsePointer = usePrefersCoarsePointer();
+  const allowDragSelection = canCreateBooking && !prefersCoarsePointer;
   const currentDate = useMemo(() => new Date(), []);
 
   useEffect(() => {
@@ -609,6 +634,7 @@ export function TimelinePage() {
                       rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
+                      allowDragSelection={allowDragSelection}
                       activeSelection={
                         activeSelection?.ba_id === ba.id ? activeSelection : null
                       }
@@ -737,6 +763,7 @@ function TimelineRow({
   rowMinHeight,
   isAlternateRow,
   canCreateBooking,
+  allowDragSelection,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -750,6 +777,7 @@ function TimelineRow({
   rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
+  allowDragSelection: boolean;
   activeSelection: DraftSelection | null;
   onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
   onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
@@ -784,17 +812,19 @@ function TimelineRow({
             )}
             style={{ minHeight: rowMinHeight }}
             onPointerDown={(event) => {
-              if (!canCreateBooking || event.button !== 0) return;
+              if (!allowDragSelection || event.button !== 0) return;
               onSelectionStart(ba.id, day, event.pointerId);
             }}
             onPointerEnter={(event) => {
-              if (canCreateBooking && event.buttons === 1)
+              if (allowDragSelection && event.buttons === 1)
                 onSelectionMove(ba.id, day, event.pointerId);
             }}
             onPointerUp={(event) => {
-              if (canCreateBooking) onSelectionEnd(event.pointerId);
+              if (allowDragSelection) onSelectionEnd(event.pointerId);
             }}
-            onPointerCancel={(event) => onSelectionEnd(event.pointerId)}
+            onPointerCancel={(event) => {
+              if (allowDragSelection) onSelectionEnd(event.pointerId);
+            }}
             onClick={(event) => {
               if (canCreateBooking && event.detail === 0) onEmptyClick(day);
             }}

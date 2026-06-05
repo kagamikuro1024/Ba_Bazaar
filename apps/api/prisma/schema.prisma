@@ -57,10 +57,37 @@ enum PrivateNoteVisibility {
   MANAGER_ONLY
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RejectReason {
+  NOT_OFFICIAL
+  TOO_OLD
+  MISSING_DOCS
+  OTHER
+}
+
+model Vendor {
+  id              Int             @id @default(autoincrement())
+  name            String
+  status          ApprovalStatus  @default(PENDING)
+  reject_reason   RejectReason?
+  reject_note     String?
+  reviewed_by     Int?
+  reviewed_at     DateTime?
+  submitted_at    DateTime        @default(now())
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+
+  @@map("vendors")
+}
+
 enum AuditResult {
   SUCCESS
   DENIED
-  FAILED
 }
 
 model User {
@@ -186,6 +213,7 @@ model Booking {
   title             String
   description       String
   notes             String?
+  pending_changes   Json?
   start_date        DateTime        @db.Date
   end_date          DateTime        @db.Date
   capacity_percent  Int

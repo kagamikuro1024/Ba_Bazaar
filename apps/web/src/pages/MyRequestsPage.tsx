@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { apiFetch, type Booking } from '@/lib/api';
 import { CAPACITY_OPTIONS } from '@/lib/capacity';
 import { StatusBadge } from '@/components/common';
@@ -10,6 +11,8 @@ import { formatDate } from '@/lib/format';
 
 export function MyRequestsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const targetBookingId = searchParams.get('bookingId');
   const [status, setStatus] = useState('');
   const [editing, setEditing] = useState<Booking | null>(null);
   const requests = useQuery({
@@ -35,6 +38,18 @@ export function MyRequestsPage() {
       void queryClient.invalidateQueries();
     }
   });
+
+  function hasPendingChanges(booking: Booking) {
+    return Boolean(booking.pending_changes && Object.keys(booking.pending_changes).length > 0);
+  }
+
+  function canEditBooking(booking: Booking) {
+    return (
+      !hasPendingChanges(booking) &&
+      booking.status !== 'COMPLETED' &&
+      booking.status !== 'CANCELLED'
+    );
+  }
 
   return (
     <div className="grid gap-5">
@@ -69,7 +84,7 @@ export function MyRequestsPage() {
       ) : null}
       <div className="grid gap-4">
         {(requests.data ?? []).map((booking) => (
-          <Card key={booking.id}>
+          <Card key={booking.id} className={booking.id === targetBookingId ? 'ring-2 ring-blue-600 ring-offset-2' : ''}>
             <CardContent className="grid gap-3 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -78,7 +93,14 @@ export function MyRequestsPage() {
                     {booking.ba?.full_name ?? 'Auto assign'}
                   </p>
                 </div>
-                <StatusBadge status={booking.status} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={booking.status} />
+                  {hasPendingChanges(booking) ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                      Changes pending manager review
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <p className="text-sm text-slate-600">
                 {formatDate(booking.start_date)} - {formatDate(booking.end_date)} ·{' '}
@@ -102,9 +124,9 @@ export function MyRequestsPage() {
                   onCancel={() => setEditing(null)}
                   onSubmit={(draft) => resubmit.mutate(draft)}
                 />
-              ) : booking.status === 'REJECTED' ? (
+              ) : canEditBooking(booking) ? (
                 <Button variant="secondary" onClick={() => setEditing(booking)}>
-                  Edit & Resubmit
+                  {booking.status === 'REJECTED' ? 'Edit & Resubmit' : 'Edit'}
                 </Button>
               ) : null}
             </CardContent>

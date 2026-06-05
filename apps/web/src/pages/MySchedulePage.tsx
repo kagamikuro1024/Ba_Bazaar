@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { apiFetch, type Booking } from '@/lib/api';
 import { BAIdentity, StatusBadge } from '@/components/common';
 import { Card, CardContent } from '@/components/ui/card';
@@ -6,6 +7,8 @@ import { LoadingScreen } from '@/components/ui/loading-screen';
 import { formatDate } from '@/lib/format';
 
 export function MySchedulePage() {
+  const [searchParams] = useSearchParams();
+  const targetBookingId = searchParams.get('bookingId');
   const schedule = useQuery({
     queryKey: ['my-schedule'],
     queryFn: () => apiFetch<Booking[]>('/api/bookings/my-schedule')
@@ -21,7 +24,7 @@ export function MySchedulePage() {
       ) : null}
       <div className="grid gap-4">
         {(schedule.data ?? []).map((booking) => (
-          <Card key={booking.id}>
+          <Card key={booking.id} className={booking.id === targetBookingId ? 'ring-2 ring-blue-600 ring-offset-2' : ''}>
             <CardContent className="grid gap-3 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <BAIdentity ba={booking.ba} />

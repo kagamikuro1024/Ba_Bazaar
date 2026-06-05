@@ -7,17 +7,20 @@ import {
   Home,
   Inbox,
   Bell,
+  Check,
   ChevronRight,
   Users,
-  Plus
+  Plus,
+  X
 } from 'lucide-react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type NotificationItem, type UserRole } from '@/lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
+import { useInboxDirty } from '@/lib/unsaved-changes';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -91,9 +94,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [pendingNavPath, setPendingNavPath] = useState('');
+  const [navActionPending, setNavActionPending] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const inboxDirty = useInboxDirty();
   const introKey = getIntroKey(location.pathname);
   const intro = introKey ? pageIntros[introKey] : undefined;
   const storageKey = introKey ? `ba-bazaar:intro:${introKey}` : '';
@@ -167,16 +174,21 @@ export function LayoutShell({ children }: LayoutShellProps) {
   }
 
   function resolveNotificationPath(item: NotificationItem) {
-    if (item.type === 'BOOKING_REJECTED' || item.type === 'BOOKING_CANCELLED') {
-      return '/my-requests';
+    const id = item.related_entity_id;
+    if (item.related_entity_type === 'Booking' && id) {
+      if (role === 'BA_MANAGER' || role === 'ADMIN') {
+        return `/manager/inbox?requestId=${id}`;
+      }
+      if (role === 'PM_PO') {
+        return `/my-requests?bookingId=${id}`;
+      }
+      if (role === 'BA') {
+        return `/my-schedule?bookingId=${id}`;
+      }
     }
 
-    if (item.related_entity_type === 'Booking') {
-      if (role === 'BA_MANAGER' || role === 'ADMIN') {
-        return '/manager/inbox';
-      }
-
-      return role === 'BA' ? '/my-schedule' : '/notifications';
+    if (item.type === 'BOOKING_REJECTED' || item.type === 'BOOKING_CANCELLED') {
+      return id ? `/my-requests?bookingId=${id}` : '/my-requests';
     }
 
     return '/notifications';
@@ -320,6 +332,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   key={item.to}
                   to={item.to}
                   end
+                  onClick={(event) => {
+                    if (inboxDirty.dirty && item.to !== location.pathname) {
+                      event.preventDefault();
+                      setPendingNavPath(item.to);
+                    }
+                  }}
                   className={({ isActive }) =>
                     [
                       'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -360,7 +378,18 @@ export function LayoutShell({ children }: LayoutShellProps) {
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} end className="min-w-0 flex-1">
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end
+                className="min-w-0 flex-1"
+                onClick={(event) => {
+                  if (inboxDirty.dirty && item.to !== location.pathname) {
+                    event.preventDefault();
+                    setPendingNavPath(item.to);
+                  }
+                }}
+              >
                 {({ isActive }) => (
                   <div
                     className={[
@@ -400,6 +429,141 @@ export function LayoutShell({ children }: LayoutShellProps) {
       {canCreateBooking && (
         <BookingModal open={bookingModalOpen} onClose={() => setBookingModalOpen(false)} />
       )}
+
+      {pendingNavPath ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950">Unsaved changes</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Review these edits before leaving Manager Inbox.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingNavPath('')}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close unsaved changes dialog"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Changes summary
+              </p>
+              {inboxDirty.summary.length > 0 ? (
+                <ul className="mt-2 grid gap-1 text-sm text-slate-700">
+                  {inboxDirty.summary.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-md bg-white px-2 py-1"
+                    >
+                      <span className="min-w-0 flex-1">{item.label}</span>
+                      <button
+                        type="button"
+                        disabled={navActionPending || !item.approve}
+                        onClick={async () => {
+                          setNavActionPending(true);
+                          try {
+                            await item.approve?.();
+                            await queryClient.invalidateQueries();
+                          } finally {
+                            setNavActionPending(false);
+                          }
+                        }}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
+                        aria-label={`Approve ${item.label}`}
+                      >
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={navActionPending || !item.reject}
+                        onClick={async () => {
+                          setNavActionPending(true);
+                          try {
+                            await item.reject?.();
+                            await queryClient.invalidateQueries();
+                          } finally {
+                            setNavActionPending(false);
+                          }
+                        }}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+                        aria-label={`Reject ${item.label}`}
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">There are unsaved edits in this review.</p>
+              )}
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                disabled={navActionPending || !inboxDirty.approveAndLeave}
+                onClick={async () => {
+                  const nextPath = pendingNavPath;
+                  setNavActionPending(true);
+                  try {
+                    await inboxDirty.approveAndLeave?.();
+                    setPendingNavPath('');
+                    navigate(nextPath);
+                  } finally {
+                    setNavActionPending(false);
+                  }
+                }}
+              >
+                {navActionPending ? 'Working...' : 'Approve and leave'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                disabled={navActionPending || !inboxDirty.rejectAndLeave}
+                onClick={async () => {
+                  const nextPath = pendingNavPath;
+                  setNavActionPending(true);
+                  try {
+                    await inboxDirty.rejectAndLeave?.();
+                    setPendingNavPath('');
+                    navigate(nextPath);
+                  } finally {
+                    setNavActionPending(false);
+                  }
+                }}
+              >
+                {navActionPending ? 'Working...' : 'Reject and leave'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setPendingNavPath('')}
+                disabled={navActionPending}
+              >
+                Stay here
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                disabled={navActionPending}
+                onClick={() => {
+                  const nextPath = pendingNavPath;
+                  setPendingNavPath('');
+                  navigate(nextPath);
+                }}
+              >
+                Leave anyway
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {introOpen && intro ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">

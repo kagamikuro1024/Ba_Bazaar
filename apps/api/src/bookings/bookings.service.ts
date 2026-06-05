@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { BAStatus, BookingPriority, BookingStatus, User, UserRole } from '@prisma/client';
+import { BAStatus, BookingPriority, BookingStatus, Prisma, User, UserRole } from '@prisma/client';
 import { canApproveCapacity, getRangeCapacity } from '../domain/capacity';
 import {
   optionalString,
@@ -173,10 +173,17 @@ export class BookingsService {
     const booking = await this.getById(currentUser, id);
     const manager = canApproveBooking(currentUser.role);
     const requesterOwns = booking.requester_id === currentUser.id;
+    const requesterCanProposeChanges =
+      requesterOwns &&
+      currentUser.role === UserRole.PM_PO &&
+      booking.status !== BookingStatus.COMPLETED &&
+      booking.status !== BookingStatus.CANCELLED;
 
-    if (!manager && !(requesterOwns && booking.status === BookingStatus.REJECTED)) {
+    if (!manager && !requesterCanProposeChanges) {
       await this.auditDenied(currentUser, 'UPDATE_BOOKING', 'Booking', id);
-      throw new ForbiddenException('Only Manager or requester resubmitting rejected request can update');
+      throw new ForbiddenException(
+        'Only Manager/Admin or requester can propose changes for non-completed, non-cancelled bookings'
+      );
     }
 
     const data = {
@@ -190,12 +197,7 @@ export class BookingsService {
         input.capacity_percent !== undefined
           ? requireCapacityPercent(input.capacity_percent)
           : undefined,
-      priority: input.priority,
-      status: requesterOwns && booking.status === BookingStatus.REJECTED ? BookingStatus.PENDING : undefined,
-      reject_reason:
-        requesterOwns && booking.status === BookingStatus.REJECTED ? null : undefined,
-      rejected_at:
-        requesterOwns && booking.status === BookingStatus.REJECTED ? null : undefined
+      priority: input.priority
     };
 
     if (data.start_date && data.end_date && data.end_date < data.start_date) {
@@ -206,7 +208,7 @@ export class BookingsService {
     const nextEndDate = data.end_date ?? booking.end_date;
     const nextCapacity = data.capacity_percent ?? booking.capacity_percent;
 
-    if (manager && isOfficialBooking(booking.status)) {
+    if ((manager && isOfficialBooking(booking.status)) || requesterCanProposeChanges) {
       const existing = await this.getBaBookings(booking.ba_id);
       const approval = canApproveCapacity(
         existing,
@@ -221,6 +223,29 @@ export class BookingsService {
           `Cannot update booking because capacity exceeds 100% on ${approval.blocking_day}`
         );
       }
+    }
+
+    if (requesterCanProposeChanges) {
+      const pendingChanges = Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== undefined)
+      );
+
+      const updated = await this.prisma.booking.update({
+        where: { id },
+        data: {
+          pending_changes: pendingChanges,
+          status: BookingStatus.PENDING
+        },
+        include: this.includeRelations()
+      });
+
+      await this.audit(currentUser, 'UPDATE_BOOKING', 'Booking', id, booking, updated);
+      await this.notifyManagers(
+        'BOOKING_CHANGES_PROPOSED',
+        'Booking changes proposed',
+        updated
+      );
+      return updated;
     }
 
     const updated = await this.prisma.booking.update({
@@ -313,6 +338,78 @@ export class BookingsService {
     return updated;
   }
 
+  async approveChanges(currentUser: User, id: string, input: BookingInput = {}) {
+    if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'APPROVE_BOOKING_CHANGES', 'Booking', id);
+      throw new ForbiddenException('Manager role required to approve booking changes');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: this.includeRelations()
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const pendingChanges = this.getPendingChangesObject(booking.pending_changes);
+    if (!pendingChanges || Object.keys(pendingChanges).length === 0) {
+      throw new BadRequestException('No pending changes to approve');
+    }
+
+    const effectiveChanges = this.normalizePartialBookingInput({
+      ...pendingChanges,
+      ...this.getDefinedEntries(input)
+    });
+
+    if (effectiveChanges.ba_id) {
+      const ba = await this.prisma.bAProfile.findUnique({ where: { id: effectiveChanges.ba_id } });
+      if (!ba || ba.status !== BAStatus.ACTIVE) {
+        throw new BadRequestException('Only active BA can be booked');
+      }
+    }
+
+    const nextBaId = effectiveChanges.ba_id ?? booking.ba_id;
+    const nextStartDate = effectiveChanges.start_date ?? booking.start_date;
+    const nextEndDate = effectiveChanges.end_date ?? booking.end_date;
+    const nextCapacity = effectiveChanges.capacity_percent ?? booking.capacity_percent;
+
+    if (nextEndDate < nextStartDate) {
+      throw new BadRequestException('end_date must be greater than or equal to start_date');
+    }
+
+    if (nextBaId) {
+      const existing = await this.getBaBookings(nextBaId);
+      const approval = canApproveCapacity(existing, nextStartDate, nextEndDate, nextCapacity, booking.id);
+      if (!approval.allowed) {
+        throw new BadRequestException(
+          `Cannot approve booking changes because capacity exceeds 100% on ${approval.blocking_day}`
+        );
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        ...effectiveChanges,
+        pending_changes: Prisma.DbNull,
+        ...(booking.status === BookingStatus.PENDING
+          ? {
+              status: BookingStatus.APPROVED,
+              manager_id: currentUser.id,
+              approved_at: new Date(),
+              reject_reason: null,
+              rejected_at: null
+            }
+          : {})
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'APPROVE_BOOKING_CHANGES', 'Booking', id, booking, updated);
+    await this.notifyRequester(updated, 'BOOKING_CHANGES_APPROVED', 'Booking changes approved');
+    await this.notifyAssignedBA(updated, 'BOOKING_CHANGES_APPROVED', 'Booking changes approved');
+    return updated;
+  }
+
   async reject(currentUser: User, id: string, reason?: string) {
     if (!canApproveBooking(currentUser.role)) {
       await this.auditDenied(currentUser, 'REJECT_BOOKING', 'Booking', id);
@@ -341,6 +438,200 @@ export class BookingsService {
       'BOOKING_REJECTED',
       'Booking rejected',
       `Reason: ${rejectReason}`
+    );
+    return updated;
+  }
+
+  async rejectChanges(currentUser: User, id: string, reason?: string) {
+    if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'REJECT_BOOKING_CHANGES', 'Booking', id);
+      throw new ForbiddenException('Manager role required to reject booking changes');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: this.includeRelations()
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const pendingChanges = this.getPendingChangesObject(booking.pending_changes);
+    if (!pendingChanges || Object.keys(pendingChanges).length === 0) {
+      throw new BadRequestException('No pending changes to reject');
+    }
+
+    const rejectReason = optionalString(reason);
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: { pending_changes: Prisma.DbNull },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'REJECT_BOOKING_CHANGES', 'Booking', id, booking, {
+      id,
+      pending_changes: null,
+      reject_reason: rejectReason
+    });
+    await this.notifyRequester(
+      updated,
+      'BOOKING_CHANGES_REJECTED',
+      'Booking changes rejected',
+      rejectReason ? `Reason: ${rejectReason}` : undefined
+    );
+    return updated;
+  }
+
+  async approveFields(
+    currentUser: User,
+    id: string,
+    fields: string[],
+    overrides?: Record<string, unknown>
+  ) {
+    if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'APPROVE_BOOKING_CHANGES_PARTIAL', 'Booking', id);
+      throw new ForbiddenException('Manager role required to approve booking changes');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: this.includeRelations()
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const pendingChanges = this.getPendingChangesObject(booking.pending_changes);
+    if (!pendingChanges || Object.keys(pendingChanges).length === 0) {
+      throw new BadRequestException('No pending changes to approve');
+    }
+
+    if (!fields || fields.length === 0) {
+      throw new BadRequestException('No fields specified to approve');
+    }
+
+    const fieldChanges: Record<string, unknown> = {};
+    for (const field of fields) {
+      if (!(field in pendingChanges)) {
+        throw new BadRequestException(`Field "${field}" is not in pending changes`);
+      }
+      fieldChanges[field] = overrides?.[field] ?? pendingChanges[field];
+    }
+
+    const effectiveChanges = this.normalizePartialBookingInput(fieldChanges);
+
+    if (effectiveChanges.ba_id) {
+      const ba = await this.prisma.bAProfile.findUnique({ where: { id: effectiveChanges.ba_id } });
+      if (!ba || ba.status !== BAStatus.ACTIVE) {
+        throw new BadRequestException('Only active BA can be booked');
+      }
+    }
+
+    const nextBaId = effectiveChanges.ba_id ?? booking.ba_id;
+    const nextStartDate = effectiveChanges.start_date ?? booking.start_date;
+    const nextEndDate = effectiveChanges.end_date ?? booking.end_date;
+    const nextCapacity = effectiveChanges.capacity_percent ?? booking.capacity_percent;
+
+    if (nextEndDate < nextStartDate) {
+      throw new BadRequestException('end_date must be greater than or equal to start_date');
+    }
+
+    if (nextBaId) {
+      const existing = await this.getBaBookings(nextBaId);
+      const approval = canApproveCapacity(existing, nextStartDate, nextEndDate, nextCapacity, booking.id);
+      if (!approval.allowed) {
+        throw new BadRequestException(
+          `Cannot approve booking field changes because capacity exceeds 100% on ${approval.blocking_day}`
+        );
+      }
+    }
+
+    // Remove approved keys from pending_changes
+    const remainingChanges: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(pendingChanges)) {
+      if (!fields.includes(key)) {
+        remainingChanges[key] = value;
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        ...effectiveChanges,
+        pending_changes:
+          Object.keys(remainingChanges).length === 0
+            ? Prisma.DbNull
+            : (remainingChanges as Prisma.InputJsonValue),
+        ...(booking.status === BookingStatus.PENDING
+          ? {
+              status: BookingStatus.APPROVED,
+              manager_id: currentUser.id,
+              approved_at: new Date(),
+              reject_reason: null,
+              rejected_at: null
+            }
+          : {})
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'APPROVE_BOOKING_CHANGES_PARTIAL', 'Booking', id, booking, updated);
+    await this.notifyRequester(
+      updated,
+      'BOOKING_CHANGES_PARTIALLY_APPROVED',
+      'Booking field changes approved',
+      `Approved fields: ${fields.join(', ')}`
+    );
+    await this.notifyAssignedBA(
+      { id: updated.id, title: updated.title, ba: updated.ba },
+      'BOOKING_CHANGES_PARTIALLY_APPROVED',
+      'Booking field changes approved'
+    );
+    return updated;
+  }
+
+  async rejectFields(currentUser: User, id: string, fields: string[]) {
+    if (!canApproveBooking(currentUser.role)) {
+      await this.auditDenied(currentUser, 'REJECT_BOOKING_CHANGES_PARTIAL', 'Booking', id);
+      throw new ForbiddenException('Manager role required to reject booking changes');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: this.includeRelations()
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const pendingChanges = this.getPendingChangesObject(booking.pending_changes);
+    if (!pendingChanges || Object.keys(pendingChanges).length === 0) {
+      throw new BadRequestException('No pending changes to reject');
+    }
+
+    if (!fields || fields.length === 0) {
+      throw new BadRequestException('No fields specified to reject');
+    }
+
+    // Remove rejected keys from pending_changes
+    const remainingChanges: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(pendingChanges)) {
+      if (!fields.includes(key)) {
+        remainingChanges[key] = value;
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        pending_changes:
+          Object.keys(remainingChanges).length === 0
+            ? Prisma.DbNull
+            : (remainingChanges as Prisma.InputJsonValue)
+      },
+      include: this.includeRelations()
+    });
+
+    await this.audit(currentUser, 'REJECT_BOOKING_CHANGES_PARTIAL', 'Booking', id, booking, updated);
+    await this.notifyRequester(
+      updated,
+      'BOOKING_CHANGES_PARTIALLY_REJECTED',
+      'Booking field changes rejected',
+      `Rejected fields: ${fields.join(', ')}`
     );
     return updated;
   }
@@ -637,6 +928,31 @@ export class BookingsService {
         }
       })
       .catch(() => undefined);
+  }
+
+  private normalizePartialBookingInput(input: Record<string, unknown>) {
+    return {
+      ba_id: input.ba_id === undefined ? undefined : requireString(input.ba_id, 'ba_id'),
+      project_id: input.project_id === undefined ? undefined : requireString(input.project_id, 'project_id'),
+      title: input.title === undefined ? undefined : requireString(input.title, 'title'),
+      description: input.description === undefined ? undefined : requireString(input.description, 'description'),
+      notes: input.notes === undefined ? undefined : optionalString(input.notes),
+      start_date: input.start_date === undefined ? undefined : requireDate(input.start_date, 'start_date'),
+      end_date: input.end_date === undefined ? undefined : requireDate(input.end_date, 'end_date'),
+      capacity_percent:
+        input.capacity_percent === undefined ? undefined : requireCapacityPercent(input.capacity_percent),
+      priority: input.priority === undefined ? undefined : (input.priority as BookingPriority),
+      manager_comment: input.manager_comment === undefined ? undefined : optionalString(input.manager_comment)
+    };
+  }
+
+  private getDefinedEntries(input: Record<string, unknown>) {
+    return Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+  }
+
+  private getPendingChangesObject(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
   }
 }
 

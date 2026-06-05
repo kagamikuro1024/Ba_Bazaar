@@ -81,6 +81,51 @@ export class BookingsController {
     return this.bookingsService.reject(await this.authService.getCurrentUser(request), id, reason);
   }
 
+  @Post(':id/changes/approve')
+  async approveChanges(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>
+  ) {
+    return this.bookingsService.approveChanges(await this.authService.getCurrentUser(request), id, body);
+  }
+
+  @Post(':id/changes/reject')
+  async rejectChanges(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body('reject_reason') reason?: string
+  ) {
+    return this.bookingsService.rejectChanges(await this.authService.getCurrentUser(request), id, reason);
+  }
+
+  @Post(':id/changes/approve-fields')
+  async approveFields(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: { fields: string[]; overrides?: Record<string, unknown> }
+  ) {
+    return this.bookingsService.approveFields(
+      await this.authService.getCurrentUser(request),
+      id,
+      body.fields,
+      body.overrides
+    );
+  }
+
+  @Post(':id/changes/reject-fields')
+  async rejectFields(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: { fields: string[] }
+  ) {
+    return this.bookingsService.rejectFields(
+      await this.authService.getCurrentUser(request),
+      id,
+      body.fields
+    );
+  }
+
   @Post(':id/cancel')
   async cancel(
     @Req() request: Request,

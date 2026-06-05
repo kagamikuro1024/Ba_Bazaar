@@ -21,12 +21,21 @@ export function NotificationsPage() {
   });
 
   function resolveNotificationPath(item: NotificationItem) {
-    if (item.type === 'BOOKING_REJECTED' || item.type === 'BOOKING_CANCELLED') {
-      return '/my-requests';
+    const id = item.related_entity_id;
+    if (item.related_entity_type === 'Booking' && id) {
+      if (role === 'BA_MANAGER' || role === 'ADMIN') {
+        return `/manager/inbox?requestId=${id}`;
+      }
+      if (role === 'PM_PO') {
+        return `/my-requests?bookingId=${id}`;
+      }
+      if (role === 'BA') {
+        return `/my-schedule?bookingId=${id}`;
+      }
     }
 
-    if (item.related_entity_type === 'Booking') {
-      return role === 'BA' ? '/my-schedule' : '/notifications';
+    if (item.type === 'BOOKING_REJECTED' || item.type === 'BOOKING_CANCELLED') {
+      return id ? `/my-requests?bookingId=${id}` : '/my-requests';
     }
 
     return '/notifications';

@@ -76,6 +76,7 @@ export type Booking = {
   reject_reason?: string | null;
   cancel_reason?: string | null;
   manager_comment?: string | null;
+  pending_changes?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   ba: BAProfile | null;
