@@ -1012,8 +1012,8 @@ export function ManagerInboxPage() {
 
       <Card>
         <CardContent className="grid gap-3 p-4 lg:p-5">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:items-center">
-            <label className="relative block">
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] 2xl:items-center">
+            <label className="relative block 2xl:min-w-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={filters.search}
@@ -1022,7 +1022,7 @@ export function ManagerInboxPage() {
                 className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm"
               />
             </label>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-wrap items-center gap-2 2xl:justify-start">
               {[
                 ['ALL', `All (${counts.ALL})`],
                 ['SPECIFIC_BA', `Specific BA (${counts.SPECIFIC_BA})`],
@@ -1034,7 +1034,7 @@ export function ManagerInboxPage() {
                   type="button"
                   onClick={() => selectTab(tab as InboxTab)}
                   className={[
-                    'whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+                    'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
                     activeTab === tab
                       ? 'border-blue-200 bg-blue-50 text-blue-700'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
@@ -1046,13 +1046,13 @@ export function ManagerInboxPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,180px))_repeat(2,minmax(0,156px))_auto] xl:items-center">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[repeat(3,minmax(0,180px))_repeat(2,minmax(0,156px))_auto] 2xl:items-center">
             <select
               value={filters.priority}
               onChange={(event) =>
                 setFilter({ priority: event.target.value as FilterState['priority'] })
               }
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
             >
               <option value="ALL">Priority: All</option>
               <option value="LOW">Priority: Low</option>
@@ -1065,7 +1065,7 @@ export function ManagerInboxPage() {
               onChange={(event) =>
                 setFilter({ status: event.target.value as FilterState['status'] })
               }
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
             >
               <option value="ALL">Status: All</option>
               <option value="PENDING">Pending</option>
@@ -1080,7 +1080,7 @@ export function ManagerInboxPage() {
               onChange={(event) =>
                 setFilter({ type: event.target.value as FilterState['type'] })
               }
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
             >
               <option value="ALL">Type: All</option>
               <option value="SPECIFIC_BA">Specific BA</option>
@@ -1113,7 +1113,7 @@ export function ManagerInboxPage() {
                   overbookRisk: false
                 })
               }
-              className="inline-flex h-10 w-fit items-center justify-center gap-2 justify-self-start rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800"
+              className="inline-flex h-10 w-fit items-center justify-center gap-2 justify-self-start rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800 md:col-span-2 xl:col-span-3 2xl:col-span-1"
             >
               <SlidersHorizontal className="h-4 w-4" />
               Reset filters
@@ -1600,7 +1600,7 @@ export function ManagerInboxPage() {
   );
 }
 
-function RequestDetailPanel({
+export function RequestDetailPanel({
   booking,
   allBas,
   capacitySummary,

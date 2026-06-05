@@ -24,7 +24,7 @@ export function NotificationsPage() {
     const id = item.related_entity_id;
     if (item.related_entity_type === 'Booking' && id) {
       if (role === 'BA_MANAGER' || role === 'ADMIN') {
-        return `/manager/inbox?requestId=${id}`;
+        return `/notifications?bookingId=${id}`;
       }
       if (role === 'PM_PO') {
         return `/my-requests?bookingId=${id}`;

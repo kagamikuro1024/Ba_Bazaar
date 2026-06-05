@@ -13,7 +13,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ManagerInboxPage } from './pages/ManagerInboxPage';
 import { MyRequestsPage } from './pages/MyRequestsPage';
 import { MySchedulePage } from './pages/MySchedulePage';
-import { NotificationsPage } from './pages/NotificationsPage';
+import { NotificationsManagerPage } from './pages/NotificationsManagerPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { TimelinePage } from './pages/TimelinePage';
@@ -91,7 +91,7 @@ export function App() {
             </ProtectedPage>
           }
         />
-        <Route path="/notifications" element={<ProtectedPage><LayoutShell><NotificationsPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/notifications" element={<ProtectedPage><LayoutShell><NotificationsManagerPage /></LayoutShell></ProtectedPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
