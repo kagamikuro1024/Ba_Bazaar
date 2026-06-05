@@ -109,6 +109,12 @@ export function ManagerInboxPage() {
   const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState('');
   const [saveForLaterMessage, setSaveForLaterMessage] = useState('');
+  const [confirmationState, setConfirmationState] = useState<{
+    title: string;
+    body: string;
+    confirmLabel: string;
+    action: () => void;
+  } | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [decisionModal, setDecisionModal] = useState<DecisionModalState>(null);
   const [decisionReason, setDecisionReason] = useState('');
@@ -374,6 +380,7 @@ export function ManagerInboxPage() {
     parseCapacityPercent(selectedCapacityDraft) ??
     selectedBooking?.capacity_percent ??
     50;
+  const selectedBookableBa = bas.data?.find((ba) => ba.id === selectedBaId);
   const selectedBookingId = selectedBooking?.id;
   const selectedBookingCapacity = selectedBooking?.capacity_percent;
   const selectedPendingChangeEntries = useMemo(
@@ -416,6 +423,19 @@ export function ManagerInboxPage() {
       [selectedBookingId]: String(selectedBookingCapacity)
     }));
   }, [selectedBookingId, selectedBookingCapacity]);
+
+  useEffect(() => {
+    if (!successMessage && !saveForLaterMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setSuccessMessage('');
+      setSaveForLaterMessage('');
+    }, 3000);
+
+    return () => window.clearTimeout(timeout);
+  }, [saveForLaterMessage, successMessage]);
 
   const approve = useMutation({
     mutationFn: async ({
@@ -537,14 +557,9 @@ export function ManagerInboxPage() {
     onSuccess: () => handleMutationSuccess('Field change(s) rejected.', false)
   });
 
-  const assignDraftChanged =
-    selectedBooking &&
-    assignDrafts[selectedBooking.id] &&
-    assignDrafts[selectedBooking.id] !== selectedBooking.ba_id;
+  const assignDraftChanged = selectedBaId !== (selectedBooking?.ba_id ?? '');
   const capacityDraftChanged =
-    selectedBooking &&
-    capacityDrafts[selectedBooking.id] &&
-    capacityDrafts[selectedBooking.id] !== String(selectedBooking.capacity_percent);
+    selectedCapacityPercent !== (selectedBooking?.capacity_percent ?? 50);
   const hasUnsavedChanges = Boolean(assignDraftChanged || capacityDraftChanged || pendingChangeDraftDirty);
   const unsavedChangeSummary = useMemo(() => {
     if (!selectedBooking) return [];
@@ -767,22 +782,69 @@ export function ManagerInboxPage() {
     currentCapacityPercent: number
   ) {
     if (capacityPercent === currentCapacityPercent) {
-      return;
+      return false;
     }
 
     await apiFetch(`/api/bookings/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ capacity_percent: capacityPercent })
     });
+
+    queryClient.setQueryData<Booking[] | undefined>(['manager-inbox-bookings'], (current) =>
+      current?.map((booking) =>
+        booking.id === id ? { ...booking, capacity_percent: capacityPercent } : booking
+      )
+    );
+
+    return true;
   }
 
   function handleMutationSuccess(message: string, closeDetail = true) {
     setSuccessMessage(message);
     setSaveForLaterMessage('');
+    if (selectedBooking) {
+      setAssignDrafts((current) => {
+        const next = { ...current };
+        delete next[selectedBooking.id];
+        return next;
+      });
+      setCapacityDrafts((current) => {
+        const next = { ...current };
+        delete next[selectedBooking.id];
+        return next;
+      });
+      setChangeDrafts({});
+    }
     if (closeDetail) {
       setMobileDetailOpen(false);
     }
     void queryClient.invalidateQueries();
+  }
+
+  function runWithCapacityConfirmation(confirmLabel: string, action: () => void) {
+    if (!selectedBooking || !selectedBaId || !selectedBookableBa) {
+      action();
+      return;
+    }
+
+    const approvedCapacity = selectedCapacity.data?.max_approved_capacity ?? 0;
+    const remainingAvailability = Math.max(0, 100 - approvedCapacity);
+    const exceedsCapacity = approvedCapacity + selectedCapacityPercent > 100;
+    const hasZeroAvailability = remainingAvailability <= 0;
+
+    if (!hasZeroAvailability && !exceedsCapacity) {
+      action();
+      return;
+    }
+
+    setConfirmationState({
+      title: exceedsCapacity ? 'Exceeds BA capacity' : 'Assign BA with 0% availability?',
+      body: exceedsCapacity
+        ? `${selectedBookableBa.full_name} would exceed 100% approved capacity with this action. Are you sure you want to continue?`
+        : `${selectedBookableBa.full_name} currently has 0% availability for this period. Are you sure you want to continue?`,
+      confirmLabel,
+      action
+    });
   }
 
   function setFilter(next: Partial<FilterState>) {
@@ -915,14 +977,45 @@ export function ManagerInboxPage() {
 
   return (
     <div className="grid gap-5">
-      {successMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
-      {saveForLaterMessage ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          {saveForLaterMessage}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-950">Manager Inbox</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Review, prioritize, and resolve booking requests
+        </p>
+      </div>
+
+      {successMessage || saveForLaterMessage ? (
+        <div className="fixed right-4 top-4 z-[60] flex max-w-sm flex-col gap-3">
+          {successMessage ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
+              <div className="flex items-start justify-between gap-3">
+                <span>{successMessage}</span>
+                <button
+                  type="button"
+                  className="text-emerald-700 hover:text-emerald-900"
+                  onClick={() => setSuccessMessage('')}
+                  aria-label="Dismiss success message"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {saveForLaterMessage ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-lg">
+              <div className="flex items-start justify-between gap-3">
+                <span>{saveForLaterMessage}</span>
+                <button
+                  type="button"
+                  className="text-slate-500 hover:text-slate-700"
+                  onClick={() => setSaveForLaterMessage('')}
+                  aria-label="Dismiss reminder message"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {filters.needsVerification || filters.overbookRisk ? (
@@ -1297,20 +1390,24 @@ export function ManagerInboxPage() {
             }
             onReject={() => handleReject(selectedBooking.id)}
             onAssign={() =>
-              assign.mutate({
-                id: selectedBooking.id,
-                baId: selectedBaId,
-                capacityPercent: selectedCapacityPercent,
-                currentCapacityPercent: selectedBooking.capacity_percent
-              })
+              runWithCapacityConfirmation('Assign BA', () =>
+                assign.mutate({
+                  id: selectedBooking.id,
+                  baId: selectedBaId,
+                  capacityPercent: selectedCapacityPercent,
+                  currentCapacityPercent: selectedBooking.capacity_percent
+                })
+              )
             }
             onAssignAndApprove={() =>
-              assignAndApprove.mutate({
-                id: selectedBooking.id,
-                baId: selectedBaId,
-                capacityPercent: selectedCapacityPercent,
-                currentCapacityPercent: selectedBooking.capacity_percent
-              })
+              runWithCapacityConfirmation('Assign + Approve', () =>
+                assignAndApprove.mutate({
+                  id: selectedBooking.id,
+                  baId: selectedBaId,
+                  capacityPercent: selectedCapacityPercent,
+                  currentCapacityPercent: selectedBooking.capacity_percent
+                })
+              )
             }
             onCancel={() => handleCancel(selectedBooking.id)}
             onSaveForLater={() =>
@@ -1393,20 +1490,24 @@ export function ManagerInboxPage() {
               }
               onReject={() => handleReject(selectedBooking.id)}
               onAssign={() =>
-                assign.mutate({
-                  id: selectedBooking.id,
-                  baId: selectedBaId,
-                  capacityPercent: selectedCapacityPercent,
-                  currentCapacityPercent: selectedBooking.capacity_percent
-                })
+                runWithCapacityConfirmation('Assign BA', () =>
+                  assign.mutate({
+                    id: selectedBooking.id,
+                    baId: selectedBaId,
+                    capacityPercent: selectedCapacityPercent,
+                    currentCapacityPercent: selectedBooking.capacity_percent
+                  })
+                )
               }
               onAssignAndApprove={() =>
-                assignAndApprove.mutate({
-                  id: selectedBooking.id,
-                  baId: selectedBaId,
-                  capacityPercent: selectedCapacityPercent,
-                  currentCapacityPercent: selectedBooking.capacity_percent
-                })
+                runWithCapacityConfirmation('Assign + Approve', () =>
+                  assignAndApprove.mutate({
+                    id: selectedBooking.id,
+                    baId: selectedBaId,
+                    capacityPercent: selectedCapacityPercent,
+                    currentCapacityPercent: selectedBooking.capacity_percent
+                  })
+                )
               }
               onCancel={() => handleCancel(selectedBooking.id)}
               onSaveForLater={() => {
@@ -1558,17 +1659,36 @@ export function ManagerInboxPage() {
               )}
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setPendingNavigationAction(null)}>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <Button type="button" variant="secondary" onClick={() => continuePendingNavigation()}>
+                Leave anyway
+              </Button>
+              <Button type="button" onClick={() => setPendingNavigationAction(null)}>
                 Stay here
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmationState ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-slate-950">{confirmationState.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{confirmationState.body}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setConfirmationState(null)}>
+                Cancel
               </Button>
               <Button
                 type="button"
-                variant="secondary"
-                className={rejectButtonClassName}
-                onClick={continuePendingNavigation}
+                onClick={() => {
+                  const action = confirmationState.action;
+                  setConfirmationState(null);
+                  action();
+                }}
               >
-                Leave anyway
+                {confirmationState.confirmLabel}
               </Button>
             </div>
           </div>
@@ -1660,6 +1780,9 @@ export function RequestDetailPanel({
   const canAssign = canEditPendingRequest;
   const canReject = canEditPendingRequest;
   const canCancel = booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS';
+  const assignChanged = selectedBaId !== (booking.ba_id ?? '');
+  const hasAssignmentAction = assignChanged || capacityChanged;
+  const hasApprovalAction = capacityChanged || booking.status === 'PENDING';
   const pendingChangeEntries = getPendingChangeEntries(booking);
   const hasPendingChanges = pendingChangeEntries.length > 0;
 
@@ -2049,15 +2172,15 @@ export function RequestDetailPanel({
               <Button
                 variant="secondary"
                 onClick={onAssign}
-                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision}
+                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision || !hasAssignmentAction}
               >
-                {capacityChanged ? 'Save + assign' : 'Assign BA'}
+                {capacityChanged || assignChanged ? 'Save + assign' : 'Assign BA'}
               </Button>
               <Button
                 onClick={onAssignAndApprove}
-                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision}
+                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision || !hasApprovalAction}
               >
-                {capacityChanged ? 'Save + assign + approve' : 'Assign + Approve'}
+                {capacityChanged || assignChanged ? 'Save + assign + approve' : 'Assign + Approve'}
               </Button>
               <Button
                 variant="secondary"
