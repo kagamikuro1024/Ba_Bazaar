@@ -15,6 +15,8 @@ import {
 } from '../common/parse';
 import { canApproveBooking, canAssignBooking, canCreateBookingRequest, canCreateDirectBooking } from '../auth/rbac';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseDateOnly, toDateKey } from '../domain/date';
+import { syncBookingStatuses } from './bookings.utils';
 
 type BookingInput = {
   ba_id?: string;
@@ -45,6 +47,7 @@ export class BookingsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: Record<string, string | undefined>) {
+    await syncBookingStatuses(this.prisma);
     const where = {
       ...(currentUser.role === UserRole.BA ? { ba: { user_id: currentUser.id } } : {}),
       ...(query.ba_id ? { ba_id: query.ba_id } : {}),
@@ -60,6 +63,7 @@ export class BookingsService {
   }
 
   async getById(currentUser: User, id: string) {
+    await syncBookingStatuses(this.prisma);
     const booking = await this.prisma.booking.findUnique({
       where: { id },
       include: this.includeRelations()
@@ -327,7 +331,8 @@ export class BookingsService {
         manager_id: currentUser.id,
         approved_at: new Date(),
         reject_reason: null,
-        rejected_at: null
+        rejected_at: null,
+        pending_changes: Prisma.DbNull
       },
       include: this.includeRelations()
     });
@@ -645,6 +650,15 @@ export class BookingsService {
       throw new ForbiddenException('Manager role required to cancel bookings');
     }
 
+    const today = parseDateOnly(toDateKey(new Date()));
+    if (today >= booking.start_date) {
+      throw new BadRequestException('Cannot cancel ongoing or completed bookings');
+    }
+
+    if (booking.status !== BookingStatus.APPROVED) {
+      throw new BadRequestException('Only approved bookings can be cancelled');
+    }
+
     const updated = await this.prisma.booking.update({
       where: { id },
       data: {
@@ -675,6 +689,7 @@ export class BookingsService {
   }
 
   async myRequests(currentUser: User, status?: BookingStatus) {
+    await syncBookingStatuses(this.prisma);
     if (currentUser.role !== UserRole.PM_PO && !canApproveBooking(currentUser.role)) {
       throw new ForbiddenException('PM/PO or Manager role required');
     }
@@ -690,6 +705,7 @@ export class BookingsService {
   }
 
   async mySchedule(currentUser: User) {
+    await syncBookingStatuses(this.prisma);
     const ba = await this.prisma.bAProfile.findFirst({ where: { user_id: currentUser.id } });
     if (!ba) {
       if (canApproveBooking(currentUser.role)) {

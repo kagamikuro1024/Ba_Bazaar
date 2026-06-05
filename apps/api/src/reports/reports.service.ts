@@ -4,6 +4,7 @@ import { canExportReports } from '../auth/rbac';
 import { calculateBookedWorkingDays } from '../domain/capacity';
 import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
 import { PrismaService } from '../prisma/prisma.service';
+import { syncBookingStatuses } from '../bookings/bookings.utils';
 
 const reportBookingStatuses = [
   BookingStatus.APPROVED,
@@ -26,6 +27,7 @@ export class ReportsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async utilization(currentUser: User, month = '2026-06') {
+    await syncBookingStatuses(this.prisma);
     if (!canExportReports(currentUser.role)) {
       await this.auditDenied(currentUser, 'EXPORT_REPORT', 'Permission', currentUser.id);
       throw new ForbiddenException('Manager role required for reports');

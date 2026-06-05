@@ -12,6 +12,7 @@ import { calculateBookedWorkingDays } from '../domain/capacity';
 import { optionalString, requireDate, requireString } from '../common/parse';
 import { canReadPrivateNotes, canViewPrivateBaFields, isManagerRole } from '../auth/rbac';
 import { hashPassword } from '../auth/password';
+import { syncBookingStatuses } from '../bookings/bookings.utils';
 
 type DirectoryQuery = {
   search?: string;
@@ -48,6 +49,7 @@ export class BAService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(currentUser: User, query: DirectoryQuery) {
+    await syncBookingStatuses(this.prisma);
     const search = (query.search ?? query.q)?.trim();
     const statusFilter = Object.values(BAStatus).includes(query.status as BAStatus)
       ? (query.status as BAStatus)
@@ -164,6 +166,7 @@ export class BAService {
   }
 
   async getById(currentUser: User, id: string) {
+    await syncBookingStatuses(this.prisma);
     const ba = await this.prisma.bAProfile.findUnique({
       where: { id },
       include: {

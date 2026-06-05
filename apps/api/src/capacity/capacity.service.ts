@@ -9,12 +9,14 @@ import { getRangeCapacity } from '../domain/capacity';
 import { parseDateOnly, toDateKey } from '../domain/date';
 import { requireCapacityPercent } from '../common/parse';
 import { PrismaService } from '../prisma/prisma.service';
+import { syncBookingStatuses } from '../bookings/bookings.utils';
 
 @Injectable()
 export class CapacityService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async summary(currentUser: User, start = '2026-06-01', end = '2026-06-30') {
+    await syncBookingStatuses(this.prisma);
     const startDate = parseDateOnly(start);
     const endDate = parseDateOnly(end);
     const bas = await this.prisma.bAProfile.findMany({
@@ -69,6 +71,7 @@ export class CapacityService {
     start = '2026-06-01',
     end = '2026-06-30'
   ) {
+    await syncBookingStatuses(this.prisma);
     const ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
     if (!ba) {
       throw new BadRequestException('BA not found');
@@ -95,6 +98,7 @@ export class CapacityService {
   }
 
   async rangeCheck(query: Record<string, string | undefined>) {
+    await syncBookingStatuses(this.prisma);
     const baId = query.ba_id;
     if (!baId) {
       throw new BadRequestException('ba_id is required');

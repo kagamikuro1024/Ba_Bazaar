@@ -1045,6 +1045,14 @@ function BookingDetailModal({
   const capacityChanged = Boolean(
     booking && canEditCapacity && capacityPercent !== booking.capacity_percent
   );
+  const now = new Date();
+  const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const startStr = booking
+    ? (typeof booking.start_date === 'string'
+      ? booking.start_date.slice(0, 10)
+      : new Date(booking.start_date).toISOString().slice(0, 10))
+    : '';
+  const canCancel = booking?.status === 'APPROVED' && startStr > todayStr;
   const updateCapacity = useMutation({
     mutationFn: () => {
       if (!booking) {
@@ -1202,8 +1210,7 @@ function BookingDetailModal({
             </Button>
           </div>
         ) : null}
-        {isManagerRole &&
-        (booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS') ? (
+        {isManagerRole && canCancel ? (
           <div className="flex gap-2">
             <Button
               variant="secondary"

@@ -3,6 +3,7 @@ import { BookingStatus, User } from '@prisma/client';
 import { canRunReminderJobs } from '../auth/rbac';
 import { addDays, parseDateOnly, toDateKey } from '../domain/date';
 import { PrismaService } from '../prisma/prisma.service';
+import { syncBookingStatuses } from '../bookings/bookings.utils';
 
 @Injectable()
 export class NotificationsService {
@@ -37,6 +38,7 @@ export class NotificationsService {
   }
 
   async runReminders(currentUser: User, date = toDateKey(new Date())) {
+    await syncBookingStatuses(this.prisma);
     if (!canRunReminderJobs(currentUser.role)) {
       throw new ForbiddenException('BA Manager role required');
     }

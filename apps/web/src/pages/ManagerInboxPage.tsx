@@ -1659,7 +1659,12 @@ export function RequestDetailPanel({
   const canApproveDirectly = booking.status === 'PENDING' && Boolean(booking.ba_id);
   const canAssign = canEditPendingRequest;
   const canReject = canEditPendingRequest;
-  const canCancel = booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS';
+  const now = new Date();
+  const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const startStr = typeof booking.start_date === 'string'
+    ? booking.start_date.slice(0, 10)
+    : new Date(booking.start_date).toISOString().slice(0, 10);
+  const canCancel = booking.status === 'APPROVED' && startStr > todayStr;
   const pendingChangeEntries = getPendingChangeEntries(booking);
   const hasPendingChanges = pendingChangeEntries.length > 0;
 
