@@ -68,6 +68,7 @@ export function BookingModal({
   const [form, setForm] = useState({
     ba_id: initialBaId,
     project_id: initialProjectId,
+    project_name: '',
     title: '',
     description: '',
     notes: '',
@@ -83,17 +84,21 @@ export function BookingModal({
   useEffect(() => {
     if (open) {
       const autoAssign = !initialBaId;
+      const initialProjectName = initialProjectId
+        ? projects.data?.find((project) => project.id === initialProjectId)?.name ?? ''
+        : '';
       setForm((prev) => ({
         ...prev,
         ba_id: initialBaId,
         project_id: initialProjectId,
+        project_name: initialProjectName,
         start_date: initialStartDate || format(new Date(), 'yyyy-MM-dd'),
         end_date: initialEndDate || format(new Date(), 'yyyy-MM-dd'),
         auto_assign: autoAssign
       }));
       setLocalError('');
     }
-  }, [open, initialBaId, initialProjectId, initialStartDate, initialEndDate]);
+  }, [open, initialBaId, initialProjectId, initialStartDate, initialEndDate, projects.data]);
 
   const capacityCheck = useQuery({
     queryKey: [
@@ -172,20 +177,22 @@ export function BookingModal({
                 Leave unassigned for BA Manager to assign later.
               </p>
             </Field>
-            <Field label="Project">
-              <select
-                value={form.project_id}
-                onChange={(event) => setForm({ ...form, project_id: event.target.value })}
+            <Field label="Project name">
+              <input
+                value={form.project_name}
+                onChange={(event) =>
+                  setForm({ ...form, project_id: '', project_name: event.target.value })
+                }
                 className="h-10 rounded-md border px-3"
+                placeholder="Enter project name"
+                list="booking-project-name-options"
                 required
-              >
-                <option value="">Select project</option>
+              />
+              <datalist id="booking-project-name-options">
                 {(projects.data ?? []).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
+                  <option key={project.id} value={project.name} />
                 ))}
-              </select>
+              </datalist>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start date">

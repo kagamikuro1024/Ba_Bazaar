@@ -333,7 +333,7 @@ export function TimelinePage() {
   function finishSelection(pointerId: number) {
     setActiveSelection((current) => {
       if (!current || current.pointerId !== pointerId) return current;
-      setDraft({ ...selectionToDraft(current), ba_id: '' });
+      setDraft(selectionToDraft(current));
       return null;
     });
   }
@@ -592,7 +592,7 @@ export function TimelinePage() {
                       canCreateBooking={canCreateBooking}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: '',
+                          ba_id: ba.id,
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false
@@ -617,7 +617,7 @@ export function TimelinePage() {
                       onSelectionEnd={finishSelection}
                       onEmptyClick={(date) =>
                         setDraft({
-                          ba_id: '',
+                          ba_id: ba.id,
                           start_date: format(date, 'yyyy-MM-dd'),
                           end_date: format(date, 'yyyy-MM-dd'),
                           direct: false

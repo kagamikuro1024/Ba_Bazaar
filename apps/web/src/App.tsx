@@ -53,8 +53,30 @@ export function App() {
             </ProtectedPage>
           }
         />
-        <Route path="/crm/ba" element={<ProtectedPage><LayoutShell><BADirectoryPage /></LayoutShell></ProtectedPage>} />
-        <Route path="/crm/ba/:id" element={<ProtectedPage><LayoutShell><BAProfilePage /></LayoutShell></ProtectedPage>} />
+        <Route
+          path="/crm/ba"
+          element={
+            <ProtectedPage>
+              <LayoutShell>
+                <RequireRole roles={['BA_MANAGER', 'BA', 'ADMIN']}>
+                  <BADirectoryPage />
+                </RequireRole>
+              </LayoutShell>
+            </ProtectedPage>
+          }
+        />
+        <Route
+          path="/crm/ba/:id"
+          element={
+            <ProtectedPage>
+              <LayoutShell>
+                <RequireRole roles={['BA_MANAGER', 'BA', 'ADMIN']}>
+                  <BAProfilePage />
+                </RequireRole>
+              </LayoutShell>
+            </ProtectedPage>
+          }
+        />
         <Route
           path="/reports"
           element={

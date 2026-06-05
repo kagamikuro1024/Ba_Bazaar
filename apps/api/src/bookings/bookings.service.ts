@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 type BookingInput = {
   ba_id?: string;
   project_id?: string;
+  project_name?: string;
   title?: string;
   description?: string;
   notes?: string;
@@ -433,9 +434,13 @@ export class BookingsService {
       throw new BadRequestException('end_date must be greater than or equal to start_date');
     }
 
+    const projectId = input.project_id
+      ? requireString(input.project_id, 'project_id')
+      : await this.findOrCreateProjectId(requireString(input.project_name, 'project_name'));
+
     return {
       ba_id: baId,
-      project_id: requireString(input.project_id, 'project_id'),
+      project_id: projectId,
       title: requireString(input.title, 'title'),
       description: requireString(input.description, 'description'),
       notes: optionalString(input.notes),
@@ -444,6 +449,26 @@ export class BookingsService {
       capacity_percent: requireCapacityPercent(input.capacity_percent),
       priority: input.priority ?? BookingPriority.MEDIUM
     };
+  }
+
+  private async findOrCreateProjectId(projectName: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { name: { equals: projectName, mode: 'insensitive' } }
+    });
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const created = await this.prisma.project.create({
+      data: {
+        name: projectName,
+        color: '#2563EB',
+        description: 'Created from booking request'
+      }
+    });
+
+    return created.id;
   }
 
   private async getSubmitWarning(

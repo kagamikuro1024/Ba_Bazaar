@@ -10,6 +10,7 @@ import {
   UsersRound
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
 import {
   apiFetch,
   getManagerRequestMessage,
@@ -40,17 +41,58 @@ const stateLabelMap = {
 } as const;
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isManagerDashboard = role === 'BA_MANAGER' || role === 'ADMIN';
+  const isBaDashboard = role === 'BA';
+  const dashboardCopy = isManagerDashboard
+    ? {
+        title: 'Manager Dashboard',
+        subtitle: 'Requests waiting for action',
+        loading: 'Loading manager dashboard...',
+        error: 'Could not load manager dashboard. Check API connection and retry.'
+      }
+    : isBaDashboard
+      ? {
+          title: 'BA Dashboard',
+          subtitle: 'Your assigned work and schedule status',
+          loading: 'Loading your dashboard...',
+          error: 'Could not load your dashboard. Check API connection and retry.'
+        }
+      : {
+          title: 'PM/PO Dashboard',
+          subtitle: 'Your booking requests and decisions',
+          loading: 'Loading your dashboard...',
+          error: 'Could not load your dashboard. Check API connection and retry.'
+        };
+
+  const bookingsEndpoint = isManagerDashboard
+    ? '/api/bookings'
+    : isBaDashboard
+      ? '/api/bookings/my-schedule'
+      : '/api/bookings/my-requests';
+
   const bookings = useQuery({
-    queryKey: ['manager-dashboard-bookings'],
-    queryFn: () => apiFetch<Booking[]>('/api/bookings')
+    queryKey: ['dashboard-bookings', role, user?.id, bookingsEndpoint],
+    queryFn: () => apiFetch<Booking[]>(bookingsEndpoint),
+    enabled: Boolean(user)
   });
   const summary = useQuery({
-    queryKey: ['manager-dashboard-capacity'],
-    queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
+    queryKey: ['dashboard-capacity', role],
+    queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary'),
+    enabled: isManagerDashboard
   });
 
   const dashboardData = useMemo(() => {
-    const pending = (bookings.data ?? []).filter((booking) => booking.status === 'PENDING');
+    const allBookings = bookings.data ?? [];
+    const pending = allBookings.filter((booking) => booking.status === 'PENDING');
+    const approved = allBookings.filter(
+      (booking) => booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS'
+    );
+    const completed = allBookings.filter((booking) => booking.status === 'COMPLETED');
+    const rejectedOrCancelled = allBookings.filter(
+      (booking) => booking.status === 'REJECTED' || booking.status === 'CANCELLED'
+    );
     const specific = pending.filter((booking) => getRequestType(booking) === 'SPECIFIC_BA');
     const open = pending.filter((booking) => getRequestType(booking) === 'OPEN_REQUEST');
     const urgent = pending.filter((booking) => booking.priority === 'URGENT');
@@ -63,6 +105,10 @@ export function DashboardPage() {
       (booking) => getManagerRequestState(booking) === 'NEED_VERIFICATION'
     ).length;
     const overbookCount = pending.filter((booking) => booking.ba_id && byRiskBa.has(booking.ba_id)).length;
+    const upcoming = [...allBookings]
+      .filter((booking) => booking.status !== 'CANCELLED' && booking.status !== 'REJECTED')
+      .sort((left, right) => new Date(left.start_date).getTime() - new Date(right.start_date).getTime())
+      .slice(0, 4);
     const needsActionNow = [...pending]
       .sort((left, right) => {
         const leftScore = getPriorityScore(left);
@@ -76,65 +122,119 @@ export function DashboardPage() {
       .slice(0, 4);
 
     return {
+      allBookings,
       pending,
+      approved,
+      completed,
+      rejectedOrCancelled,
       specific,
       open,
       urgent,
       verificationCount,
       overbookCount,
+      upcoming,
       needsActionNow
     };
   }, [bookings.data, summary.data]);
 
-  const cards = [
-    {
-      title: 'Pending Requests',
-      count: dashboardData.pending.length,
-      description: 'Need your review',
-      icon: ClipboardList,
-      to: '/manager/inbox?status=PENDING'
-    },
-    {
-      title: 'Specific BA Requests',
-      count: dashboardData.specific.length,
-      description: 'Pre-assigned to a BA',
-      icon: UserRound,
-      to: '/manager/inbox?type=SPECIFIC_BA'
-    },
-    {
-      title: 'Open Requests',
-      count: dashboardData.open.length,
-      description: 'BA not assigned yet',
-      icon: UsersRound,
-      to: '/manager/inbox?type=OPEN_REQUEST'
-    },
-    {
-      title: 'Urgent',
-      count: dashboardData.urgent.length,
-      description: 'High priority',
-      icon: AlertCircle,
-      to: '/manager/inbox?priority=URGENT'
-    }
-  ];
+  const cards = isManagerDashboard
+    ? [
+        {
+          title: 'Pending Requests',
+          count: dashboardData.pending.length,
+          description: 'Need your review',
+          icon: ClipboardList,
+          to: '/manager/inbox?status=PENDING'
+        },
+        {
+          title: 'Specific BA Requests',
+          count: dashboardData.specific.length,
+          description: 'Pre-assigned to a BA',
+          icon: UserRound,
+          to: '/manager/inbox?type=SPECIFIC_BA'
+        },
+        {
+          title: 'Open Requests',
+          count: dashboardData.open.length,
+          description: 'BA not assigned yet',
+          icon: UsersRound,
+          to: '/manager/inbox?type=OPEN_REQUEST'
+        },
+        {
+          title: 'Urgent',
+          count: dashboardData.urgent.length,
+          description: 'High priority',
+          icon: AlertCircle,
+          to: '/manager/inbox?priority=URGENT'
+        }
+      ]
+    : isBaDashboard
+      ? [
+          {
+            title: 'Active Assignments',
+            count: dashboardData.approved.length,
+            description: 'Approved or in progress',
+            icon: CalendarRange,
+            to: '/my-schedule'
+          },
+          {
+            title: 'Upcoming Work',
+            count: dashboardData.upcoming.length,
+            description: 'Visible on your schedule',
+            icon: ClipboardList,
+            to: '/my-schedule'
+          },
+          {
+            title: 'Completed',
+            count: dashboardData.completed.length,
+            description: 'Finished assignments',
+            icon: Sparkles,
+            to: '/my-schedule'
+          }
+        ]
+      : [
+          {
+            title: 'Pending Requests',
+            count: dashboardData.pending.length,
+            description: 'Awaiting manager review',
+            icon: ClipboardList,
+            to: '/my-requests?status=PENDING'
+          },
+          {
+            title: 'Approved Requests',
+            count: dashboardData.approved.length,
+            description: 'Ready or in progress',
+            icon: CalendarRange,
+            to: '/my-requests?status=APPROVED'
+          },
+          {
+            title: 'Rejected / Cancelled',
+            count: dashboardData.rejectedOrCancelled.length,
+            description: 'Closed without approval',
+            icon: AlertCircle,
+            to: '/my-requests'
+          }
+        ];
+
+  const isLoading = bookings.isLoading || (isManagerDashboard && summary.isLoading);
+  const hasError = bookings.error || (isManagerDashboard && summary.error);
 
   return (
     <div className="grid gap-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-950">Manager Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">Requests waiting for action</p>
+        <h1 className="text-2xl font-bold text-slate-950">{dashboardCopy.title}</h1>
+        <p className="mt-1 text-sm text-slate-500">{dashboardCopy.subtitle}</p>
       </div>
 
-      {bookings.isLoading || summary.isLoading ? (
+      {isLoading ? (
         <Card>
-          <CardContent className="p-5 text-sm text-slate-600">Loading manager dashboard...</CardContent>
+          <CardContent className="p-5 text-sm text-slate-600">{dashboardCopy.loading}</CardContent>
         </Card>
       ) : null}
 
-      {bookings.error || summary.error ? (
+      {hasError ? (
         <Card>
-          <CardContent className="p-5 text-sm text-rose-700">
-            Could not load manager dashboard. Check API connection and retry.
-          </CardContent>
+          <CardContent className="p-5 text-sm text-rose-700">{dashboardCopy.error}</CardContent>
         </Card>
       ) : null}
 
@@ -153,7 +253,9 @@ export function DashboardPage() {
                   </div>
                   <Icon
                     className={
-                      item.title === 'Urgent' ? 'h-6 w-6 text-rose-500' : 'h-6 w-6 text-blue-600'
+                      item.title === 'Urgent' || item.title === 'Rejected / Cancelled'
+                        ? 'h-6 w-6 text-rose-500'
+                        : 'h-6 w-6 text-blue-600'
                     }
                   />
                 </CardContent>
@@ -163,85 +265,139 @@ export function DashboardPage() {
         })}
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base">Needs action now</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {dashboardData.needsActionNow.map((booking) => (
-            <div
-              key={booking.id}
-              className="grid gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] md:items-center"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
-                  <RequestTypeBadge booking={booking} />
-                  <RequestStateBadge booking={booking} />
+      {isManagerDashboard ? (
+        <>
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Needs action now</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {dashboardData.needsActionNow.map((booking) => (
+                <ManagerActionRow key={booking.id} booking={booking} />
+              ))}
+
+              {dashboardData.needsActionNow.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                  No requests currently need manager action.
                 </div>
-                <p className="mt-2 text-sm font-medium text-blue-700">
-                  {getManagerRequestMessage(booking)}
-                </p>
-              </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
-              <MetaItem label="Requester" value={booking.requester.full_name} />
-              <MetaItem
-                label="Date range"
-                value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
-              />
-
-              <Link to={`/manager/inbox?requestId=${booking.id}`}>
-                <span className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
-                  Open in Manager Inbox <ArrowRight className="ml-2 h-4 w-4" />
-                </span>
-              </Link>
-            </div>
-          ))}
-
-          {dashboardData.needsActionNow.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-              No requests currently need manager action.
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <PreviewPanel
-          title="Specific BA Requests"
-          items={dashboardData.specific.slice(0, 3)}
-          emptyText="No specific BA requests."
-          to="/manager/inbox?type=SPECIFIC_BA"
-        />
-        <PreviewPanel
-          title="Open Requests"
-          items={dashboardData.open.slice(0, 3)}
-          emptyText="No open requests."
-          to="/manager/inbox?type=OPEN_REQUEST"
-        />
+          <div className="grid gap-4 xl:grid-cols-3">
+            <PreviewPanel
+              title="Specific BA Requests"
+              items={dashboardData.specific.slice(0, 3)}
+              emptyText="No specific BA requests."
+              to="/manager/inbox?type=SPECIFIC_BA"
+            />
+            <PreviewPanel
+              title="Open Requests"
+              items={dashboardData.open.slice(0, 3)}
+              emptyText="No open requests."
+              to="/manager/inbox?type=OPEN_REQUEST"
+            />
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Alerts</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <AlertRow
+                  icon={Sparkles}
+                  text={`${dashboardData.verificationCount} request${dashboardData.verificationCount === 1 ? '' : 's'} need verification`}
+                  tone="warning"
+                  to="/manager/inbox?needsVerification=true"
+                  cta="Open verification requests"
+                />
+                <AlertRow
+                  icon={AlertCircle}
+                  text={`${dashboardData.overbookCount} request${dashboardData.overbookCount === 1 ? '' : 's'} may cause overbook`}
+                  tone="danger"
+                  to="/manager/inbox?overbookRisk=true"
+                  cta="Open overbook-risk requests"
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      ) : (
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="text-base">Alerts</CardTitle>
+            <CardTitle className="text-base">
+              {isBaDashboard ? 'Your upcoming assignments' : 'Your recent requests'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <AlertRow
-              icon={Sparkles}
-              text={`${dashboardData.verificationCount} request${dashboardData.verificationCount === 1 ? '' : 's'} need verification`}
-              tone="warning"
-              to="/manager/inbox?needsVerification=true"
-              cta="Open verification requests"
-            />
-            <AlertRow
-              icon={AlertCircle}
-              text={`${dashboardData.overbookCount} request${dashboardData.overbookCount === 1 ? '' : 's'} may cause overbook`}
-              tone="danger"
-              to="/manager/inbox?overbookRisk=true"
-              cta="Open overbook-risk requests"
-            />
+            {dashboardData.upcoming.map((booking) => (
+              <UserBookingRow key={booking.id} booking={booking} role={role} />
+            ))}
+
+            {dashboardData.upcoming.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                {isBaDashboard
+                  ? 'No assignments are currently on your schedule.'
+                  : 'No booking requests found for your account.'}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
+  );
+}
+function ManagerActionRow({ booking }: { booking: Booking }) {
+  return (
+    <div className="grid gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] md:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
+          <RequestTypeBadge booking={booking} />
+          <RequestStateBadge booking={booking} />
+        </div>
+        <p className="mt-2 text-sm font-medium text-blue-700">
+          {getManagerRequestMessage(booking)}
+        </p>
+      </div>
+
+      <MetaItem label="Requester" value={booking.requester.full_name} />
+      <MetaItem
+        label="Date range"
+        value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
+      />
+
+      <Link to={`/manager/inbox?requestId=${booking.id}`}>
+        <span className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+          Open in Manager Inbox <ArrowRight className="ml-2 h-4 w-4" />
+        </span>
+      </Link>
+    </div>
+  );
+}
+
+function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) {
+  const target = role === 'BA' ? '/my-schedule' : `/my-requests?requestId=${booking.id}`;
+
+  return (
+    <Link to={target}>
+      <div className="grid gap-4 rounded-xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 md:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] md:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
+            <Badge>{booking.status.replace('_', ' ')}</Badge>
+          </div>
+          <p className="mt-2 text-sm text-slate-500">{booking.project.name}</p>
+        </div>
+
+        <MetaItem label={role === 'BA' ? 'Requester' : 'BA'} value={role === 'BA' ? booking.requester.full_name : booking.ba?.full_name ?? 'Auto assign'} />
+        <MetaItem
+          label="Date range"
+          value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
+        />
+        <span className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700">
+          View details <ArrowRight className="ml-2 h-4 w-4" />
+        </span>
+      </div>
+    </Link>
   );
 }
 
