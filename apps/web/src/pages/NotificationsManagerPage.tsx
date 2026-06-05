@@ -79,9 +79,7 @@ export function NotificationsManagerPage() {
   const selectedCapacityPercent =
     parseCapacityPercent(selectedCapacityDraft) ?? selectedBooking?.capacity_percent ?? 50;
   const selectedBa = (bas.data ?? []).find((ba) => ba.id === selectedBaId);
-  const assignChanged = selectedBaId !== (selectedBooking?.ba_id ?? '');
-  const hasAssignmentAction = assignChanged || selectedCapacityPercent !== (selectedBooking?.capacity_percent ?? 50);
-  const hasApprovalAction = (selectedBooking?.status === 'PENDING') || selectedCapacityPercent !== (selectedBooking?.capacity_percent ?? 50);
+
 
   const selectedCapacity = useQuery({
     queryKey: [
@@ -364,8 +362,14 @@ export function NotificationsManagerPage() {
               onSaveCapacity={() => updateCapacity.mutate()}
               onApprove={() => approve.mutate()}
               onReject={() => {}}
-              onAssign={() => assign.mutate()}
-              onAssignAndApprove={() => assignAndApprove.mutate()}
+              onAssign={() =>
+                runWithCapacityConfirmation('Assign BA', () => assign.mutate())
+              }
+              onAssignAndApprove={() =>
+                runWithCapacityConfirmation('Assign + Approve', () =>
+                  assignAndApprove.mutate()
+                )
+              }
               onCancel={() => cancel.mutate()}
               onSaveForLater={() => {
                 setSearchParams((current) => {
