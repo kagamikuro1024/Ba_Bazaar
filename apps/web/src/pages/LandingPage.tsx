@@ -12,7 +12,6 @@ import {
   Users
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import dashboardPreview from '@/assets/ba-dashboard-preview.png';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -89,6 +88,175 @@ const roleBenefits = [
   }
 ];
 
+const timelineRows = [
+  {
+    name: 'Nguyễn Ngọc Linh',
+    role: 'Senior BA',
+    capacity: '72%',
+    tone: 'text-amber-600',
+    bars: [
+      { label: 'Payment Flow', width: '44%', left: '4%', color: 'bg-blue-600' },
+      { label: 'CRM Revamp', width: '28%', left: '52%', color: 'border border-dashed border-amber-400 bg-amber-100 text-amber-800' }
+    ]
+  },
+  {
+    name: 'Hoàng Thanh Tâm',
+    role: 'Middle BA',
+    capacity: '40%',
+    tone: 'text-emerald-600',
+    bars: [
+      { label: 'Mobile App', width: '34%', left: '18%', color: 'bg-emerald-600' }
+    ]
+  },
+  {
+    name: 'Lê Đăng Khoa',
+    role: 'Middle BA',
+    capacity: '0%',
+    tone: 'text-emerald-600',
+    bars: [
+      { label: 'Available', width: '36%', left: '58%', color: 'border border-dashed border-slate-300 bg-slate-50 text-slate-500' }
+    ]
+  }
+];
+
+function ProductPreview() {
+  return (
+    <div
+      className="relative min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-2xl shadow-slate-900/10"
+      aria-label="Bản xem trước giao diện dashboard và timeline BA Bazaar"
+    >
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-blue-700">Manager Dashboard</p>
+            <p className="truncate text-sm font-semibold text-slate-950">
+              Yêu cầu cần xử lý hôm nay
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+              3 Pending
+            </span>
+            <span className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+              1 Risk
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-4 xl:grid-cols-[0.88fr_1.12fr]">
+          <div className="grid gap-3">
+            {[
+              {
+                title: 'Payment Refund Flow',
+                meta: 'Requested BA: Bùi Phương Thảo',
+                badge: 'Pending',
+                tone: 'border-blue-300 bg-blue-50'
+              },
+              {
+                title: 'CRM Revamp',
+                meta: 'BA not assigned yet',
+                badge: 'Open request',
+                tone: 'border-slate-200 bg-white'
+              },
+              {
+                title: 'Mobile Onboarding',
+                meta: 'Needs manager verification',
+                badge: 'Urgent',
+                tone: 'border-rose-200 bg-rose-50'
+              }
+            ].map((item) => (
+              <div key={item.title} className={`rounded-lg border p-3 ${item.tone}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-950">{item.title}</p>
+                    <p className="mt-1 text-xs text-slate-600">{item.meta}</p>
+                  </div>
+                  <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                    {item.badge}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-500">Resource timeline</p>
+                <p className="text-sm font-semibold text-slate-950">Tuần 01/06 - 07/06</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-5 rounded bg-blue-600" />
+                  Approved
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-5 rounded border border-dashed border-amber-400 bg-amber-100" />
+                  Pending
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[148px_repeat(7,minmax(34px,1fr))] text-xs">
+              <div className="border-b border-r border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-500">
+                BA
+              </div>
+              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => (
+                <div
+                  key={day}
+                  className="border-b border-r border-slate-200 bg-slate-50 px-1 py-2 text-center font-semibold text-slate-500"
+                >
+                  {day}
+                </div>
+              ))}
+
+              {timelineRows.map((row) => (
+                <div key={row.name} className="contents">
+                  <div className="flex min-h-16 items-center justify-between gap-2 border-b border-r border-slate-200 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-950">{row.name}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{row.role}</p>
+                    </div>
+                    <span className={`shrink-0 text-xs font-bold ${row.tone}`}>
+                      {row.capacity}
+                    </span>
+                  </div>
+                  <div className="relative col-span-7 min-h-16 border-b border-r border-slate-200 bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]">
+                    {row.bars.map((bar) => (
+                      <div
+                        key={bar.label}
+                        className={`absolute top-4 h-7 truncate rounded-md px-2 py-1 text-xs font-semibold text-white shadow-sm ${bar.color}`}
+                        style={{ left: bar.left, width: bar.width }}
+                      >
+                        {bar.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium text-slate-500">Average capacity</p>
+            <p className="mt-1 text-2xl font-bold text-blue-700">72%</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">BA available</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-600">5</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Overbook risk</p>
+            <p className="mt-1 text-2xl font-bold text-rose-600">1</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -123,15 +291,8 @@ export function LandingPage() {
       </header>
 
       <main>
-        <section className="relative min-h-[82svh] overflow-hidden border-b border-slate-200 bg-white pt-24">
-          <img
-            src={dashboardPreview}
-            alt="Ảnh chụp màn hình BA Bazaar với dashboard quản lý yêu cầu đặt lịch và capacity"
-            className="absolute inset-x-0 bottom-0 h-full w-full object-cover object-[62%_50%]"
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#ffffff_0%,rgba(255,255,255,0.96)_28%,rgba(255,255,255,0.72)_55%,rgba(255,255,255,0.18)_100%)]" />
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white to-white/0" />
-          <div className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-16 pt-14 sm:px-6 lg:px-8 lg:pt-20">
+        <section className="relative overflow-hidden border-b border-slate-200 bg-white pt-24">
+          <div className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-12 pt-12 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center lg:px-8 lg:pb-14 lg:pt-16">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
                 <Sparkles className="h-4 w-4" />
@@ -156,7 +317,9 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="hidden max-w-3xl gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+            <ProductPreview />
+
+            <div className="hidden max-w-3xl gap-3 sm:grid sm:grid-cols-2 lg:col-span-2 lg:grid-cols-4">
               {stats.map((item) => (
                 <div
                   key={item.label}

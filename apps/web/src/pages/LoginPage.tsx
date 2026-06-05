@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { roleHomePath } from '@/auth/routes';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,13 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto grid max-w-md gap-6">
+        <Link
+          to="/"
+          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-blue-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Về trang giới thiệu
+        </Link>
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">BA Bazaar</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950">Sign in</h1>
