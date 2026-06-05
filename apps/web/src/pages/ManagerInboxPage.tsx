@@ -739,7 +739,7 @@ export function ManagerInboxPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,180px))_minmax(260px,320px)_auto] xl:items-center">
+          <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,180px))_repeat(2,minmax(0,156px))_auto] xl:items-center">
             <select
               value={filters.priority}
               onChange={(event) =>
@@ -779,20 +779,18 @@ export function ManagerInboxPage() {
               <option value="SPECIFIC_BA">Specific BA</option>
               <option value="OPEN_REQUEST">Open Request</option>
             </select>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(event) => setFilter({ startDate: event.target.value })}
-                className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
-              />
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(event) => setFilter({ endDate: event.target.value })}
-                className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
-              />
-            </div>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(event) => setFilter({ startDate: event.target.value })}
+              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            />
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(event) => setFilter({ endDate: event.target.value })}
+              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            />
             <button
               type="button"
               onClick={() =>
@@ -808,7 +806,7 @@ export function ManagerInboxPage() {
                   overbookRisk: false
                 })
               }
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800"
+              className="inline-flex h-10 w-fit items-center justify-center gap-2 justify-self-start rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800"
             >
               <SlidersHorizontal className="h-4 w-4" />
               Reset filters
