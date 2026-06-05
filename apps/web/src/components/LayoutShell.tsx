@@ -736,7 +736,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-slate-200/90 bg-white/95 p-1.5 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="grid grid-cols-4 gap-1">
+        <div className="flex items-stretch justify-around gap-2">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
@@ -744,7 +744,12 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 key={item.to}
                 to={item.to}
                 end
-                className="min-w-0 flex-1"
+                className={({ isActive }) =>
+                  [
+                    'min-w-0 transition-[flex] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    isActive ? 'flex-[1.9]' : 'flex-1'
+                  ].join(' ')
+                }
                 onClick={(event) => {
                   if (inboxDirty.dirty && item.to !== location.pathname) {
                     event.preventDefault();
@@ -755,23 +760,35 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 {({ isActive }) => (
                   <div
                     className={[
-                      'relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5 py-2 text-center transition-colors',
+                      'relative flex h-full min-w-0 items-center justify-center overflow-hidden rounded-2xl px-3 py-2 text-left transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
                       isActive
-                        ? 'bg-blue-50 text-blue-700'
+                        ? 'bg-blue-50 text-blue-600'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
                     ].join(' ')}
                   >
-                    <div className="relative flex h-6 w-10 items-center justify-center">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                      {item.to === '/notifications' && unreadCount > 0 ? (
-                        <span className="absolute right-1.5 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
-                          {unreadCount}
-                        </span>
-                      ) : null}
+                    <div
+                      className={[
+                        'flex min-w-0 items-center overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                        isActive ? 'w-[124px]' : 'w-8'
+                      ].join(' ')}
+                    >
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                        {item.to === '/notifications' && unreadCount > 0 ? (
+                          <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                            {unreadCount}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span
+                        className={[
+                          'overflow-hidden whitespace-nowrap text-sm font-semibold leading-none transition-[max-width,margin,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                          isActive ? 'ml-2 max-w-[88px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+                        ].join(' ')}
+                      >
+                        {item.label}
+                      </span>
                     </div>
-                    <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-                      {item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')}
-                    </span>
                   </div>
                 )}
               </NavLink>
