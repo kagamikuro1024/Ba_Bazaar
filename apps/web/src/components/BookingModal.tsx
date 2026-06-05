@@ -185,14 +185,8 @@ export function BookingModal({
                 }
                 className="h-10 rounded-md border px-3"
                 placeholder="Enter project name"
-                list="booking-project-name-options"
                 required
               />
-              <datalist id="booking-project-name-options">
-                {(projects.data ?? []).map((project) => (
-                  <option key={project.id} value={project.name} />
-                ))}
-              </datalist>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start date">
