@@ -10,6 +10,18 @@ async function bootstrap() {
   const isProduction = nodeEnv === 'production';
 
   const webPort = configService.get<string>('WEB_PORT') ?? '5173';
+  const devWebPorts = Array.from(
+    new Set([
+      webPort,
+      '5173',
+      '5174',
+      '5175',
+      '5176',
+      '5177',
+      '5178',
+      '5179'
+    ])
+  ).join('|');
   const corsOriginEnv = configService.get<string>('CORS_ORIGIN');
   const configuredOrigins = corsOriginEnv
     ? corsOriginEnv
@@ -20,7 +32,7 @@ async function bootstrap() {
 
   function isAllowedLanOrigin(origin: string) {
     return new RegExp(
-      `^http://(?:localhost|127\\.0\\.0\\.1|10(?:\\.\\d{1,3}){3}|172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}|192\\.168(?:\\.\\d{1,3}){2}):${webPort}$`
+      `^http://(?:localhost|127\\.0\\.0\\.1|10(?:\\.\\d{1,3}){3}|172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2}|192\\.168(?:\\.\\d{1,3}){2}):(?:${devWebPorts})$`
     ).test(origin);
   }
 

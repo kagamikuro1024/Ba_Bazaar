@@ -221,11 +221,6 @@ export function DashboardPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">{dashboardCopy.title}</h1>
-        <p className="mt-1 text-sm text-slate-500">{dashboardCopy.subtitle}</p>
-      </div>
-
       {isLoading ? (
         <Card>
           <CardContent className="p-5 text-sm text-slate-600">{dashboardCopy.loading}</CardContent>
@@ -347,7 +342,7 @@ export function DashboardPage() {
 }
 function ManagerActionRow({ booking }: { booking: Booking }) {
   return (
-    <div className="grid gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] md:items-center">
+    <div className="grid gap-4 rounded-xl border border-slate-200 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
@@ -365,8 +360,8 @@ function ManagerActionRow({ booking }: { booking: Booking }) {
         value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
       />
 
-      <Link to={`/manager/inbox?requestId=${booking.id}`}>
-        <span className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+      <Link to={`/manager/inbox?requestId=${booking.id}`} className="min-w-0 xl:justify-self-end">
+        <span className="inline-flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 sm:w-auto">
           Open in Manager Inbox <ArrowRight className="ml-2 h-4 w-4" />
         </span>
       </Link>
@@ -379,7 +374,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
 
   return (
     <Link to={target}>
-      <div className="grid gap-4 rounded-xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 md:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] md:items-center">
+      <div className="grid gap-4 rounded-xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
@@ -393,7 +388,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
           label="Date range"
           value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
         />
-        <span className="inline-flex h-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700">
+        <span className="inline-flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 sm:w-auto xl:justify-self-end">
           View details <ArrowRight className="ml-2 h-4 w-4" />
         </span>
       </div>

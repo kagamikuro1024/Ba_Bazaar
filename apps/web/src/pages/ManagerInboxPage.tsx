@@ -915,13 +915,6 @@ export function ManagerInboxPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">Manager Inbox</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Review, prioritize, and resolve booking requests
-        </p>
-      </div>
-
       {successMessage ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {successMessage}

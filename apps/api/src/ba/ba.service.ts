@@ -206,10 +206,6 @@ export class BAService {
     this.ensureManager(currentUser);
     const existing = await this.getExisting(id);
 
-    if (existing.status === BAStatus.RESIGNED) {
-      throw new BadRequestException('Resigned BA profile is read-only in Manager UI');
-    }
-
     if (input.email && input.email.toLowerCase() !== existing.email.toLowerCase()) {
       throw new BadRequestException('BA email is immutable');
     }
@@ -238,10 +234,6 @@ export class BAService {
   ) {
     this.ensureManager(currentUser);
     const existing = await this.getExisting(id);
-
-    if (existing.status === BAStatus.RESIGNED && input.status !== BAStatus.RESIGNED) {
-      throw new BadRequestException('Manager UI cannot restore a resigned BA');
-    }
 
     const status = input.status ?? BAStatus.ACTIVE;
     const updated = await this.prisma.bAProfile.update({

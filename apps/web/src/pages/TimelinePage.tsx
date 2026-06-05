@@ -283,7 +283,21 @@ export function TimelinePage() {
       }>('/api/capacity/summary')
   });
 
-  const visibleBas = (bas.data ?? []).filter((ba) => !baFilter || ba.id === baFilter);
+  const timelineBas = useMemo(
+    () => (bas.data ?? []).filter((ba) => ba.status === 'ACTIVE' || ba.status === 'ON_LEAVE'),
+    [bas.data]
+  );
+  const visibleBas = useMemo(
+    () => timelineBas.filter((ba) => !baFilter || ba.id === baFilter),
+    [baFilter, timelineBas]
+  );
+
+  useEffect(() => {
+    if (baFilter && !timelineBas.some((ba) => ba.id === baFilter)) {
+      setBaFilter('');
+    }
+  }, [baFilter, timelineBas]);
+
   const visibleBookings = (bookings.data ?? []).filter(
     (booking) => !projectFilter || booking.project_id === projectFilter
   );
@@ -429,7 +443,7 @@ export function TimelinePage() {
             className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-48"
           >
             <option value="">All BA</option>
-            {(bas.data ?? []).map((ba) => (
+            {timelineBas.map((ba) => (
               <option key={ba.id} value={ba.id}>
                 {ba.full_name}
               </option>

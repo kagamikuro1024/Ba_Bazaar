@@ -56,6 +56,10 @@ const pageIntros: Record<string, PageIntro> = {
     title: 'BA Directory',
     body: 'Browse BA profiles, skills, levels, and availability. Use the directory to understand who can be booked.'
   },
+  '/crm/ba/profile': {
+    title: 'BA Profile',
+    body: 'Review BA details, booking history, utilization, skills, notes, and profile status.'
+  },
   '/reports': {
     title: 'Reports',
     body: 'Analyze utilization by month, search BA rows, paginate large result sets, and export CSV reports.'
@@ -83,8 +87,35 @@ const navigation: Array<{
   ];
 
 function getIntroKey(pathname: string) {
-  if (pathname.startsWith('/crm/ba/')) return '/crm/ba';
+  if (pathname.startsWith('/crm/ba/')) return '/crm/ba/profile';
   return pageIntros[pathname] ? pathname : '';
+}
+
+function getPageHeader(introKey: string, role?: UserRole): PageIntro | undefined {
+  if (!introKey) return undefined;
+
+  if (introKey === '/dashboard') {
+    if (role === 'BA_MANAGER' || role === 'ADMIN') {
+      return {
+        title: 'Manager Dashboard',
+        body: 'Requests waiting for action'
+      };
+    }
+
+    if (role === 'BA') {
+      return {
+        title: 'BA Dashboard',
+        body: 'Your assigned work and schedule status'
+      };
+    }
+
+    return {
+      title: 'PM/PO Dashboard',
+      body: 'Your booking requests and decisions'
+    };
+  }
+
+  return pageIntros[introKey];
 }
 
 export function LayoutShell({ children }: LayoutShellProps) {
@@ -121,9 +152,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
   });
   const unreadCount = notifications.data?.filter((item) => !item.read_at).length ?? 0;
   const recentNotifications = (notifications.data ?? []).slice(0, 5);
-  const visibleNavigation = role ? navigation.filter((item) => item.roles.includes(role)) : [];
+  const visibleNavigation = useMemo(
+    () => (role ? navigation.filter((item) => item.roles.includes(role)) : []),
+    [role]
+  );
   const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
   const displayRole = role?.replace('_', ' ') ?? '';
+  const pageHeader = getPageHeader(introKey, role);
   const mobileNavigation = useMemo(() => {
     if (role === 'BA_MANAGER' || role === 'ADMIN') {
       return visibleNavigation.filter((item) => item.to !== '/reports');
@@ -367,7 +402,15 @@ export function LayoutShell({ children }: LayoutShellProps) {
           ) : null}
         </Card>
 
-        <main>{children}</main>
+        <main className="grid min-w-0 gap-5">
+          {pageHeader ? (
+            <div>
+              <h1 className="text-2xl font-bold text-slate-950">{pageHeader.title}</h1>
+              <p className="mt-1 text-sm text-slate-500">{pageHeader.body}</p>
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
 
       <nav
