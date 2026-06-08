@@ -1,0 +1,15 @@
+name: Keep Hugging Face Space Awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -fsS --max-time 20 https://kurokami-1024-ba-bazaar.hf.space/health
