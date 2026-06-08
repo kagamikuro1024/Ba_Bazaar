@@ -74,7 +74,10 @@ if [ -z "${DATABASE_URL:-}" ]; then
     sleep 1
   done
 
-  psql -h "${PGSOCKET_DIR}" -p "${PGPORT}" -d postgres \
+  DB_SUPERUSER="$(id -un)"
+
+  psql -h "${PGSOCKET_DIR}" -p "${PGPORT}" -U "${DB_SUPERUSER}" -d postgres \
+    -v ON_ERROR_STOP=1 \
     -v app_user="${PGUSER}" \
     -v app_password="${PGPASSWORD}" \
     -v app_db="${PGDATABASE}" <<'SQL'
