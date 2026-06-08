@@ -36,27 +36,25 @@ RUN apt-get update \
     tini \
   && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -u 1000 user
-
 WORKDIR /app
 
-COPY --from=build --chown=user:user /app/package.json /app/pnpm-workspace.yaml ./
-COPY --from=build --chown=user:user /app/node_modules node_modules
-COPY --from=build --chown=user:user /app/apps/api/package.json apps/api/package.json
-COPY --from=build --chown=user:user /app/apps/api/node_modules apps/api/node_modules
-COPY --from=build --chown=user:user /app/apps/api/dist apps/api/dist
-COPY --from=build --chown=user:user /app/apps/api/prisma apps/api/prisma
-COPY --from=build --chown=user:user /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
-COPY --from=build --chown=user:user /app/apps/web/dist apps/web/dist
-COPY --from=build --chown=user:user /app/packages/shared packages/shared
-COPY --chown=user:user scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
-COPY --chown=user:user scripts/hf-web-server.mjs scripts/hf-web-server.mjs
+COPY --from=build --chown=1000:0 /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=build --chown=1000:0 /app/node_modules node_modules
+COPY --from=build --chown=1000:0 /app/apps/api/package.json apps/api/package.json
+COPY --from=build --chown=1000:0 /app/apps/api/node_modules apps/api/node_modules
+COPY --from=build --chown=1000:0 /app/apps/api/dist apps/api/dist
+COPY --from=build --chown=1000:0 /app/apps/api/prisma apps/api/prisma
+COPY --from=build --chown=1000:0 /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
+COPY --from=build --chown=1000:0 /app/apps/web/dist apps/web/dist
+COPY --from=build --chown=1000:0 /app/packages/shared packages/shared
+COPY --chown=1000:0 scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
+COPY --chown=1000:0 scripts/hf-web-server.mjs scripts/hf-web-server.mjs
 
 RUN chmod +x /app/scripts/hf-entrypoint.sh \
   && mkdir -p /home/user/pgdata /home/user/postgres-socket \
-  && chown -R user:user /home/user
+  && chown -R 1000:0 /home/user /app
 
-USER user
+USER 1000
 
 EXPOSE 7860
 
