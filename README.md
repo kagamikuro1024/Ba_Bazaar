@@ -1,3 +1,10 @@
+---
+title: BA Bazaar
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # BA Bazaar
 
 BA Bazaar is an internal BA Booking and CRM system for BA Managers, PM/PO users,

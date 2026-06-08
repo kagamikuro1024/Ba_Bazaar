@@ -1,4 +1,115 @@
-# BA Bazaar - VPS Deployment (Docker Compose)
+# BA Bazaar - Deployment
+
+## Hugging Face Docker Space
+
+Use this path when you only have a Hugging Face Space instead of a normal VPS.
+The root `Dockerfile` builds the Vite frontend, builds the Nest API, starts a
+PostgreSQL process inside the same container when no external `DATABASE_URL` is
+provided, and exposes one public web server on port `7860`.
+
+Important constraints:
+
+- This is a Docker Space, not a traditional VPS.
+- Hugging Face exposes one public app port. This repo uses `7860`.
+- Runtime disk is ephemeral unless you attach persistent storage. Without
+  persistent storage, embedded PostgreSQL data can disappear after restart/sleep.
+- Do not put secrets in repo files. Add them in the Space Settings tab.
+
+### 1) Create the Space
+
+1. Create a new Hugging Face Space.
+2. Select `Docker` as the SDK.
+3. Keep the free CPU hardware if this is a demo/internal backup.
+4. Open the Space repository URL.
+
+The root `README.md` already includes the required Space metadata:
+
+```yaml
+sdk: docker
+app_port: 7860
+```
+
+### 2) Add runtime settings
+
+In Space `Settings` -> `Variables and secrets`, add at least:
+
+```text
+JWT_SECRET=<a long random string>
+```
+
+Optional variables:
+
+```text
+HF_AUTO_SEED=true
+CORS_ORIGIN=https://your-custom-domain.example
+```
+
+`HF_AUTO_SEED=true` seeds demo data only when the `users` table is empty. The
+embedded database path is `/data/postgres` when persistent storage is attached;
+otherwise it falls back to `/home/user/pgdata`.
+
+You usually do not need `CORS_ORIGIN` on the default Hugging Face domain because
+the container derives it from `SPACE_HOST`. Set it manually when using a custom
+domain.
+
+Only set `DATABASE_URL` if you have an external PostgreSQL endpoint reachable
+from Hugging Face. For a quick recovery/demo Space, leave `DATABASE_URL` empty so
+the container starts its embedded PostgreSQL.
+
+### 3) Push this repo to the Space
+
+From your local repo:
+
+```bash
+git remote add hf https://huggingface.co/spaces/<YOUR_HF_USER>/<YOUR_SPACE_NAME>
+git push hf HEAD:main
+```
+
+If the remote already exists:
+
+```bash
+git remote set-url hf https://huggingface.co/spaces/<YOUR_HF_USER>/<YOUR_SPACE_NAME>
+git push hf HEAD:main
+```
+
+Hugging Face will rebuild automatically after the push. Watch the `Logs` panel in
+the Space page.
+
+### 4) Verify
+
+Open:
+
+```text
+https://<YOUR_HF_USER>-<YOUR_SPACE_NAME>.hf.space/
+```
+
+Health check:
+
+```text
+https://<YOUR_HF_USER>-<YOUR_SPACE_NAME>.hf.space/health
+```
+
+Seeded demo accounts:
+
+```text
+manager@ba-bazaar.local / Manager@123
+admin@ba-bazaar.local   / Admin@123
+pm1@ba-bazaar.local     / Pmpo@123
+ba1@ba-bazaar.local     / Ba@123
+```
+
+### 5) Redeploy
+
+Commit your changes and push again:
+
+```bash
+git push hf HEAD:main
+```
+
+Every push rebuilds and restarts the Space. If you are using only the free
+ephemeral disk, database changes made at runtime may be lost on restart.
+
+## VPS Deployment (Docker Compose)
 
 This guide deploys BA Bazaar on a VPS using Docker Compose, with Caddy as a reverse proxy.
 
