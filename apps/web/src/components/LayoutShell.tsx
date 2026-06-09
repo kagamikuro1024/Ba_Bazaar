@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Inbox,
+  Search,
   Users,
   Plus,
   X
@@ -23,6 +24,11 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
 import { useInboxDirty } from '@/lib/unsaved-changes';
+import {
+  GlobalSearchModal,
+  globalSearchStorage,
+  type PageItem
+} from './GlobalSearchModal';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -129,6 +135,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [pendingNavPath, setPendingNavPath] = useState('');
   const [navActionPending, setNavActionPending] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => globalSearchStorage.load());
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -196,6 +204,34 @@ export function LayoutShell({ children }: LayoutShellProps) {
   }, [location.pathname, role]);
 
   useEffect(() => {
+    globalSearchStorage.save(recentSearches);
+  }, [recentSearches]);
+
+  useEffect(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      const isMetaK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (isMetaK) {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+
+      if (!searchOpen) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSearchOpen(false);
+        return;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [searchOpen]);
+
+  useEffect(() => {
     window.localStorage.setItem(
       'ba-bazaar:sidebar-collapsed',
       sidebarCollapsed ? 'true' : 'false'
@@ -259,17 +295,58 @@ export function LayoutShell({ children }: LayoutShellProps) {
     return '/notifications';
   }
 
+  const pageSearchItems = useMemo<PageItem[]>(
+    () =>
+      visibleNavigation.map((item) => ({
+        to: item.to,
+        label: item.label,
+        meta: pageIntros[item.to]?.body
+      })),
+    [visibleNavigation]
+  );
+
+  const commitRecentSearch = useCallback((term: string) => {
+    const cleaned = term.trim();
+    if (!cleaned) return;
+    setRecentSearches((current) => [
+      cleaned,
+      ...current.filter((value) => value !== cleaned)
+    ].slice(0, globalSearchStorage.limit));
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 xl:max-w-[1500px] 2xl:max-w-[1880px]">
+        <div className="mx-auto grid max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-4 py-4 sm:px-6 xl:max-w-[1500px] 2xl:max-w-[1880px]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
               BA Bazaar
             </p>
             <h1 className="text-xl font-bold text-slate-950">Booking + CRM</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="hidden w-full max-w-[520px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white lg:flex"
+              aria-label="Open global search"
+            >
+              <Search className="h-4 w-4 text-slate-400" />
+              <span className="flex-1">Search requests, BA, projects...</span>
+              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                Ctrl K
+              </span>
+            </button>
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white lg:hidden"
+              aria-label="Open global search"
+            >
+              <Search className="h-4 w-4" />
+            </button>
             <div ref={notificationRef} className="relative hidden sm:block">
               <Button
                 variant="secondary"
@@ -534,6 +611,17 @@ export function LayoutShell({ children }: LayoutShellProps) {
       {canCreateBooking && (
         <BookingModal open={bookingModalOpen} onClose={() => setBookingModalOpen(false)} />
       )}
+
+      <GlobalSearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        role={role}
+        pageItems={pageSearchItems}
+        recentSearches={recentSearches}
+        onCommitRecent={commitRecentSearch}
+        onClearRecent={() => setRecentSearches([])}
+        onTriggerCreateBooking={() => setBookingModalOpen(true)}
+      />
 
       {pendingNavPath ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">
