@@ -1,34 +1,28 @@
-FROM node:22-alpine AS build
+FROM golang:1.22-bookworm AS build
 
 WORKDIR /app
-RUN corepack enable
 
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/api/package.json apps/api/package.json
-COPY packages/shared/package.json packages/shared/package.json
-COPY pnpm-lock.yaml* ./
+COPY apps/api/go.mod apps/api/go.sum ./
+RUN go mod download
 
-RUN pnpm install --filter @ba-bazaar/api... --frozen-lockfile
+COPY apps/api/cmd ./cmd
 
-COPY tsconfig.base.json ./
-COPY apps/api apps/api
-COPY packages/shared packages/shared
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/ba-bazaar-api ./cmd/api
 
-RUN pnpm --filter @ba-bazaar/api db:generate
-RUN pnpm --filter @ba-bazaar/api build
+FROM debian:bookworm-slim AS runtime
 
-FROM node:22-alpine AS runtime
-
-WORKDIR /app
-RUN corepack enable
+ENV API_PORT=3001
 ENV NODE_ENV=production
 
-COPY --from=build /app/node_modules /app/node_modules
-COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
-COPY --from=build /app/apps/api/dist /app/apps/api/dist
-COPY --from=build /app/apps/api/prisma /app/apps/api/prisma
-COPY --from=build /app/apps/api/prisma.config.ts /app/apps/api/prisma.config.ts
-COPY --from=build /app/packages/shared /app/packages/shared
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=build /out/ba-bazaar-api /app/ba-bazaar-api
 
 EXPOSE 3001
-CMD ["sh", "-c", "cd /app/apps/api && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && exec node dist/main.js"]
+
+CMD ["/app/ba-bazaar-api"]
