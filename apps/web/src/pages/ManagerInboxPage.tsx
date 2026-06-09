@@ -1242,7 +1242,7 @@ export function ManagerInboxPage() {
               </select>
             </div>
           </div>
-          <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500 2xl:grid 2xl:grid-cols-[92px_116px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_96px] 2xl:gap-3">
+          <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500 2xl:grid 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:gap-3 2xl:items-center">
             <span>Priority</span>
             <span>Type</span>
             <span>Project</span>
@@ -1266,15 +1266,15 @@ export function ManagerInboxPage() {
                 type="button"
                 onClick={() => openDetail(booking.id)}
                 className={[
-                  'grid w-full gap-3 rounded-lg border bg-white p-3 text-left text-sm shadow-sm transition 2xl:grid-cols-[92px_116px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_96px] 2xl:items-center',
+                  'grid w-full gap-3 rounded-lg border bg-white p-3 text-left text-sm shadow-sm transition 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:items-center 2xl:text-center',
                   selected
                     ? 'border-blue-400 ring-1 ring-blue-400'
                     : 'border-slate-200 hover:border-slate-300'
                 ].join(' ')}
               >
-                <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+                <Badge tone={priorityTone(booking.priority)} className={actionCenterBadgeClassName}>{booking.priority}</Badge>
                 <RequestTypeBadge booking={booking} />
-                <div className="min-w-0">
+                <div className="min-w-0 text-left">
                   <p className="truncate font-semibold text-slate-950">
                     {booking.project.name}
                   </p>
@@ -1306,7 +1306,7 @@ export function ManagerInboxPage() {
                   {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
                 </span>
                 <RequestStateBadge booking={booking} />
-                <span className="inline-flex items-center gap-1 font-semibold text-blue-700 2xl:justify-end">
+                <span className="inline-flex items-center justify-center gap-1 font-semibold text-blue-700">
                   {actionLabel} <ChevronRight className="h-4 w-4" />
                 </span>
               </button>
@@ -2362,12 +2362,12 @@ function DetailStat({
   const priorityValueClass =
     tone === 'priority'
       ? value === 'URGENT'
-        ? 'inline-flex rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300'
+        ? 'inline-flex min-w-[116px] justify-center rounded-md bg-rose-100 px-2 py-1 text-center text-rose-800 ring-1 ring-rose-300'
         : value === 'HIGH'
-          ? 'inline-flex rounded-md bg-amber-100 px-2 py-1 text-amber-800 ring-1 ring-amber-300'
+          ? 'inline-flex min-w-[116px] justify-center rounded-md bg-amber-100 px-2 py-1 text-center text-amber-800 ring-1 ring-amber-300'
           : value === 'MEDIUM'
-            ? 'inline-flex rounded-md bg-blue-50 px-2 py-1 text-blue-700 ring-1 ring-blue-200'
-            : 'inline-flex rounded-md bg-gray-100 px-2 py-1 text-gray-700 ring-1 ring-gray-200'
+            ? 'inline-flex min-w-[116px] justify-center rounded-md bg-blue-50 px-2 py-1 text-center text-blue-700 ring-1 ring-blue-200'
+            : 'inline-flex min-w-[116px] justify-center rounded-md bg-gray-100 px-2 py-1 text-center text-gray-700 ring-1 ring-gray-200'
       : style.value;
 
   return (
@@ -2382,9 +2382,14 @@ function DetailStat({
   );
 }
 
+const actionCenterBadgeClassName = 'inline-flex w-full min-w-[128px] justify-center text-center';
+
 function RequestTypeBadge({ booking }: { booking: Booking }) {
   return (
-    <Badge tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}>
+    <Badge
+      tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}
+      className={actionCenterBadgeClassName}
+    >
       {getRequestType(booking) === 'SPECIFIC_BA' ? 'Specific BA' : 'Open Request'}
     </Badge>
   );
@@ -2403,7 +2408,11 @@ function RequestStateBadge({ booking }: { booking: Booking }) {
             ? 'danger'
             : 'neutral';
 
-  return <Badge tone={tone}>{stateLabelMap[state]}</Badge>;
+  return (
+    <Badge tone={tone} className={actionCenterBadgeClassName}>
+      {stateLabelMap[state]}
+    </Badge>
+  );
 }
 
 function getRequestRiskFlags(booking: Booking, riskCapacity: number) {
