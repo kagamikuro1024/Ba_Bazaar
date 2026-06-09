@@ -144,9 +144,16 @@ function BAAvailabilityCard({
   const capacityPercent = ba.risk_capacity ?? ba.utilization_percent ?? 0;
   const capacityLabel = ba.capacity_label ?? classifyCapacityLabel(capacityPercent);
   const projects = ba.current_projects ?? [];
+  const visibleTags = (ba.skill_tags ?? []).slice(0, 5).map((item) => {
+  	const tag = 'tag' in item ? item.tag : item;
+  	return {
+  		id: tag?.id ?? ('id' in item ? item.id : Math.random().toString(36)),
+  		name: tag?.name ?? 'Unknown tag'
+  	};
+  });
 
   return (
-    <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
+<Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="grid gap-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <BAIdentity ba={ba} />
@@ -214,8 +221,8 @@ function BAAvailabilityCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {ba.skill_tags.slice(0, 5).map((item) => (
-            <Badge key={item.tag.id} tone="info">{item.tag.name}</Badge>
+          {visibleTags.map((tag) => (
+            <Badge key={tag.id} tone="info">{tag.name}</Badge>
           ))}
         </div>
 

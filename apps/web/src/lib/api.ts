@@ -47,7 +47,7 @@ export type BAProfile = {
   avatar_url?: string | null;
   status: BAStatus;
   status_reason?: string | null;
-  skill_tags: { id: string; tag: SkillTag }[];
+  skill_tags: Array<{ id: string; tag: SkillTag } | SkillTag>;
   bookings?: Booking[];
   approved_capacity?: number;
   pending_capacity?: number;
@@ -332,6 +332,86 @@ export function getManagerRequestMessage(booking: Booking) {
   return 'Ready for manager review';
 }
 
+function normalizeSkillTagEntry(entry: any) {
+  if (!entry || typeof entry !== 'object') {
+    return entry;
+  }
+
+  if ('tag' in entry && entry.tag) {
+    return entry;
+  }
+
+  if ('name' in entry && 'group' in entry) {
+    return {
+      id: entry.id,
+      tag: {
+        id: entry.id,
+        name: entry.name,
+        group: entry.group,
+        status: entry.status
+      }
+    };
+  }
+
+  return entry;
+}
+
+function normalizeBAProfile(ba: any) {
+  if (!ba || typeof ba !== 'object') {
+    return ba;
+  }
+
+  const normalized = { ...ba };
+  if (Array.isArray(normalized.skill_tags)) {
+    normalized.skill_tags = normalized.skill_tags.map(normalizeSkillTagEntry);
+  }
+  return normalized;
+}
+
+function normalizeBooking(booking: any) {
+  if (!booking || typeof booking !== 'object') {
+    return booking;
+  }
+
+  const normalized = { ...booking };
+  if (normalized.ba && typeof normalized.ba === 'object') {
+    normalized.ba = normalizeBAProfile(normalized.ba);
+  }
+  if (normalized.project == null && normalized.project_name) {
+    normalized.project = {
+      id: normalized.project_id,
+      name: normalized.project_name,
+      color: normalized.color ?? '#2563EB',
+      description: normalized.description ?? null
+    };
+  }
+  return normalized;
+}
+
+function normalizeApiData(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(normalizeApiData);
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  if ('skill_tags' in value || 'current_projects' in value) {
+    return normalizeBAProfile(value);
+  }
+
+  if ('project_id' in value && 'requester_id' in value && 'status' in value) {
+    return normalizeBooking(value);
+  }
+
+  const normalized: Record<string, any> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    normalized[key] = normalizeApiData(nested);
+  }
+  return normalized;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -354,7 +434,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       }
 
       const retryText = await retryResponse.text();
-      return (retryText ? JSON.parse(retryText) : null) as T;
+      return normalizeApiData(retryText ? JSON.parse(retryText) : null) as T;
     }
   }
 
@@ -363,7 +443,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   const text = await response.text();
-  return (text ? JSON.parse(text) : null) as T;
+  return normalizeApiData(text ? JSON.parse(text) : null) as T;
 }
 
 export async function downloadCsv(path: string) {
