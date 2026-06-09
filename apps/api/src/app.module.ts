@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AnalyticsController } from './analytics/analytics.controller';
 import { HealthController } from './health.controller';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -10,6 +11,7 @@ import { BookingsController } from './bookings/bookings.controller';
 import { BookingsService } from './bookings/bookings.service';
 import { CapacityController } from './capacity/capacity.controller';
 import { CapacityService } from './capacity/capacity.service';
+import { DashboardController } from './dashboard/dashboard.controller';
 import { NotificationsController } from './notifications/notifications.controller';
 import { NotificationsService } from './notifications/notifications.service';
 import { PrismaService } from './prisma/prisma.service';
@@ -31,7 +33,9 @@ import { ReportsService } from './reports/reports.service';
     AuthController,
     BAController,
     BookingsController,
+    AnalyticsController,
     CapacityController,
+    DashboardController,
     ProjectsController,
     ReportsController,
     NotificationsController

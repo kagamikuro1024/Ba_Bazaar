@@ -70,9 +70,17 @@ export class BAController {
   async utilization(
     @Req() request: Request,
     @Param('id') id: string,
-    @Query('month') month?: string
+    @Query('month') month?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string
   ) {
-    return this.baService.utilization(await this.authService.getCurrentUser(request), id, month);
+    return this.baService.utilization(
+      await this.authService.getCurrentUser(request),
+      id,
+      month,
+      from,
+      to
+    );
   }
 
   @Get('tags')

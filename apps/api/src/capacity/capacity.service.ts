@@ -5,8 +5,13 @@ import {
   Injectable
 } from '@nestjs/common';
 import { BAStatus, User, UserRole } from '@prisma/client';
-import { getRangeCapacity } from '../domain/capacity';
-import { parseDateOnly, toDateKey } from '../domain/date';
+import {
+  calculateBookedWorkingDays,
+  calculateUtilizationPercent,
+  classifyCapacity,
+  getRangeCapacity
+} from '../domain/capacity';
+import { parseDateOnly, toDateKey, workingDaysInRange } from '../domain/date';
 import { requireCapacityPercent } from '../common/parse';
 import { PrismaService } from '../prisma/prisma.service';
 import { syncBookingStatuses } from '../bookings/bookings.utils';
@@ -33,6 +38,11 @@ export class CapacityService {
 
     const items = bas.map((ba) => {
       const capacity = getRangeCapacity(ba.bookings, startDate, endDate);
+      const availableManDays =
+        ba.status === BAStatus.ACTIVE ? workingDaysInRange(startDate, endDate).length : 0;
+      const bookedManDays = calculateBookedWorkingDays(ba.bookings, startDate, endDate);
+      const utilizationPercent = calculateUtilizationPercent(bookedManDays, availableManDays);
+
       return {
         ba_id: ba.id,
         full_name: ba.full_name,
@@ -40,7 +50,11 @@ export class CapacityService {
         approved_capacity: capacity.max_approved_capacity,
         pending_capacity: capacity.max_pending_capacity,
         risk_capacity: capacity.max_risk_capacity,
-        has_overbook_risk: capacity.has_overbook_risk
+        has_overbook_risk: capacity.has_overbook_risk,
+        booked_man_days: Number(bookedManDays.toFixed(2)),
+        available_man_days: availableManDays,
+        utilization_percent: utilizationPercent,
+        capacity_label: classifyCapacity(capacity.max_risk_capacity)
       };
     });
     const average = items.length

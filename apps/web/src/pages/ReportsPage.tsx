@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Search, X } from 'lucide-react';
-import { apiFetch, downloadCsv } from '@/lib/api';
+import { apiFetch, downloadCsv, type ManagerDashboardSummary } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
@@ -34,7 +34,15 @@ export function ReportsPage() {
     queryKey: ['reports', month],
     queryFn: () => apiFetch<Report>(`/api/reports/utilization?month=${month}`)
   });
-  const rows = report.data?.rows ?? [];
+  const monthRange = useMemo(() => getMonthDateRange(month), [month]);
+  const managerSummary = useQuery({
+    queryKey: ['reports-manager-summary', monthRange.from, monthRange.to],
+    queryFn: () =>
+      apiFetch<ManagerDashboardSummary>(
+        `/api/dashboard/manager-summary?from=${monthRange.from}&to=${monthRange.to}`
+      )
+  });
+  const rows = useMemo(() => report.data?.rows ?? [], [report.data?.rows]);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return rows;
@@ -87,13 +95,13 @@ export function ReportsPage() {
           </Button>
         </div>
       </div>
-      {report.isLoading ? (
+      {report.isLoading || managerSummary.isLoading ? (
         <LoadingScreen message="Loading report" />
       ) : null}
-      {report.error ? (
+      {report.error || managerSummary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>
       ) : null}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardContent className="p-4 sm:p-5">
             <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Active BA</p>
@@ -102,8 +110,8 @@ export function ReportsPage() {
         </Card>
         <Card>
           <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Bookings</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{report.data?.total_booking_count ?? 0}</p>
+            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Man-days</p>
+            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.total_man_days ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
@@ -114,11 +122,63 @@ export function ReportsPage() {
         </Card>
         <Card>
           <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Next month</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{report.data?.next_month_booking_count ?? 0}</p>
+            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Bench rate</p>
+            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_rate_percent ?? 0}%</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 sm:p-5">
+            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Bench BA</p>
+            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_count ?? 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 sm:p-5">
+            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Overbooked</p>
+            <p className="mt-2 text-3xl font-bold text-rose-700 sm:text-4xl">{managerSummary.data?.team.overbooked_count ?? 0}</p>
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardContent className="grid gap-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-base font-semibold text-slate-950">Project effort distribution</p>
+              <p className="mt-1 text-sm text-slate-500">Approved/in-progress/completed effort by man-day.</p>
+            </div>
+            <span className="text-sm font-semibold text-slate-600">
+              {managerSummary.data?.project_effort.length ?? 0} projects
+            </span>
+          </div>
+          <div className="grid gap-3">
+            {(managerSummary.data?.project_effort ?? []).slice(0, 8).map((project) => (
+              <div key={project.project_id} className="grid gap-2">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: project.color }}
+                    />
+                    <span className="truncate font-medium text-slate-800">{project.project_name}</span>
+                  </div>
+                  <span className="shrink-0 text-slate-600">
+                    {project.man_days} md · {project.allocation_percent}%
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{ width: `${Math.min(100, project.allocation_percent)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            {managerSummary.data?.project_effort.length === 0 ? (
+              <p className="text-sm text-slate-500">No project effort in this month.</p>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
       {report.data && report.data.total_booking_count === 0 ? (
         <Card>
           <CardContent className="p-6 text-center sm:p-10">
@@ -258,4 +318,13 @@ export function ReportsPage() {
       )}
     </div>
   );
+}
+
+function getMonthDateRange(month: string) {
+  const [year, monthIndex] = month.split('-').map(Number);
+  const from = `${month}-01`;
+  const endDate = new Date(Date.UTC(year, monthIndex, 0));
+  const to = endDate.toISOString().slice(0, 10);
+
+  return { from, to };
 }

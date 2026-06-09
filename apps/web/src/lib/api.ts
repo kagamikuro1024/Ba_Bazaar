@@ -11,6 +11,13 @@ export type BookingStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 export type BookingPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type CapacityClassification =
+  | 'BENCH'
+  | 'LOW'
+  | 'AVAILABLE'
+  | 'HIGH'
+  | 'FULL'
+  | 'OVERBOOKED';
 export type RequestType = 'SPECIFIC_BA' | 'OPEN_REQUEST';
 export type ManagerRequestState =
   | 'PENDING'
@@ -42,6 +49,20 @@ export type BAProfile = {
   status_reason?: string | null;
   skill_tags: { id: string; tag: SkillTag }[];
   bookings?: Booking[];
+  approved_capacity?: number;
+  pending_capacity?: number;
+  risk_capacity?: number;
+  booked_man_days?: number;
+  available_man_days?: number;
+  utilization_percent?: number;
+  capacity_label?: CapacityClassification;
+  current_projects?: Array<{
+    project_id: string;
+    project_name: string;
+    color: string;
+    capacity_percent: number;
+    man_days?: number;
+  }>;
 };
 
 export type Project = {
@@ -94,6 +115,65 @@ export type NotificationItem = {
   related_entity_id?: string | null;
   read_at?: string | null;
   created_at: string;
+};
+
+export type ManagerDashboardSummary = {
+  timeframe: {
+    from: string;
+    to: string;
+  };
+  team: {
+    total_ba: number;
+    team_utilization_percent: number;
+    bench_count: number;
+    bench_rate_percent: number;
+    overbooked_count: number;
+    total_man_days: number;
+    total_available_man_days: number;
+  };
+  actions: {
+    pending_requests: number;
+    unassigned_requests: number;
+    urgent_requests: number;
+    overbooked_ba: number;
+    bench_ba: number;
+  };
+  capacity_distribution: {
+    bench: number;
+    low: number;
+    available: number;
+    high: number;
+    full: number;
+    overbooked: number;
+  };
+  ba_utilization: Array<{
+    ba_id: string;
+    ba_name: string;
+    level: BALevel;
+    booked_man_days: number;
+    available_man_days: number;
+    utilization_percent: number;
+    approved_capacity: number;
+    pending_capacity: number;
+    risk_capacity: number;
+    capacity_label: CapacityClassification;
+    current_projects: Array<{
+      project_id: string;
+      project_name: string;
+      color: string;
+      capacity_percent: number;
+      man_days: number;
+    }>;
+  }>;
+  project_effort: Array<{
+    project_id: string;
+    project_name: string;
+    color: string;
+    man_days: number;
+    allocation_percent: number;
+    booking_count: number;
+    ba_count: number;
+  }>;
 };
 
 function resolveApiBaseUrl() {

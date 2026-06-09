@@ -1,7 +1,7 @@
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, type PrismaClient } from '@prisma/client';
 import { parseDateOnly, toDateKey } from '../domain/date';
 
-export async function syncBookingStatuses(prisma: any) {
+export async function syncBookingStatuses(prisma: Pick<PrismaClient, 'booking'>) {
   const today = parseDateOnly(toDateKey(new Date()));
 
   // 1. APPROVED -> IN_PROGRESS if start_date <= today <= end_date

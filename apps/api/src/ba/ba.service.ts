@@ -7,8 +7,13 @@ import {
 } from '@nestjs/common';
 import { BAStatus, BALevel, SkillTagStatus, User, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { monthRange, toDateKey, workingDaysInRange } from '../domain/date';
-import { calculateBookedWorkingDays } from '../domain/capacity';
+import { monthRange, parseDateOnly, toDateKey, workingDaysInRange } from '../domain/date';
+import {
+  calculateBookedWorkingDays,
+  calculateUtilizationPercent,
+  classifyCapacity,
+  getRangeCapacity
+} from '../domain/capacity';
 import { optionalString, requireDate, requireString } from '../common/parse';
 import { canReadPrivateNotes, canViewPrivateBaFields, isManagerRole } from '../auth/rbac';
 import { hashPassword } from '../auth/password';
@@ -21,6 +26,8 @@ type DirectoryQuery = {
   level?: string;
   tags?: string;
   bookable?: string;
+  from?: string;
+  to?: string;
 };
 
 type CreateBAInput = {
@@ -50,6 +57,8 @@ export class BAService {
 
   async list(currentUser: User, query: DirectoryQuery) {
     await syncBookingStatuses(this.prisma);
+    const timeframe = this.resolveTimeframe(query.from, query.to);
+    const workingDays = workingDaysInRange(timeframe.startDate, timeframe.endDate).length;
     const search = (query.search ?? query.q)?.trim();
     const statusFilter = Object.values(BAStatus).includes(query.status as BAStatus)
       ? (query.status as BAStatus)
@@ -96,7 +105,7 @@ export class BAService {
         : {})
     };
 
-    return this.prisma.bAProfile.findMany({
+    const bas = await this.prisma.bAProfile.findMany({
       where,
       orderBy: [{ status: 'asc' }, { full_name: 'asc' }],
       include: {
@@ -104,11 +113,42 @@ export class BAService {
         bookings: {
           where: {
             status: { in: ['APPROVED', 'IN_PROGRESS', 'PENDING'] },
-            end_date: { gte: new Date('2026-06-01T00:00:00.000Z') },
-            start_date: { lte: new Date('2026-06-30T00:00:00.000Z') }
-          }
+            end_date: { gte: timeframe.startDate },
+            start_date: { lte: timeframe.endDate }
+          },
+          include: { project: true, requester: { select: safeUserSelect } }
         }
       }
+    });
+
+    return bas.map((ba) => {
+      const capacity = getRangeCapacity(ba.bookings, timeframe.startDate, timeframe.endDate);
+      const availableManDays = ba.status === BAStatus.ACTIVE ? workingDays : 0;
+      const bookedManDays = calculateBookedWorkingDays(
+        ba.bookings,
+        timeframe.startDate,
+        timeframe.endDate
+      );
+      const utilizationPercent = calculateUtilizationPercent(bookedManDays, availableManDays);
+      const capacityLabel = capacity.max_risk_capacity > 100
+        ? 'OVERBOOKED'
+        : classifyCapacity(utilizationPercent);
+
+      return {
+        ...ba,
+        timeframe: {
+          from: toDateKey(timeframe.startDate),
+          to: toDateKey(timeframe.endDate)
+        },
+        approved_capacity: capacity.max_approved_capacity,
+        pending_capacity: capacity.max_pending_capacity,
+        risk_capacity: capacity.max_risk_capacity,
+        booked_man_days: Number(bookedManDays.toFixed(2)),
+        available_man_days: availableManDays,
+        utilization_percent: utilizationPercent,
+        capacity_label: capacityLabel,
+        current_projects: this.summarizeCurrentProjects(ba.bookings)
+      };
     });
   }
 
@@ -315,10 +355,12 @@ export class BAService {
     });
   }
 
-  async utilization(currentUser: User, id: string, month = '2026-06') {
+  async utilization(currentUser: User, id: string, month = '2026-06', from?: string, to?: string) {
     await this.getById(currentUser, id);
 
-    const { startDate, endDate } = monthRange(month);
+    const { startDate, endDate } = from || to
+      ? this.resolveTimeframe(from, to)
+      : monthRange(month);
     const bookings = await this.prisma.booking.findMany({
       where: {
         ba_id: id,
@@ -340,6 +382,61 @@ export class BAService {
         ? Number(((bookedDays / workingDays) * 100).toFixed(1))
         : 0
     };
+  }
+
+  private resolveTimeframe(from?: string, to?: string) {
+    if (from || to) {
+      if (!from || !to) {
+        throw new BadRequestException('from and to must be provided together');
+      }
+
+      const startDate = parseDateOnly(from);
+      const endDate = parseDateOnly(to);
+      if (startDate > endDate) {
+        throw new BadRequestException('from must be before or equal to to');
+      }
+
+      return { startDate, endDate };
+    }
+
+    const now = new Date();
+    return {
+      startDate: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      endDate: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+    };
+  }
+
+  private summarizeCurrentProjects<
+    TBooking extends {
+      project_id: string;
+      project: { id: string; name: string; color: string };
+      capacity_percent: number;
+    }
+  >(bookings: TBooking[]) {
+    const projectMap = new Map<
+      string,
+      {
+        project_id: string;
+        project_name: string;
+        color: string;
+        capacity_percent: number;
+      }
+    >();
+
+    for (const booking of bookings) {
+      const current = projectMap.get(booking.project_id) ?? {
+        project_id: booking.project.id,
+        project_name: booking.project.name,
+        color: booking.project.color,
+        capacity_percent: 0
+      };
+      current.capacity_percent += booking.capacity_percent;
+      projectMap.set(booking.project_id, current);
+    }
+
+    return Array.from(projectMap.values()).sort(
+      (left, right) => right.capacity_percent - left.capacity_percent
+    );
   }
 
   async listTags() {

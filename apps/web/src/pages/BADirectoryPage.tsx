@@ -1,10 +1,16 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Plus, Search } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type BAProfile, type BALevel, type SkillTag } from '@/lib/api';
+import {
+  capacityBadgeTone,
+  capacityLabelText,
+  classifyCapacityLabel
+} from '@/lib/format';
 import { BAIdentity, Field, StatusBadge } from '@/components/common';
+import { BookingModal } from '@/components/BookingModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +27,7 @@ export function BADirectoryPage() {
   const [status, setStatus] = useState('');
   const [tag, setTag] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [requestBaId, setRequestBaId] = useState('');
   const visibleStatuses = useMemo(
     () => (isManagerView ? ['ACTIVE', 'ON_LEAVE', 'RESIGNED'] : ['ACTIVE']),
     [isManagerView]
@@ -97,31 +104,152 @@ export function BADirectoryPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {(bas.data ?? []).map((ba) => (
-          <Link key={ba.id} to={`/crm/ba/${ba.id}`}>
-            <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
-              <CardContent className="grid gap-4 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <BAIdentity ba={ba} />
-                  <StatusBadge status={ba.status} />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ba.skill_tags.slice(0, 4).map((item) => (
-                    <Badge key={item.tag.id} tone="info">{item.tag.name}</Badge>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                  <span>Level: <strong>{ba.level}</strong></span>
-                  <span>Bookings: <strong>{ba.bookings?.length ?? 0}</strong></span>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+          <BAAvailabilityCard
+            key={ba.id}
+            ba={ba}
+            role={role}
+            onRequestBa={() => setRequestBaId(ba.id)}
+          />
         ))}
         {bas.data?.length === 0 ? (
           <Card><CardContent className="p-5 text-sm text-slate-600">No BA profiles match the current filters.</CardContent></Card>
         ) : null}
       </div>
+
+      <BookingModal
+        open={Boolean(requestBaId)}
+        onClose={() => setRequestBaId('')}
+        onSuccess={() => {
+          setRequestBaId('');
+          void queryClient.invalidateQueries();
+        }}
+        initialBaId={requestBaId}
+      />
     </div>
+  );
+}
+
+function BAAvailabilityCard({
+  ba,
+  role,
+  onRequestBa
+}: {
+  ba: BAProfile;
+  role: string;
+  onRequestBa: () => void;
+}) {
+  const isManagerView = role === 'BA_MANAGER' || role === 'ADMIN';
+  const isPmpo = role === 'PM_PO';
+  const canRequest = ba.status === 'ACTIVE';
+  const capacityPercent = ba.risk_capacity ?? ba.utilization_percent ?? 0;
+  const capacityLabel = ba.capacity_label ?? classifyCapacityLabel(capacityPercent);
+  const projects = ba.current_projects ?? [];
+
+  return (
+    <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardContent className="grid gap-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <BAIdentity ba={ba} />
+          <div className="flex flex-col items-end gap-2">
+            <StatusBadge status={ba.status} />
+            <Badge tone={capacityBadgeTone(capacityLabel)}>
+              {capacityLabel === 'OVERBOOKED' ? (
+                <AlertTriangle className="mr-1 h-3 w-3" />
+              ) : null}
+              {capacityLabelText(capacityLabel)}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500">Current capacity</span>
+            <span className="font-bold text-slate-950">{capacityPercent}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white">
+            <div
+              className={
+                capacityPercent > 100
+                  ? 'h-full bg-rose-600'
+                  : capacityPercent === 100
+                    ? 'h-full bg-indigo-600'
+                    : capacityPercent >= 75
+                      ? 'h-full bg-amber-500'
+                      : capacityPercent >= 50
+                        ? 'h-full bg-emerald-500'
+                        : capacityPercent > 0
+                          ? 'h-full bg-sky-500'
+                          : 'h-full bg-slate-300'
+              }
+              style={{ width: `${Math.min(100, capacityPercent)}%` }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-slate-600">
+            <span>Utilization: <strong>{ba.utilization_percent ?? 0}%</strong></span>
+            <span>Man-days: <strong>{ba.booked_man_days ?? 0}</strong></span>
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          <p className="text-xs font-semibold uppercase text-slate-500">Current projects</p>
+          {projects.length > 0 ? (
+            <div className="grid gap-2">
+              {projects.slice(0, 3).map((project) => (
+                <div
+                  key={project.project_id}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate font-medium text-slate-800">
+                    {project.project_name}
+                  </span>
+                  <span className="shrink-0 text-slate-600">{project.capacity_percent}%</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+              Bench for the selected period
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {ba.skill_tags.slice(0, 5).map((item) => (
+            <Badge key={item.tag.id} tone="info">{item.tag.name}</Badge>
+          ))}
+        </div>
+
+        {ba.status !== 'ACTIVE' ? (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {ba.status === 'ON_LEAVE' ? 'On Leave' : 'Resigned'}
+            {ba.status_reason ? `: ${ba.status_reason}` : ''}
+          </p>
+        ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {isPmpo ? (
+            <Button type="button" onClick={onRequestBa} disabled={!canRequest}>
+              Request BA
+            </Button>
+          ) : null}
+          {isManagerView ? (
+            <>
+              <Button variant="secondary" asChild>
+                <Link to="/manager/action-center?type=OPEN_REQUEST">Assign to Request</Link>
+              </Button>
+              <Button variant="secondary" asChild>
+                <Link to={`/timeline?baId=${ba.id}`}>
+                  <CalendarDays className="h-4 w-4" /> Timeline
+                </Link>
+              </Button>
+            </>
+          ) : null}
+          <Button variant="secondary" asChild>
+            <Link to={`/crm/ba/${ba.id}`}>View Profile</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -204,3 +332,4 @@ function CreateBACard({ onDone }: { onDone: () => void }) {
     </Card>
   );
 }
+

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { roleHomePath } from './auth/routes';
 import { LayoutShell } from './components/LayoutShell';
@@ -43,8 +43,10 @@ export function App() {
         <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/action-center" element={<RedirectPreserveSearch to="/manager/action-center" />} />
+        <Route path="/manager/inbox" element={<RedirectPreserveSearch to="/manager/action-center" />} />
         <Route
-          path="/manager/inbox"
+          path="/manager/action-center"
           element={
             <ProtectedPage>
               <LayoutShell>
@@ -60,7 +62,7 @@ export function App() {
           element={
             <ProtectedPage>
               <LayoutShell>
-                <RequireRole roles={['BA_MANAGER', 'BA', 'ADMIN']}>
+                <RequireRole roles={['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']}>
                   <BADirectoryPage />
                 </RequireRole>
               </LayoutShell>
@@ -72,7 +74,7 @@ export function App() {
           element={
             <ProtectedPage>
               <LayoutShell>
-                <RequireRole roles={['BA_MANAGER', 'BA', 'ADMIN']}>
+                <RequireRole roles={['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']}>
                   <BAProfilePage />
                 </RequireRole>
               </LayoutShell>
@@ -110,6 +112,11 @@ function ProtectedPage({ children }: { children: ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+function RedirectPreserveSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
 }
 
 function PublicOnlyRoute({ children }: { children: ReactNode }) {

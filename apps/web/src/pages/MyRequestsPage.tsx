@@ -4,10 +4,11 @@ import { useSearchParams } from 'react-router-dom';
 import { apiFetch, type Booking } from '@/lib/api';
 import { CAPACITY_OPTIONS } from '@/lib/capacity';
 import { StatusBadge } from '@/components/common';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
-import { formatDate } from '@/lib/format';
+import { formatDate, priorityTone } from '@/lib/format';
 
 export function MyRequestsPage() {
   const queryClient = useQueryClient();
@@ -104,8 +105,11 @@ export function MyRequestsPage() {
               </div>
               <p className="text-sm text-slate-600">
                 {formatDate(booking.start_date)} - {formatDate(booking.end_date)} ·{' '}
-                {booking.capacity_percent}% · {booking.priority}
+                {booking.capacity_percent}%
               </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+              </div>
               {booking.reject_reason ? (
                 <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
                   Reject reason: {booking.reject_reason}

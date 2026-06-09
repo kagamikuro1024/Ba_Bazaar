@@ -7,19 +7,22 @@ import {
   type WheelEvent
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   addDays,
   addMonths,
   differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
+  endOfWeek,
   format,
   isSameDay,
   parseISO,
+  startOfMonth,
+  startOfQuarter,
   startOfWeek,
-  startOfMonth
 } from 'date-fns';
-import { ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type BAProfile, type Booking, type Project } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
@@ -54,6 +57,30 @@ type DragScrollState = {
   pointerId: number;
   startX: number;
   startScrollLeft: number;
+};
+
+type CapacityDetail = {
+  ba_id: string;
+  daily: Array<{
+    date: string;
+    approved_capacity: number;
+    pending_capacity: number;
+    risk_capacity: number;
+  }>;
+  max_approved_capacity: number;
+  max_pending_capacity: number;
+  max_risk_capacity: number;
+  has_overbook_risk: boolean;
+};
+
+type TimelineViewMode = 'week' | 'month' | 'quarter';
+
+type TimelineColumn = {
+  id: string;
+  label: string;
+  subLabel: string;
+  start: Date;
+  end: Date;
 };
 
 function usePrefersCoarsePointer() {
@@ -94,7 +121,11 @@ function dayCellBackground(isAlternateRow: boolean) {
     : 'bg-[repeating-linear-gradient(-45deg,#f8fafc,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)]';
 }
 
-function bookingBarClass(status: Booking['status']) {
+function bookingBarClass(status: Booking['status'], hasOverbookRisk = false) {
+  if (hasOverbookRisk && (status === 'APPROVED' || status === 'IN_PROGRESS' || status === 'PENDING')) {
+    return 'border border-rose-500 bg-rose-600 text-white shadow-rose-200';
+  }
+
   switch (status) {
     case 'PENDING':
       return 'border border-dashed border-amber-400 bg-amber-100 text-amber-800';
@@ -111,15 +142,15 @@ function bookingBarClass(status: Booking['status']) {
 
 type BookingLayout = {
   booking: Booking;
-  left: number;
-  span: number;
+  leftPercent: number;
+  widthPercent: number;
   lane: number;
 };
 
-function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout[] {
-  if (days.length === 0) return [];
-  const first = days[0];
-  const last = days[days.length - 1];
+function computeBookingLayouts(columns: TimelineColumn[], bookings: Booking[]): BookingLayout[] {
+  if (columns.length === 0) return [];
+  const first = columns[0].start;
+  const last = columns[columns.length - 1].end;
 
   const visible = bookings
     .map((booking) => {
@@ -130,7 +161,13 @@ function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout
       if (end < first || start > last) return null;
       return { booking, start, end };
     })
-    .filter((item): item is { booking: Booking; start: Date; end: Date } => item !== null)
+    .filter(
+      (item): item is {
+        booking: Booking;
+        start: Date;
+        end: Date;
+      } => item !== null
+    )
     .sort((a, b) => {
       const byStart = a.start.getTime() - b.start.getTime();
       if (byStart !== 0) return byStart;
@@ -139,13 +176,16 @@ function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout
 
   const laneEndDays: number[] = [];
   const layouts: BookingLayout[] = [];
+  const totalDays = differenceInCalendarDays(last, first) + 1;
 
   for (const item of visible) {
-    const left = Math.max(0, differenceInCalendarDays(item.start, first));
-    const span = differenceInCalendarDays(item.end, item.start) + 1;
-    const endDay = left + span - 1;
+    const leftDay = differenceInCalendarDays(item.start, first);
+    const visibleDays = differenceInCalendarDays(item.end, item.start) + 1;
+    const endDay = leftDay + visibleDays - 1;
+    const leftPercent = (leftDay / totalDays) * 100;
+    const widthPercent = (visibleDays / totalDays) * 100;
 
-    let lane = laneEndDays.findIndex((laneEnd) => laneEnd < left);
+    let lane = laneEndDays.findIndex((laneEnd) => laneEnd < leftDay);
     if (lane === -1) {
       lane = laneEndDays.length;
       laneEndDays.push(endDay);
@@ -153,21 +193,72 @@ function computeBookingLayouts(days: Date[], bookings: Booking[]): BookingLayout
       laneEndDays[lane] = endDay;
     }
 
-    layouts.push({ booking: item.booking, left, span, lane });
+    layouts.push({ booking: item.booking, leftPercent, widthPercent, lane });
   }
 
   return layouts;
 }
 
 function computeRowMinHeight(
-  days: Date[],
+  columns: TimelineColumn[],
   bookings: Booking[],
   barBaseTop: number,
   minHeight: number
 ) {
-  const layouts = computeBookingLayouts(days, bookings);
+  const layouts = computeBookingLayouts(columns, bookings);
   const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
   return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
+}
+
+function buildTimelineColumns(viewMode: TimelineViewMode, anchorDate: Date): TimelineColumn[] {
+  if (viewMode === 'month') {
+    const start = startOfMonth(anchorDate);
+    const end = endOfMonth(start);
+    const columns: TimelineColumn[] = [];
+    let cursor = startOfWeek(start, { weekStartsOn: 1 });
+    let weekIndex = 1;
+
+    while (cursor <= end) {
+      const weekStart = cursor < start ? start : cursor;
+      const weekEnd = endOfWeek(cursor, { weekStartsOn: 1 }) > end
+        ? end
+        : endOfWeek(cursor, { weekStartsOn: 1 });
+      columns.push({
+        id: `week-${weekIndex}-${format(weekStart, 'yyyy-MM-dd')}`,
+        label: `Week ${weekIndex}`,
+        subLabel: `${format(weekStart, 'dd/MM')} - ${format(weekEnd, 'dd/MM')}`,
+        start: weekStart,
+        end: weekEnd
+      });
+      cursor = addDays(endOfWeek(cursor, { weekStartsOn: 1 }), 1);
+      weekIndex += 1;
+    }
+
+    return columns;
+  }
+
+  if (viewMode === 'quarter') {
+    const start = startOfQuarter(anchorDate);
+    return [0, 1, 2].map((offset) => {
+      const monthStart = addMonths(start, offset);
+      const monthEnd = endOfMonth(monthStart);
+      return {
+        id: `month-${format(monthStart, 'yyyy-MM')}`,
+        label: format(monthStart, 'MMM'),
+        subLabel: format(monthStart, 'yyyy'),
+        start: monthStart,
+        end: monthEnd
+      };
+    });
+  }
+
+  return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) }).map((day) => ({
+    id: format(day, 'yyyy-MM-dd'),
+    label: format(day, 'EEE'),
+    subLabel: format(day, 'dd/MM'),
+    start: day,
+    end: day
+  }));
 }
 
 function sortSelectionRange(selection: DraftSelection) {
@@ -213,17 +304,18 @@ function useIsMobile() {
 export function TimelinePage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const role = user?.role ?? 'BA';
-  const [viewMode, setViewMode] = useState<'week' | 'month'>(() => {
+  const [viewMode, setViewMode] = useState<TimelineViewMode>(() => {
     if (typeof window === 'undefined') {
       return 'week';
     }
 
     const stored = window.localStorage.getItem(timelineViewModeStorageKey);
-    return stored === 'month' ? 'month' : 'week';
+    return stored === 'month' || stored === 'quarter' ? stored : 'week';
   });
   const [anchorDate, setAnchorDate] = useState(initialWeek);
-  const [baFilter, setBaFilter] = useState('');
+  const [baFilter, setBaFilter] = useState(() => searchParams.get('baId') ?? '');
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
@@ -238,7 +330,7 @@ export function TimelinePage() {
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const prefersCoarsePointer = usePrefersCoarsePointer();
-  const allowDragSelection = canCreateBooking && !prefersCoarsePointer;
+  const allowDragSelection = canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
   const currentDate = useMemo(() => new Date(), []);
 
   useEffect(() => {
@@ -251,14 +343,9 @@ export function TimelinePage() {
     window.localStorage.setItem(timelineViewModeStorageKey, viewMode);
   }, [viewMode]);
 
-  const days = useMemo(() => {
-    if (viewMode === 'month') {
-      const start = startOfMonth(anchorDate);
-      return eachDayOfInterval({ start, end: endOfMonth(start) });
-    }
-
-    return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) });
-  }, [anchorDate, viewMode]);
+  const columns = useMemo(() => buildTimelineColumns(viewMode, anchorDate), [anchorDate, viewMode]);
+  const timelineStart = columns[0]?.start ?? anchorDate;
+  const timelineEnd = columns[columns.length - 1]?.end ?? anchorDate;
 
   const bas = useQuery({
     queryKey: ['ba-directory', role],
@@ -274,13 +361,21 @@ export function TimelinePage() {
     queryFn: () => apiFetch<Booking[]>('/api/bookings')
   });
   const summary = useQuery({
-    queryKey: ['capacity-summary', role],
+    queryKey: ['capacity-summary', role, format(timelineStart, 'yyyy-MM-dd'), format(timelineEnd, 'yyyy-MM-dd')],
     queryFn: () =>
       apiFetch<{
         average_capacity: number;
         counts: Record<string, number>;
-        items: Array<{ ba_id: string; approved_capacity: number; risk_capacity: number }>;
-      }>('/api/capacity/summary')
+        items: Array<{
+          ba_id: string;
+          approved_capacity: number;
+          pending_capacity: number;
+          risk_capacity: number;
+          capacity_label?: string;
+        }>;
+      }>(
+        `/api/capacity/summary?start_date=${format(timelineStart, 'yyyy-MM-dd')}&end_date=${format(timelineEnd, 'yyyy-MM-dd')}`
+      )
   });
 
   const timelineBas = useMemo(
@@ -309,22 +404,24 @@ export function TimelinePage() {
           ba,
           bookings: baBookings,
           desktopRowMinHeight: computeRowMinHeight(
-            days,
+            columns,
             baBookings,
             desktopBarBaseTop,
             72
           ),
-          mobileRowMinHeight: computeRowMinHeight(days, baBookings, mobileBarBaseTop, 120)
+          mobileRowMinHeight: computeRowMinHeight(columns, baBookings, mobileBarBaseTop, 120)
         };
       }),
-    [days, visibleBas, visibleBookings]
+    [columns, visibleBas, visibleBookings]
   );
 
   const move = (direction: number) =>
     setAnchorDate((current) =>
       viewMode === 'week'
         ? addDays(current, direction * 7)
-        : addMonths(current, direction)
+        : viewMode === 'month'
+          ? addMonths(current, direction)
+          : addMonths(current, direction * 3)
     );
 
   function handleTimelineScroll() {
@@ -491,8 +588,8 @@ export function TimelinePage() {
             </div>
             <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
               <span className="hidden sm:inline">View mode</span>
-              <div className="grid w-full grid-cols-2 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
-                {(['week', 'month'] as const).map((mode) => (
+              <div className="grid w-full grid-cols-3 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
+                {(['week', 'month', 'quarter'] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -549,6 +646,12 @@ export function TimelinePage() {
                   <span className="h-4 w-9 rounded border border-dashed bg-slate-50" />{' '}
                   Available
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-4 w-9 items-center justify-center rounded bg-rose-600 text-white">
+                    <AlertTriangle className="h-3 w-3" />
+                  </span>{' '}
+                  Overbooked BA
+                </div>
               </div>
             ) : null}
           </div>
@@ -573,43 +676,43 @@ export function TimelinePage() {
               className={cn('grid', !isMobile && 'min-w-[980px]')}
               style={{
                 gridTemplateColumns: isMobile
-                  ? `repeat(${days.length}, minmax(${mobileDayMinWidth}px, 1fr))`
-                  : `${baInfoColumnWidth}px repeat(${days.length}, minmax(92px, 1fr))`
+                  ? `repeat(${columns.length}, minmax(${viewMode === 'quarter' ? 112 : mobileDayMinWidth}px, 1fr))`
+                  : `${baInfoColumnWidth}px repeat(${columns.length}, minmax(${viewMode === 'week' ? 92 : 132}px, 1fr))`
               }}
             >
               {!isMobile && (
                 <>
                   <div className="h-14 border-b border-r bg-white" aria-hidden="true" />
-                  {days.map((day) => (
+                  {columns.map((column) => (
                     <div
-                      key={day.toISOString()}
+                      key={column.id}
                       className={cn(
                         'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
-                        isSameDay(day, currentDate) &&
+                        column.start <= currentDate && column.end >= currentDate &&
                           'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
                       )}
                     >
                       <div>
-                        <div>{format(day, 'EEE')}</div>
-                        <div>{format(day, 'dd/MM')}</div>
+                        <div>{column.label}</div>
+                        <div>{column.subLabel}</div>
                       </div>
                     </div>
                   ))}
                 </>
               )}
               {isMobile &&
-                days.map((day) => (
+                columns.map((column) => (
                   <div
-                    key={day.toISOString()}
+                    key={column.id}
                     className={cn(
                       'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
-                      isSameDay(day, currentDate) &&
+                      column.start <= currentDate && column.end >= currentDate &&
                         'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
                     )}
                   >
                     <div>
-                      <div>{format(day, 'EEE')}</div>
-                      <div>{format(day, 'dd/MM')}</div>
+                      <div>{column.label}</div>
+                      <div>{column.subLabel}</div>
                     </div>
                   </div>
                 ))}
@@ -624,16 +727,20 @@ export function TimelinePage() {
                     <MobileTimelineRow
                       key={ba.id}
                       ba={ba}
-                      days={days}
+                      columns={columns}
                       bookings={baBookings}
                       rowMinHeight={mobileRowMinHeight}
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
-                      onEmptyClick={(date) =>
+                      hasOverbookRisk={
+                        (summary.data?.items.find((item) => item.ba_id === ba.id)?.risk_capacity ??
+                          0) > 100
+                      }
+                      onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
-                          start_date: format(date, 'yyyy-MM-dd'),
-                          end_date: format(date, 'yyyy-MM-dd'),
+                          start_date: format(column.start, 'yyyy-MM-dd'),
+                          end_date: format(column.end, 'yyyy-MM-dd'),
                           direct: false
                         })
                       }
@@ -643,7 +750,7 @@ export function TimelinePage() {
                     <TimelineRow
                       key={ba.id}
                       ba={ba}
-                      days={days}
+                      columns={columns}
                       bookings={baBookings}
                       rowMinHeight={desktopRowMinHeight}
                       isAlternateRow={isAlternateRow}
@@ -655,11 +762,15 @@ export function TimelinePage() {
                       onSelectionStart={beginSelection}
                       onSelectionMove={updateSelection}
                       onSelectionEnd={finishSelection}
-                      onEmptyClick={(date) =>
+                      hasOverbookRisk={
+                        (summary.data?.items.find((item) => item.ba_id === ba.id)?.risk_capacity ??
+                          0) > 100
+                      }
+                      onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
-                          start_date: format(date, 'yyyy-MM-dd'),
-                          end_date: format(date, 'yyyy-MM-dd'),
+                          start_date: format(column.start, 'yyyy-MM-dd'),
+                          end_date: format(column.end, 'yyyy-MM-dd'),
                           direct: false
                         })
                       }
@@ -694,14 +805,20 @@ export function TimelinePage() {
                       />
                       <span
                         className={cn(
-                          'shrink-0 overflow-hidden text-xs font-bold transition-all duration-200 ease-out',
-                          capacityColor(capacity?.risk_capacity ?? 0),
+                          'inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs font-bold transition-all duration-200 ease-out',
+                          (capacity?.risk_capacity ?? 0) > 100 && 'bg-rose-600 text-white',
+                          (capacity?.risk_capacity ?? 0) <= 100 &&
+                            capacityColor(capacity?.risk_capacity ?? 0),
                           compactMobileInfo
                             ? 'max-w-0 -translate-x-2 opacity-0'
-                            : 'max-w-12 translate-x-0 opacity-100'
+                            : 'max-w-28 translate-x-0 opacity-100'
                         )}
                       >
+                        {(capacity?.risk_capacity ?? 0) > 100 ? (
+                          <AlertTriangle className="h-3 w-3" />
+                        ) : null}
                         {capacity?.risk_capacity ?? 0}%
+                        {(capacity?.risk_capacity ?? 0) > 100 ? ' Overbooked' : ''}
                       </span>
                     </div>
                   );
@@ -729,14 +846,21 @@ export function TimelinePage() {
                     onPointerDown={(event) => event.stopPropagation()}
                   >
                     <BAIdentity ba={ba} />
-                    <span
-                      className={cn(
-                        'text-sm font-bold',
-                        capacityColor(capacity?.risk_capacity ?? 0)
-                      )}
-                    >
-                      {capacity?.risk_capacity ?? 0}%
-                    </span>
+                    {(capacity?.risk_capacity ?? 0) > 100 ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-xs font-bold text-white">
+                        <AlertTriangle className="h-3 w-3" />
+                        {capacity?.risk_capacity ?? 0}% Overbooked
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-sm font-bold',
+                          capacityColor(capacity?.risk_capacity ?? 0)
+                        )}
+                      >
+                        {capacity?.risk_capacity ?? 0}%
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -760,6 +884,7 @@ export function TimelinePage() {
       />
       <BookingDetailModal
         booking={selectedBooking}
+        allBookings={bookings.data ?? []}
         onClose={() => setSelectedBooking(null)}
         onDone={() => {
           setSelectedBooking(null);
@@ -772,12 +897,13 @@ export function TimelinePage() {
 
 function TimelineRow({
   ba,
-  days,
+  columns,
   bookings,
   rowMinHeight,
   isAlternateRow,
   canCreateBooking,
   allowDragSelection,
+  hasOverbookRisk,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -786,20 +912,21 @@ function TimelineRow({
   onBookingClick
 }: {
   ba: BAProfile;
-  days: Date[];
+  columns: TimelineColumn[];
   bookings: Booking[];
   rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   allowDragSelection: boolean;
+  hasOverbookRisk: boolean;
   activeSelection: DraftSelection | null;
   onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
   onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
   onSelectionEnd: (pointerId: number) => void;
-  onEmptyClick: (date: Date) => void;
+  onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
-  const layouts = computeBookingLayouts(days, bookings);
+  const layouts = computeBookingLayouts(columns, bookings);
   const selectedRange = activeSelection ? sortSelectionRange(activeSelection) : null;
 
   return (
@@ -810,14 +937,14 @@ function TimelineRow({
         aria-hidden="true"
       />
       <div className="relative col-span-full hidden" />
-      {days.map((day) => {
+      {columns.map((column) => {
         const isSelected = Boolean(
-          selectedRange && day >= selectedRange.start && day <= selectedRange.end
+          selectedRange && column.start >= selectedRange.start && column.start <= selectedRange.end
         );
 
         return (
           <button
-            key={`${ba.id}-${day.toISOString()}`}
+            key={`${ba.id}-${column.id}`}
             className={cn(
               'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
               dayCellBackground(isAlternateRow),
@@ -827,11 +954,11 @@ function TimelineRow({
             style={{ minHeight: rowMinHeight }}
             onPointerDown={(event) => {
               if (!allowDragSelection || event.button !== 0) return;
-              onSelectionStart(ba.id, day, event.pointerId);
+              onSelectionStart(ba.id, column.start, event.pointerId);
             }}
             onPointerEnter={(event) => {
               if (allowDragSelection && event.buttons === 1)
-                onSelectionMove(ba.id, day, event.pointerId);
+                onSelectionMove(ba.id, column.start, event.pointerId);
             }}
             onPointerUp={(event) => {
               if (allowDragSelection) onSelectionEnd(event.pointerId);
@@ -840,7 +967,9 @@ function TimelineRow({
               if (allowDragSelection) onSelectionEnd(event.pointerId);
             }}
             onClick={(event) => {
-              if (canCreateBooking && event.detail === 0) onEmptyClick(day);
+              if (canCreateBooking && !allowDragSelection && event.detail !== 0) {
+                onEmptyClick(column);
+              }
             }}
             aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
           >
@@ -852,29 +981,35 @@ function TimelineRow({
       })}
       <div
         className="pointer-events-none relative grid"
-        style={{ gridColumn: `2 / span ${days.length}` }}
+        style={{ gridColumn: `2 / span ${columns.length}` }}
       >
         <div
           className="relative"
           style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
         >
-          {layouts.map(({ booking, left, span, lane }) => {
+          {layouts.map(({ booking, leftPercent, widthPercent, lane }) => {
             return (
               <button
                 key={booking.id}
                 className={cn(
                   'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  bookingBarClass(booking.status)
+                  bookingBarClass(booking.status, hasOverbookRisk)
                 )}
                 style={{
-                  left: `${(left / days.length) * 100}%`,
-                  width: `calc(${(span / days.length) * 100}% - 8px)`,
+                  left: `${leftPercent}%`,
+                  width: `max(28px, calc(${widthPercent}% - 8px))`,
                   top: `${desktopBarBaseTop + lane * bookingLaneHeight}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
-                {booking.project.name} · {booking.capacity_percent}%
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  {hasOverbookRisk ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                  <span className="truncate">
+                    {booking.project.name} · {booking.capacity_percent}%
+                    {hasOverbookRisk ? ' · Overbooked' : ''}
+                  </span>
+                </span>
               </button>
             );
           })}
@@ -886,30 +1021,32 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
-  days,
+  columns,
   bookings,
   rowMinHeight,
   isAlternateRow,
   canCreateBooking,
+  hasOverbookRisk,
   onEmptyClick,
   onBookingClick
 }: {
   ba: BAProfile;
-  days: Date[];
+  columns: TimelineColumn[];
   bookings: Booking[];
   rowMinHeight: number;
   isAlternateRow: boolean;
   canCreateBooking: boolean;
-  onEmptyClick: (date: Date) => void;
+  hasOverbookRisk: boolean;
+  onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
-  const layouts = computeBookingLayouts(days, bookings);
+  const layouts = computeBookingLayouts(columns, bookings);
 
   return (
     <>
-      {days.map((day) => (
+      {columns.map((column) => (
         <button
-          key={`${ba.id}-${day.toISOString()}`}
+          key={`${ba.id}-${column.id}`}
           className={cn(
             'group select-none border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
             dayCellBackground(isAlternateRow),
@@ -917,7 +1054,7 @@ function MobileTimelineRow({
           )}
           style={{ minHeight: rowMinHeight }}
           onClick={() => {
-            if (canCreateBooking) onEmptyClick(day);
+            if (canCreateBooking) onEmptyClick(column);
           }}
           aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
         >
@@ -928,29 +1065,34 @@ function MobileTimelineRow({
       ))}
       <div
         className="pointer-events-none relative grid"
-        style={{ gridColumn: `1 / span ${days.length}` }}
+        style={{ gridColumn: `1 / span ${columns.length}` }}
       >
         <div
           className="relative"
           style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
         >
-          {layouts.map(({ booking, left, span, lane }) => {
+          {layouts.map(({ booking, leftPercent, widthPercent, lane }) => {
             return (
               <button
                 key={booking.id}
                 className={cn(
                   'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  bookingBarClass(booking.status)
+                  bookingBarClass(booking.status, hasOverbookRisk)
                 )}
                 style={{
-                  left: `${(left / days.length) * 100}%`,
-                  width: `calc(${(span / days.length) * 100}% - 8px)`,
+                  left: `${leftPercent}%`,
+                  width: `max(28px, calc(${widthPercent}% - 8px))`,
                   top: `${mobileBarBaseTop + lane * bookingLaneHeight}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
-                {booking.project.name} · {booking.capacity_percent}%
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  {hasOverbookRisk ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                  <span className="truncate">
+                    {booking.project.name} · {booking.capacity_percent}%
+                  </span>
+                </span>
               </button>
             );
           })}
@@ -1011,12 +1153,18 @@ function MobileBAIdentity({
   );
 }
 
+function rangesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
+  return parseISO(firstStart) <= parseISO(secondEnd) && parseISO(firstEnd) >= parseISO(secondStart);
+}
+
 function BookingDetailModal({
   booking,
+  allBookings,
   onClose,
   onDone
 }: {
   booking: Booking | null;
+  allBookings: Booking[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -1028,6 +1176,57 @@ function BookingDetailModal({
   const [decisionReason, setDecisionReason] = useState('');
   const bookingId = booking?.id;
   const bookingCapacity = booking?.capacity_percent;
+  const capacityDetail = useQuery({
+    queryKey: [
+      'timeline-booking-capacity',
+      booking?.ba_id,
+      booking?.start_date,
+      booking?.end_date
+    ],
+    queryFn: () =>
+      apiFetch<CapacityDetail>(
+        `/api/capacity/ba/${booking?.ba_id}?start_date=${booking?.start_date}&end_date=${booking?.end_date}`
+      ),
+    enabled: Boolean(booking?.ba_id && booking?.start_date && booking?.end_date)
+  });
+  const relatedBookings = useMemo(() => {
+    if (!booking?.ba_id) {
+      return [];
+    }
+
+    return allBookings.filter(
+      (item) =>
+        item.ba_id === booking.ba_id &&
+        item.status !== 'REJECTED' &&
+        item.status !== 'CANCELLED' &&
+        rangesOverlap(item.start_date, item.end_date, booking.start_date, booking.end_date)
+    );
+  }, [allBookings, booking]);
+  const projectBreakdown = useMemo(() => {
+    const projectMap = new Map<
+      string,
+      {
+        project: string;
+        capacity: number;
+        dateRanges: string[];
+      }
+    >();
+
+    for (const item of relatedBookings) {
+      const current = projectMap.get(item.project_id) ?? {
+        project: item.project.name,
+        capacity: 0,
+        dateRanges: []
+      };
+      current.capacity += item.capacity_percent;
+      current.dateRanges.push(`${formatDate(item.start_date)} - ${formatDate(item.end_date)}`);
+      projectMap.set(item.project_id, current);
+    }
+
+    return Array.from(projectMap.values()).sort(
+      (left, right) => right.capacity - left.capacity
+    );
+  }, [relatedBookings]);
 
   useEffect(() => {
     if (!bookingId || bookingCapacity === undefined) {
@@ -1114,6 +1313,10 @@ function BookingDetailModal({
 
   if (!booking) return null;
 
+  const maxRiskCapacity = capacityDetail.data?.max_risk_capacity ?? 0;
+  const isOverbooked = maxRiskCapacity > 100;
+  const firstOverbookDay = capacityDetail.data?.daily.find((day) => day.risk_capacity > 100);
+
   return (
     <Modal title="Booking Detail" open={Boolean(booking)} onClose={onClose}>
       <div className="grid gap-4 text-sm">
@@ -1138,6 +1341,40 @@ function BookingDetailModal({
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
+        {isOverbooked ? (
+          <div className="grid gap-3 rounded-md border border-rose-200 bg-rose-50 p-4 text-rose-950">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">Overbooked capacity</p>
+                <p className="mt-1 text-xs text-rose-700">
+                  Max risk capacity {maxRiskCapacity}%{firstOverbookDay ? ` on ${formatDate(firstOverbookDay.date)}` : ''}.
+                </p>
+              </div>
+              <AlertTriangle className="h-5 w-5 shrink-0 text-rose-700" />
+            </div>
+            <div className="grid gap-2 text-sm">
+              <p>BA: {booking.ba?.full_name ?? 'Unassigned'}</p>
+              <p>
+                Selected booking: {booking.project.name} · {booking.capacity_percent}% ·{' '}
+                {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+              </p>
+              <div className="grid gap-1">
+                {projectBreakdown.map((item) => (
+                  <div key={item.project} className="rounded-md bg-white/70 px-3 py-2">
+                    <p className="font-semibold">{item.project}: {item.capacity}%</p>
+                    <p className="mt-1 text-xs text-rose-700">{item.dateRanges.join(', ')}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-1 text-xs text-rose-700 sm:grid-cols-2">
+                <span>Suggested: view available BA</span>
+                <span>Suggested: move part of effort</span>
+                <span>Suggested: reject pending request</span>
+                <span>Suggested: assign different BA</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {canEditCapacity ? (
           <div className="grid gap-3 rounded-md border p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">

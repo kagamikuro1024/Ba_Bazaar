@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BookingStatus } from '@prisma/client';
-import { canApproveCapacity, getRangeCapacity } from './capacity';
+import {
+  calculateBenchRate,
+  calculateBookingManDays,
+  calculateUtilizationPercent,
+  canApproveCapacity,
+  classifyCapacity,
+  getRangeCapacity
+} from './capacity';
 
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
@@ -54,5 +61,33 @@ describe('capacity engine', () => {
 
     expect(result.allowed).toBe(false);
     expect(result.blocking_day).toBe('2026-06-02');
+  });
+
+  it('calculates booking man-days from working days and capacity percent', () => {
+    const fullCapacity = {
+      start_date: date('2026-06-01'),
+      end_date: date('2026-06-12'),
+      capacity_percent: 100
+    };
+    const halfCapacity = {
+      ...fullCapacity,
+      capacity_percent: 50
+    };
+
+    expect(calculateBookingManDays(fullCapacity)).toBe(10);
+    expect(calculateBookingManDays(halfCapacity)).toBe(5);
+  });
+
+  it('calculates utilization percentage from booked and available man-days', () => {
+    expect(calculateUtilizationPercent(15, 20)).toBe(75);
+  });
+
+  it('classifies bench and overbooked utilization', () => {
+    expect(classifyCapacity(0)).toBe('BENCH');
+    expect(classifyCapacity(120)).toBe('OVERBOOKED');
+  });
+
+  it('calculates bench rate', () => {
+    expect(calculateBenchRate(2, 15)).toBe(13.3);
   });
 });

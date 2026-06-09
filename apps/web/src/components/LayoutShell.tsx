@@ -5,10 +5,12 @@ import {
   ClipboardList,
   FolderKanban,
   Home,
-  Inbox,
   Bell,
   Check,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Inbox,
   Users,
   Plus,
   X
@@ -48,9 +50,9 @@ const pageIntros: Record<string, PageIntro> = {
     title: 'My Requests',
     body: 'Track booking requests you created, including pending approvals, rejected requests, and completed decisions.'
   },
-  '/manager/inbox': {
-    title: 'Manager Inbox',
-    body: 'Review, prioritize, and resolve booking requests in one focused workspace.'
+  '/manager/action-center': {
+    title: 'Action Center',
+    body: 'Review, assign and resolve BA booking requests.'
   },
   '/crm/ba': {
     title: 'BA Directory',
@@ -77,16 +79,16 @@ const navigation: Array<{
   roles: UserRole[];
 }> = [
     { to: '/dashboard', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
-    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
+    { to: '/manager/action-center', label: 'Action Center', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
+    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'ADMIN'] },
     { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
     { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
-    { to: '/manager/inbox', label: 'Manager Inbox', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'BA', 'ADMIN'] },
-    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] }
+    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
+    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] }
   ];
 
 function getIntroKey(pathname: string) {
+  if (pathname === '/manager/inbox' || pathname === '/action-center') return '/manager/action-center';
   if (pathname.startsWith('/crm/ba/')) return '/crm/ba/profile';
   return pageIntros[pathname] ? pathname : '';
 }
@@ -136,6 +138,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const intro = introKey ? pageIntros[introKey] : undefined;
   const storageKey = introKey ? `ba-bazaar:intro:${introKey}` : '';
   const [introOpen, setIntroOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    return window.localStorage.getItem('ba-bazaar:sidebar-collapsed') === 'true';
+  });
   const notifications = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications'),
@@ -161,7 +170,21 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const pageHeader = getPageHeader(introKey, role);
   const mobileNavigation = useMemo(() => {
     if (role === 'BA_MANAGER' || role === 'ADMIN') {
-      return visibleNavigation.filter((item) => item.to !== '/reports');
+      return visibleNavigation.filter((item) =>
+        ['/dashboard', '/manager/action-center', '/timeline'].includes(item.to)
+      );
+    }
+
+    if (role === 'PM_PO') {
+      return visibleNavigation.filter((item) =>
+        ['/my-requests', '/timeline', '/crm/ba'].includes(item.to)
+      );
+    }
+
+    if (role === 'BA') {
+      return visibleNavigation.filter((item) =>
+        ['/dashboard', '/my-schedule', '/crm/ba'].includes(item.to)
+      );
     }
 
     return visibleNavigation;
@@ -171,6 +194,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
     setNotificationOpen(false);
     setUserMenuOpen(false);
   }, [location.pathname, role]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      'ba-bazaar:sidebar-collapsed',
+      sidebarCollapsed ? 'true' : 'false'
+    );
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!notificationOpen && !userMenuOpen) {
@@ -356,8 +386,34 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] gap-5 px-4 pb-28 pt-5 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]">
+      <div
+        className={[
+          'mx-auto grid max-w-[1440px] gap-5 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]',
+          sidebarCollapsed
+            ? 'lg:grid-cols-[72px_minmax(0,1fr)]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)]'
+        ].join(' ')}
+      >
         <Card className="sticky top-[5.75rem] hidden max-h-[calc(100vh-7rem)] overflow-y-auto p-2 lg:block">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((current) => !current)}
+            className={[
+              'mb-2 flex w-full items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950',
+              sidebarCollapsed ? 'justify-center' : 'justify-between'
+            ].join(' ')}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? (
+              <ChevronsRight className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <>
+                <span>Collapse</span>
+                <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
+              </>
+            )}
+          </button>
           <nav className="grid gap-1" aria-label="Main navigation">
             {visibleNavigation.map((item) => {
               const Icon = item.icon;
@@ -367,6 +423,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   key={item.to}
                   to={item.to}
                   end
+                  title={sidebarCollapsed ? item.label : undefined}
                   onClick={(event) => {
                     if (inboxDirty.dirty && item.to !== location.pathname) {
                       event.preventDefault();
@@ -375,7 +432,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   }}
                   className={({ isActive }) =>
                     [
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      sidebarCollapsed ? 'justify-center gap-0' : 'gap-3',
                       isActive
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -383,7 +441,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   }
                 >
                   <Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{item.label}</span>
+                  {sidebarCollapsed ? null : <span>{item.label}</span>}
                 </NavLink>
               );
             })}
@@ -393,10 +451,14 @@ export function LayoutShell({ children }: LayoutShellProps) {
               <button
                 type="button"
                 onClick={() => setBookingModalOpen(true)}
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
+                className={[
+                  'flex w-full items-center rounded-md px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50',
+                  sidebarCollapsed ? 'justify-center gap-0' : 'gap-3'
+                ].join(' ')}
+                title={sidebarCollapsed ? 'Create Booking' : undefined}
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Create Booking</span>
+                {sidebarCollapsed ? null : <span>Create Booking</span>}
               </button>
             </div>
           ) : null}
@@ -480,7 +542,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
               <div>
                 <h2 className="text-base font-semibold text-slate-950">Unsaved changes</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Review these edits before leaving Manager Inbox.
+                  Review these edits before leaving Action Center.
                 </p>
               </div>
               <button

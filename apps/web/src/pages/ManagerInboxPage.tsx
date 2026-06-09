@@ -6,9 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Hash,
-  Layers3,
-  ShieldCheck,
   Search,
   SlidersHorizontal,
   UserRound,
@@ -61,14 +58,14 @@ type CapacityDetail = {
   has_overbook_risk: boolean;
 };
 
-type InboxTab = 'ALL' | 'SPECIFIC_BA' | 'OPEN_REQUEST' | 'URGENT';
+type InboxTab = 'ALL' | 'URGENT' | 'UNASSIGNED' | 'PENDING' | 'OVERBOOK_RISK';
 
 type FilterState = {
   search: string;
   priority: 'ALL' | BookingPriority;
   status: 'ALL' | BookingStatus;
   type: 'ALL' | RequestType;
-  sort: 'NEWEST' | 'OLDEST' | 'PRIORITY';
+  sort: 'NEWEST' | 'OLDEST' | 'PRIORITY' | 'CAPACITY_RISK';
   startDate: string;
   endDate: string;
   needsVerification: boolean;
@@ -121,9 +118,11 @@ export function ManagerInboxPage() {
   const [pendingChangeDraftDirty, setPendingChangeDraftDirty] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [changeDrafts, setChangeDrafts] = useState<Record<string, string>>({});
-  const [pendingNavigationAction, setPendingNavigationAction] = useState<(() => void) | null>(null);
+  const [pendingNavigationAction, setPendingNavigationAction] = useState<
+    (() => void) | null
+  >(null);
   const isMobile = useIsMobile();
-  const pageSize = 6;
+  const pageSize = 10;
 
   const filters = useMemo<FilterState>(() => {
     const type = searchParams.get('type');
@@ -146,20 +145,24 @@ export function ManagerInboxPage() {
   }, [searchParams]);
 
   const activeTab = useMemo<InboxTab>(() => {
+    if (filters.overbookRisk) {
+      return 'OVERBOOK_RISK';
+    }
+
     if (filters.priority === 'URGENT') {
       return 'URGENT';
     }
 
-    if (filters.type === 'SPECIFIC_BA') {
-      return 'SPECIFIC_BA';
+    if (filters.type === 'OPEN_REQUEST') {
+      return 'UNASSIGNED';
     }
 
-    if (filters.type === 'OPEN_REQUEST') {
-      return 'OPEN_REQUEST';
+    if (filters.status === 'PENDING') {
+      return 'PENDING';
     }
 
     return 'ALL';
-  }, [filters.priority, filters.type]);
+  }, [filters.overbookRisk, filters.priority, filters.status, filters.type]);
 
   const bookings = useQuery({
     queryKey: ['manager-inbox-bookings'],
@@ -241,14 +244,22 @@ export function ManagerInboxPage() {
           );
         }
 
-        const leftScore = getInboxPriorityScore(left);
-        const rightScore = getInboxPriorityScore(right);
+        if (filters.sort === 'CAPACITY_RISK') {
+          const leftRisk = riskBaIds.has(left.ba_id ?? '') ? 1 : 0;
+          const rightRisk = riskBaIds.has(right.ba_id ?? '') ? 1 : 0;
+          if (leftRisk !== rightRisk) {
+            return rightRisk - leftRisk;
+          }
+        }
+
+        const leftScore = getInboxPriorityScore(left, riskBaIds.has(left.ba_id ?? ''));
+        const rightScore = getInboxPriorityScore(right, riskBaIds.has(right.ba_id ?? ''));
         if (leftScore !== rightScore) {
           return rightScore - leftScore;
         }
 
         const byCreatedAt =
-          new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+          new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
         if (byCreatedAt !== 0) {
           return byCreatedAt;
         }
@@ -257,20 +268,24 @@ export function ManagerInboxPage() {
       });
   }, [bookings.data, filters, summary.data]);
 
-  const counts = useMemo(
-    () => ({
-      ALL: (bookings.data ?? []).length,
-      SPECIFIC_BA: (bookings.data ?? []).filter(
-        (booking) => getRequestType(booking) === 'SPECIFIC_BA'
-      ).length,
-      OPEN_REQUEST: (bookings.data ?? []).filter(
-        (booking) => getRequestType(booking) === 'OPEN_REQUEST'
-      ).length,
-      URGENT: (bookings.data ?? []).filter((booking) => booking.priority === 'URGENT')
-        .length
-    }),
-    [bookings.data]
-  );
+  const counts = useMemo(() => {
+    const riskBaIds = new Set(
+      (summary.data?.items ?? [])
+        .filter((item) => item.risk_capacity > 100)
+        .map((item) => item.ba_id)
+    );
+    const allBookings = bookings.data ?? [];
+
+    return {
+      ALL: allBookings.length,
+      URGENT: allBookings.filter((booking) => booking.priority === 'URGENT').length,
+      UNASSIGNED: allBookings.filter((booking) => !booking.ba_id).length,
+      PENDING: allBookings.filter((booking) => booking.status === 'PENDING').length,
+      OVERBOOK_RISK: allBookings.filter(
+        (booking) => booking.ba_id && riskBaIds.has(booking.ba_id)
+      ).length
+    };
+  }, [bookings.data, summary.data]);
 
   const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
@@ -297,21 +312,16 @@ export function ManagerInboxPage() {
 
   const selectedRequestId = searchParams.get('requestId');
   const selectedBooking = useMemo(() => {
-    if (!filteredBookings.length) {
+    if (!selectedRequestId) {
       return null;
     }
 
-    if (selectedRequestId) {
-      return (
-        paginatedBookings.find((booking) => booking.id === selectedRequestId) ??
-        filteredBookings.find((booking) => booking.id === selectedRequestId) ??
-        bookings.data?.find((booking) => booking.id === selectedRequestId) ??
-        paginatedBookings[0]
-      );
-    }
-
-    return paginatedBookings[0] ?? filteredBookings[0];
-  }, [bookings.data, filteredBookings, paginatedBookings, selectedRequestId]);
+    return (
+      filteredBookings.find((booking) => booking.id === selectedRequestId) ??
+      bookings.data?.find((booking) => booking.id === selectedRequestId) ??
+      null
+    );
+  }, [bookings.data, filteredBookings, selectedRequestId]);
 
   useEffect(() => {
     if (!filteredBookings.length) {
@@ -355,21 +365,6 @@ export function ManagerInboxPage() {
     selectedRequestId,
     setSearchParams
   ]);
-
-  useEffect(() => {
-    if (!selectedBooking) {
-      return;
-    }
-
-    const currentRequestId = searchParams.get('requestId');
-    if (currentRequestId === selectedBooking.id) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('requestId', selectedBooking.id);
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, selectedBooking, setSearchParams]);
 
   const selectedBaId =
     (selectedBooking && assignDrafts[selectedBooking.id]) || selectedBooking?.ba_id || '';
@@ -560,7 +555,9 @@ export function ManagerInboxPage() {
   const assignDraftChanged = selectedBaId !== (selectedBooking?.ba_id ?? '');
   const capacityDraftChanged =
     selectedCapacityPercent !== (selectedBooking?.capacity_percent ?? 50);
-  const hasUnsavedChanges = Boolean(assignDraftChanged || capacityDraftChanged || pendingChangeDraftDirty);
+  const hasUnsavedChanges = Boolean(
+    assignDraftChanged || capacityDraftChanged || pendingChangeDraftDirty
+  );
   const unsavedChangeSummary = useMemo(() => {
     if (!selectedBooking) return [];
 
@@ -771,7 +768,9 @@ export function ManagerInboxPage() {
       return;
     }
 
-    if (!searchParams.get('requestId')) {
+    if (searchParams.get('requestId')) {
+      setMobileDetailOpen(true);
+    } else {
       setMobileDetailOpen(false);
     }
   }, [isMobile, searchParams, selectedBooking]);
@@ -790,10 +789,12 @@ export function ManagerInboxPage() {
       body: JSON.stringify({ capacity_percent: capacityPercent })
     });
 
-    queryClient.setQueryData<Booking[] | undefined>(['manager-inbox-bookings'], (current) =>
-      current?.map((booking) =>
-        booking.id === id ? { ...booking, capacity_percent: capacityPercent } : booking
-      )
+    queryClient.setQueryData<Booking[] | undefined>(
+      ['manager-inbox-bookings'],
+      (current) =>
+        current?.map((booking) =>
+          booking.id === id ? { ...booking, capacity_percent: capacityPercent } : booking
+        )
     );
 
     return true;
@@ -817,6 +818,9 @@ export function ManagerInboxPage() {
     }
     if (closeDetail) {
       setMobileDetailOpen(false);
+      const params = new URLSearchParams(searchParams);
+      params.delete('requestId');
+      setSearchParams(params, { replace: true });
     }
     void queryClient.invalidateQueries();
   }
@@ -879,31 +883,39 @@ export function ManagerInboxPage() {
 
   function selectTab(tab: InboxTab) {
     runOrConfirmNavigation(() => {
+      const params = new URLSearchParams(searchParams);
+      setParam(params, 'priority', '');
+      setParam(params, 'type', '');
+      setParam(params, 'status', '');
+      setParam(params, 'overbookRisk', '');
+      setParam(params, 'needsVerification', '');
+      params.delete('requestId');
+      params.delete('page');
+
       if (tab === 'ALL') {
-        const params = new URLSearchParams(searchParams);
-        setParam(params, 'priority', '');
-        setParam(params, 'type', '');
-        params.delete('requestId');
-        params.delete('page');
         setSearchParams(params);
         return;
       }
 
       if (tab === 'URGENT') {
-        const params = new URLSearchParams(searchParams);
         setParam(params, 'priority', 'URGENT');
-        setParam(params, 'type', '');
-        params.delete('requestId');
-        params.delete('page');
         setSearchParams(params);
         return;
       }
 
-      const params = new URLSearchParams(searchParams);
-      setParam(params, 'type', tab);
-      setParam(params, 'priority', '');
-      params.delete('requestId');
-      params.delete('page');
+      if (tab === 'UNASSIGNED') {
+        setParam(params, 'type', 'OPEN_REQUEST');
+        setSearchParams(params);
+        return;
+      }
+
+      if (tab === 'PENDING') {
+        setParam(params, 'status', 'PENDING');
+        setSearchParams(params);
+        return;
+      }
+
+      setParam(params, 'overbookRisk', 'true');
       setSearchParams(params);
     });
   }
@@ -919,8 +931,13 @@ export function ManagerInboxPage() {
     });
   }
 
-  function closeMobileDetail() {
-    setMobileDetailOpen(false);
+  function closeDetail() {
+    runOrConfirmNavigation(() => {
+      const params = new URLSearchParams(searchParams);
+      params.delete('requestId');
+      setSearchParams(params);
+      setMobileDetailOpen(false);
+    });
   }
 
   function handleReject(id: string) {
@@ -977,13 +994,6 @@ export function ManagerInboxPage() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">Manager Inbox</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Review, prioritize, and resolve booking requests
-        </p>
-      </div>
-
       {successMessage || saveForLaterMessage ? (
         <div className="fixed right-4 top-4 z-[60] flex max-w-sm flex-col gap-3">
           {successMessage ? (
@@ -1111,9 +1121,10 @@ export function ManagerInboxPage() {
             <div className="flex flex-wrap items-center gap-2 2xl:justify-start">
               {[
                 ['ALL', `All (${counts.ALL})`],
-                ['SPECIFIC_BA', `Specific BA (${counts.SPECIFIC_BA})`],
-                ['OPEN_REQUEST', `Open Requests (${counts.OPEN_REQUEST})`],
-                ['URGENT', `Urgent (${counts.URGENT})`]
+                ['URGENT', `Urgent (${counts.URGENT})`],
+                ['UNASSIGNED', `Unassigned (${counts.UNASSIGNED})`],
+                ['PENDING', `Pending (${counts.PENDING})`],
+                ['OVERBOOK_RISK', `Overbook Risk (${counts.OVERBOOK_RISK})`]
               ].map(([tab, label]) => (
                 <button
                   key={tab}
@@ -1208,7 +1219,7 @@ export function ManagerInboxPage() {
         </CardContent>
       </Card>
 
-      <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+      <div className="grid items-start gap-5">
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-sm font-medium text-slate-500">
@@ -1225,14 +1236,29 @@ export function ManagerInboxPage() {
                 className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
               >
                 <option value="PRIORITY">Priority</option>
+                <option value="CAPACITY_RISK">Capacity risk</option>
                 <option value="NEWEST">Newest</option>
                 <option value="OLDEST">Oldest</option>
               </select>
             </div>
           </div>
+          <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500 2xl:grid 2xl:grid-cols-[92px_116px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_96px] 2xl:gap-3">
+            <span>Priority</span>
+            <span>Type</span>
+            <span>Project</span>
+            <span>Requester</span>
+            <span>Requested / Assigned BA</span>
+            <span>Date Range</span>
+            <span>Status</span>
+            <span>Action</span>
+          </div>
           {paginatedBookings.map((booking) => {
             const selected = selectedBooking?.id === booking.id;
-            const type = getRequestType(booking);
+            const capacity = summary.data?.items.find(
+              (item) => item.ba_id === booking.ba_id
+            );
+            const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
+            const actionLabel = getRequestActionLabel(booking);
 
             return (
               <button
@@ -1240,56 +1266,49 @@ export function ManagerInboxPage() {
                 type="button"
                 onClick={() => openDetail(booking.id)}
                 className={[
-                  'rounded-xl border bg-white p-4 text-left shadow-sm transition block w-full',
+                  'grid w-full gap-3 rounded-lg border bg-white p-3 text-left text-sm shadow-sm transition 2xl:grid-cols-[92px_116px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_96px] 2xl:items-center',
                   selected
                     ? 'border-blue-400 ring-1 ring-blue-400'
                     : 'border-slate-200 hover:border-slate-300'
                 ].join(' ')}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <p className="truncate text-lg font-semibold text-slate-900">
-                        {booking.title}
-                      </p>
-                      <Badge tone={priorityTone(booking.priority)}>
-                        {booking.priority}
+                <Badge tone={priorityTone(booking.priority)}>{booking.priority}</Badge>
+                <RequestTypeBadge booking={booking} />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-950">
+                    {booking.project.name}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
+                  <span className="mt-2 flex flex-wrap gap-1">
+                    {riskFlags.map((flag) => (
+                      <Badge
+                        key={flag}
+                        tone={
+                          flag === 'Normal'
+                            ? 'neutral'
+                            : flag === 'Overbook risk' || flag === 'Urgent'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                      >
+                        {flag}
                       </Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <RequestTypeBadge booking={booking} />
-                      <RequestStateBadge booking={booking} />
-                      {needsManagerVerification(booking) ? (
-                        <Badge tone="warning">Needs verification</Badge>
-                      ) : null}
-                    </div>
-                  </div>
-                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
+                    ))}
+                  </span>
                 </div>
-
-                <div className="grid gap-x-4 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
-                  <div className="flex items-center gap-2 truncate">
-                    {type === 'SPECIFIC_BA' ? (
-                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-                    ) : (
-                      <UsersRound className="h-4 w-4 shrink-0 text-slate-400" />
-                    )}
-                    <span className="truncate">
-                      {booking.ba?.full_name ?? 'Unassigned'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 truncate">
-                    <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span className="truncate">
-                      {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 truncate sm:col-span-2">
-                    <span className="truncate">
-                      Requester: {booking.requester.full_name}
-                    </span>
-                  </div>
-                </div>
+                <span className="min-w-0 truncate text-slate-600">
+                  {booking.requester.full_name}
+                </span>
+                <span className="min-w-0 truncate text-slate-600">
+                  {booking.ba?.full_name ?? 'Unassigned'}
+                </span>
+                <span className="text-slate-600">
+                  {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+                </span>
+                <RequestStateBadge booking={booking} />
+                <span className="inline-flex items-center gap-1 font-semibold text-blue-700 2xl:justify-end">
+                  {actionLabel} <ChevronRight className="h-4 w-4" />
+                </span>
               </button>
             );
           })}
@@ -1359,101 +1378,126 @@ export function ManagerInboxPage() {
         </div>
 
         {!isMobile && selectedBooking ? (
-          <RequestDetailPanel
-            booking={selectedBooking}
-            allBas={bas.data ?? []}
-            capacitySummary={summary.data}
-            selectedBaId={selectedBaId}
-            capacity={selectedCapacity.data}
-            capacityPercent={selectedCapacityPercent}
-            onSelectBa={(baId) =>
-              setAssignDrafts((current) => ({ ...current, [selectedBooking.id]: baId }))
-            }
-            onCapacityChange={(capacityPercent) =>
-              setCapacityDrafts((current) => ({
-                ...current,
-                [selectedBooking.id]: String(capacityPercent)
-              }))
-            }
-            onSaveCapacity={() =>
-              updateCapacity.mutate({
-                id: selectedBooking.id,
-                capacityPercent: selectedCapacityPercent
-              })
-            }
-            onApprove={() =>
-              approve.mutate({
-                id: selectedBooking.id,
-                capacityPercent: selectedCapacityPercent,
-                currentCapacityPercent: selectedBooking.capacity_percent
-              })
-            }
-            onReject={() => handleReject(selectedBooking.id)}
-            onAssign={() =>
-              runWithCapacityConfirmation('Assign BA', () =>
-                assign.mutate({
-                  id: selectedBooking.id,
-                  baId: selectedBaId,
-                  capacityPercent: selectedCapacityPercent,
-                  currentCapacityPercent: selectedBooking.capacity_percent
-                })
-              )
-            }
-            onAssignAndApprove={() =>
-              runWithCapacityConfirmation('Assign + Approve', () =>
-                assignAndApprove.mutate({
-                  id: selectedBooking.id,
-                  baId: selectedBaId,
-                  capacityPercent: selectedCapacityPercent,
-                  currentCapacityPercent: selectedBooking.capacity_percent
-                })
-              )
-            }
-            onCancel={() => handleCancel(selectedBooking.id)}
-            onSaveForLater={() =>
-              setSaveForLaterMessage(`Saved ${selectedBooking.title} for later review.`)
-            }
-            onApproveChanges={(changes) =>
-              approveChanges.mutate({ id: selectedBooking.id, changes })
-            }
-            onRejectChanges={() => rejectChanges.mutate({ id: selectedBooking.id })}
-            onChangeDraftDirty={setPendingChangeDraftDirty}
-            onOpenReviewModal={() => setReviewModalOpen(true)}
-            onApproveField={(field, override) =>
-              approveFields.mutate({
-                id: selectedBooking.id,
-                fields: [field],
-                overrides: override !== undefined ? { [field]: override } : undefined
-              })
-            }
-            onRejectField={(field) =>
-              rejectFields.mutate({ id: selectedBooking.id, fields: [field] })
-            }
-            canManageActions={canManageInbox}
-            isSubmitting={
-              approve.isPending ||
-              reject.isPending ||
-              assign.isPending ||
-              assignAndApprove.isPending ||
-              cancel.isPending ||
-              updateCapacity.isPending ||
-              approveChanges.isPending ||
-              rejectChanges.isPending ||
-              approveFields.isPending ||
-              rejectFields.isPending
-            }
-          />
-        ) : !isMobile ? (
-          <Card>
-            <CardContent className="p-5 text-sm text-slate-500">
-              Select a request to review details.
-            </CardContent>
-          </Card>
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/25"
+            onClick={closeDetail}
+            role="presentation"
+          >
+            <aside
+              className="absolute inset-y-0 right-0 flex w-full max-w-[1040px] flex-col overflow-hidden border-l border-slate-200 bg-slate-50 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+              aria-label="Request detail"
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-slate-950">Request detail</p>
+                  <p className="truncate text-sm text-slate-500">
+                    {selectedBooking.project.name}
+                  </p>
+                </div>
+                <Button variant="secondary" onClick={closeDetail}>
+                  Close
+                </Button>
+              </div>
+              <div className="overflow-y-auto p-4">
+                <RequestDetailPanel
+                  booking={selectedBooking}
+                  allBas={bas.data ?? []}
+                  capacitySummary={summary.data}
+                  selectedBaId={selectedBaId}
+                  capacity={selectedCapacity.data}
+                  capacityPercent={selectedCapacityPercent}
+                  onSelectBa={(baId) =>
+                    setAssignDrafts((current) => ({
+                      ...current,
+                      [selectedBooking.id]: baId
+                    }))
+                  }
+                  onCapacityChange={(capacityPercent) =>
+                    setCapacityDrafts((current) => ({
+                      ...current,
+                      [selectedBooking.id]: String(capacityPercent)
+                    }))
+                  }
+                  onSaveCapacity={() =>
+                    updateCapacity.mutate({
+                      id: selectedBooking.id,
+                      capacityPercent: selectedCapacityPercent
+                    })
+                  }
+                  onApprove={() =>
+                    approve.mutate({
+                      id: selectedBooking.id,
+                      capacityPercent: selectedCapacityPercent,
+                      currentCapacityPercent: selectedBooking.capacity_percent
+                    })
+                  }
+                  onReject={() => handleReject(selectedBooking.id)}
+                  onAssign={() =>
+                    runWithCapacityConfirmation('Assign BA', () =>
+                      assign.mutate({
+                        id: selectedBooking.id,
+                        baId: selectedBaId,
+                        capacityPercent: selectedCapacityPercent,
+                        currentCapacityPercent: selectedBooking.capacity_percent
+                      })
+                    )
+                  }
+                  onAssignAndApprove={() =>
+                    runWithCapacityConfirmation('Assign + Approve', () =>
+                      assignAndApprove.mutate({
+                        id: selectedBooking.id,
+                        baId: selectedBaId,
+                        capacityPercent: selectedCapacityPercent,
+                        currentCapacityPercent: selectedBooking.capacity_percent
+                      })
+                    )
+                  }
+                  onCancel={() => handleCancel(selectedBooking.id)}
+                  onSaveForLater={() =>
+                    setSaveForLaterMessage(
+                      `Saved ${selectedBooking.title} for later review.`
+                    )
+                  }
+                  onApproveChanges={(changes) =>
+                    approveChanges.mutate({ id: selectedBooking.id, changes })
+                  }
+                  onRejectChanges={() => rejectChanges.mutate({ id: selectedBooking.id })}
+                  onChangeDraftDirty={setPendingChangeDraftDirty}
+                  onOpenReviewModal={() => setReviewModalOpen(true)}
+                  onApproveField={(field, override) =>
+                    approveFields.mutate({
+                      id: selectedBooking.id,
+                      fields: [field],
+                      overrides:
+                        override !== undefined ? { [field]: override } : undefined
+                    })
+                  }
+                  onRejectField={(field) =>
+                    rejectFields.mutate({ id: selectedBooking.id, fields: [field] })
+                  }
+                  canManageActions={canManageInbox}
+                  isSubmitting={
+                    approve.isPending ||
+                    reject.isPending ||
+                    assign.isPending ||
+                    assignAndApprove.isPending ||
+                    cancel.isPending ||
+                    updateCapacity.isPending ||
+                    approveChanges.isPending ||
+                    rejectChanges.isPending ||
+                    approveFields.isPending ||
+                    rejectFields.isPending
+                  }
+                />
+              </div>
+            </aside>
+          </div>
         ) : null}
       </div>
 
       {isMobile && selectedBooking && mobileDetailOpen ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={closeMobileDetail}>
+        <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={closeDetail}>
           <div
             className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -1514,7 +1558,7 @@ export function ManagerInboxPage() {
                 setSaveForLaterMessage(
                   `Saved ${selectedBooking.title} for later review.`
                 );
-                closeMobileDetail();
+                closeDetail();
               }}
               onApproveChanges={(changes) =>
                 approveChanges.mutate({ id: selectedBooking.id, changes })
@@ -1627,7 +1671,9 @@ export function ManagerInboxPage() {
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-slate-950">Unsaved changes</h2>
+                <h2 className="text-base font-semibold text-slate-950">
+                  Unsaved changes
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
                   Review these edits before leaving this section.
                 </p>
@@ -1655,12 +1701,18 @@ export function ManagerInboxPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">There are unsaved edits in this review.</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  There are unsaved edits in this review.
+                </p>
               )}
             </div>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <Button type="button" variant="secondary" onClick={() => continuePendingNavigation()}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => continuePendingNavigation()}
+              >
                 Leave anyway
               </Button>
               <Button type="button" onClick={() => setPendingNavigationAction(null)}>
@@ -1674,10 +1726,18 @@ export function ManagerInboxPage() {
       {confirmationState ? (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <h2 className="text-base font-semibold text-slate-950">{confirmationState.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{confirmationState.body}</p>
+            <h2 className="text-base font-semibold text-slate-950">
+              {confirmationState.title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {confirmationState.body}
+            </p>
             <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setConfirmationState(null)}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setConfirmationState(null)}
+              >
                 Cancel
               </Button>
               <Button
@@ -1696,10 +1756,17 @@ export function ManagerInboxPage() {
       ) : null}
 
       {selectedBooking ? (
-        <Modal open={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Changes">
+        <Modal
+          open={reviewModalOpen}
+          onClose={() => setReviewModalOpen(false)}
+          title="Review Changes"
+        >
           <div className="grid gap-3">
             {selectedPendingChangeEntries.map((entry) => (
-              <div key={entry.key} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <div
+                key={entry.key}
+                className="rounded-lg border border-slate-200 p-3 text-sm"
+              >
                 <p className="font-medium text-slate-950">{entry.label}</p>
                 <p className="mt-1 text-slate-600">
                   {entry.currentDisplay} {'->'} {entry.proposedDisplay}
@@ -1759,8 +1826,6 @@ export function RequestDetailPanel({
 }) {
   const [baSearch, setBaSearch] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const requestState = getManagerRequestState(booking);
-  const type = getRequestType(booking);
   const canEditPendingRequest = canManageActions && booking.status === 'PENDING';
   const canEditCapacity = canEditPendingRequest;
   const capacityChanged = capacityPercent !== booking.capacity_percent;
@@ -1781,9 +1846,10 @@ export function RequestDetailPanel({
   const canReject = canEditPendingRequest;
   const now = new Date();
   const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
-  const startStr = typeof booking.start_date === 'string'
-    ? booking.start_date.slice(0, 10)
-    : new Date(booking.start_date).toISOString().slice(0, 10);
+  const startStr =
+    typeof booking.start_date === 'string'
+      ? booking.start_date.slice(0, 10)
+      : new Date(booking.start_date).toISOString().slice(0, 10);
   const canCancel = booking.status === 'APPROVED' && startStr > todayStr;
   const assignChanged = selectedBaId !== (booking.ba_id ?? '');
   const hasAssignmentAction = assignChanged || capacityChanged;
@@ -1811,6 +1877,9 @@ export function RequestDetailPanel({
   }, [allBas, baSearch, capacitySummary]);
 
   const selectedBa = allBas.find((ba) => ba.id === selectedBaId);
+  const assignmentName = selectedBa?.full_name ?? booking.ba?.full_name ?? 'Unassigned';
+  const assignmentHint = selectedBa?.level ?? booking.ba?.level ?? 'Needs assignment';
+  const assignmentLabel = booking.ba_id ? 'Requested BA' : 'Assignment';
 
   return (
     <Card className="h-fit">
@@ -1858,9 +1927,9 @@ export function RequestDetailPanel({
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <DetailStat
-            label={type === 'SPECIFIC_BA' ? 'Requested BA' : 'Requested BA / Assignment'}
-            value={booking.ba?.full_name ?? selectedBa?.full_name ?? 'Unassigned'}
-            hint={booking.ba?.level ?? selectedBa?.level ?? 'Assign BA'}
+            label={assignmentLabel}
+            value={assignmentName}
+            hint={assignmentHint}
             tone="person"
             icon={UserRound}
           />
@@ -1874,16 +1943,16 @@ export function RequestDetailPanel({
           <DetailStat
             label="Priority"
             value={booking.priority}
-            hint={`${capacityPercent}% capacity`}
+            hint="Decision order"
             tone="priority"
             icon={Zap}
           />
           <DetailStat
-            label="Request ID"
-            value={booking.id.slice(0, 8).toUpperCase()}
-            hint="Booking record"
+            label="Date Range"
+            value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
+            hint={`${capacityPercent}% capacity`}
             tone="neutral"
-            icon={Hash}
+            icon={CalendarRange}
           />
         </div>
       </CardHeader>
@@ -1895,53 +1964,28 @@ export function RequestDetailPanel({
               <div>
                 <p className="text-sm font-semibold text-slate-950">Changes Proposed</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {pendingChangeEntries.length} change{pendingChangeEntries.length === 1 ? '' : 's'} proposed — review each before approving or rejecting.
+                  {pendingChangeEntries.length} change
+                  {pendingChangeEntries.length === 1 ? '' : 's'} proposed — review each
+                  before approving or rejecting.
                 </p>
               </div>
               <Badge tone="warning">Manager review required</Badge>
             </div>
-            <Button
-              type="button"
-              onClick={onOpenReviewModal}
-              disabled={isSubmitting}
-            >
+            <Button type="button" onClick={onOpenReviewModal} disabled={isSubmitting}>
               Review Changes
             </Button>
           </section>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-3">
-          <InfoCard
-            title="Date range"
-            value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
-            hint="5 working days"
-            tone="date"
-            icon={CalendarRange}
-          />
-          <InfoCard
-            title="Estimated capacity"
-            value={`${capacityPercent}%`}
-            hint={
-              capacityChanged
-                ? `Original: ${booking.capacity_percent}%`
-                : requestState === 'NEED_VERIFICATION'
-                  ? 'Needs verification'
-                  : 'Current'
-            }
-            tone="capacity"
-            icon={ShieldCheck}
-          />
-          <InfoCard
-            title="Request type"
-            value={type === 'SPECIFIC_BA' ? 'Specific BA request' : 'Open request'}
-            hint={type === 'SPECIFIC_BA' ? 'Pre-assigned submission' : 'Needs assignment'}
-            tone="type"
-            icon={Layers3}
-          />
-        </div>
-
         <section className="grid gap-2 rounded-xl border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-950">Project / Business need</p>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold text-slate-900">{booking.project.name}</span>
+            <Badge tone="info">{capacityPercent}% capacity</Badge>
+            {capacityChanged ? (
+              <Badge tone="warning">Original {booking.capacity_percent}%</Badge>
+            ) : null}
+          </div>
           <p className="text-sm leading-6 text-slate-600">{booking.description}</p>
           {booking.notes ? (
             <p className="text-sm text-slate-500">Notes: {booking.notes}</p>
@@ -2177,15 +2221,27 @@ export function RequestDetailPanel({
               <Button
                 variant="secondary"
                 onClick={onAssign}
-                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision || !hasAssignmentAction}
+                disabled={
+                  !selectedBaId ||
+                  isSubmitting ||
+                  blocksCapacityDecision ||
+                  !hasAssignmentAction
+                }
               >
                 {capacityChanged || assignChanged ? 'Save + assign' : 'Assign BA'}
               </Button>
               <Button
                 onClick={onAssignAndApprove}
-                disabled={!selectedBaId || isSubmitting || blocksCapacityDecision || !hasApprovalAction}
+                disabled={
+                  !selectedBaId ||
+                  isSubmitting ||
+                  blocksCapacityDecision ||
+                  !hasApprovalAction
+                }
               >
-                {capacityChanged || assignChanged ? 'Save + assign + approve' : 'Assign + Approve'}
+                {capacityChanged || assignChanged
+                  ? 'Save + assign + approve'
+                  : 'Assign + Approve'}
               </Button>
               <Button
                 variant="secondary"
@@ -2210,13 +2266,14 @@ export function RequestDetailPanel({
   );
 }
 
-
 function getPendingChangeEntries(booking: Booking): PendingChangeEntry[] {
   const changes = booking.pending_changes ?? {};
   return Object.entries(changes).map(([key, value]) => ({
     key,
     label: toTitleLabel(key),
-    currentDisplay: formatPendingChangeValue((booking as unknown as Record<string, unknown>)[key]),
+    currentDisplay: formatPendingChangeValue(
+      (booking as unknown as Record<string, unknown>)[key]
+    ),
     proposedDisplay: formatPendingChangeValue(value),
     proposedInputValue: formatPendingChangeValue(value)
   }));
@@ -2245,7 +2302,11 @@ function parsePendingChangeValue(entry: PendingChangeEntry, value: string) {
 
 function formatPendingChangeValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
     return String(value);
   }
   return JSON.stringify(value);
@@ -2298,6 +2359,16 @@ function DetailStat({
     }
   } as const;
   const style = styles[tone];
+  const priorityValueClass =
+    tone === 'priority'
+      ? value === 'URGENT'
+        ? 'inline-flex rounded-md bg-rose-100 px-2 py-1 text-rose-800 ring-1 ring-rose-300'
+        : value === 'HIGH'
+          ? 'inline-flex rounded-md bg-amber-100 px-2 py-1 text-amber-800 ring-1 ring-amber-300'
+          : value === 'MEDIUM'
+            ? 'inline-flex rounded-md bg-blue-50 px-2 py-1 text-blue-700 ring-1 ring-blue-200'
+            : 'inline-flex rounded-md bg-gray-100 px-2 py-1 text-gray-700 ring-1 ring-gray-200'
+      : style.value;
 
   return (
     <div className={`rounded-xl border p-3 ${style.wrapper}`}>
@@ -2305,54 +2376,7 @@ function DetailStat({
         <Icon className="h-3.5 w-3.5 text-slate-400" />
         <p className={`text-xs uppercase tracking-wide ${style.label}`}>{label}</p>
       </div>
-      <p className={`mt-3 text-sm font-semibold ${style.value}`}>{value}</p>
-      <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
-    </div>
-  );
-}
-
-function InfoCard({
-  title,
-  value,
-  hint,
-  tone,
-  icon: Icon
-}: {
-  title: string;
-  value: string;
-  hint: string;
-  tone: 'date' | 'capacity' | 'type';
-  icon: typeof CalendarRange;
-}) {
-  const styles = {
-    date: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    capacity: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    type: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    }
-  } as const;
-  const style = styles[tone];
-
-  return (
-    <div className={`rounded-xl border p-4 ${style.wrapper}`}>
-      <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-slate-400" />
-        <p className={`text-xs uppercase tracking-wide ${style.label}`}>{title}</p>
-      </div>
-      <p className={`mt-3 text-sm font-semibold ${style.value}`}>{value}</p>
+      <p className={`mt-3 text-sm font-semibold ${priorityValueClass}`}>{value}</p>
       <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
     </div>
   );
@@ -2380,6 +2404,44 @@ function RequestStateBadge({ booking }: { booking: Booking }) {
             : 'neutral';
 
   return <Badge tone={tone}>{stateLabelMap[state]}</Badge>;
+}
+
+function getRequestRiskFlags(booking: Booking, riskCapacity: number) {
+  const flags: string[] = [];
+
+  if (booking.priority === 'URGENT') {
+    flags.push('Urgent');
+  }
+
+  if (!booking.ba_id) {
+    flags.push('Unassigned');
+  }
+
+  if (riskCapacity > 100) {
+    flags.push('Overbook risk');
+  }
+
+  if (needsManagerVerification(booking)) {
+    flags.push('Needs verification');
+  }
+
+  return flags.length > 0 ? flags : ['Normal'];
+}
+
+function getRequestActionLabel(booking: Booking) {
+  if (!booking.ba_id) {
+    return 'Assign';
+  }
+
+  if (booking.status === 'PENDING' && getRequestType(booking) === 'SPECIFIC_BA') {
+    return 'Approve';
+  }
+
+  if (booking.status === 'PENDING') {
+    return 'Review';
+  }
+
+  return 'View';
 }
 
 const rejectButtonClassName =
@@ -2509,32 +2571,35 @@ function isBookingStatus(value: string | null): value is BookingStatus {
 }
 
 function isSortOption(value: string | null): value is FilterState['sort'] {
-  return value === 'NEWEST' || value === 'OLDEST' || value === 'PRIORITY';
+  return (
+    value === 'NEWEST' ||
+    value === 'OLDEST' ||
+    value === 'PRIORITY' ||
+    value === 'CAPACITY_RISK'
+  );
 }
 
-function getInboxPriorityScore(booking: Booking) {
-  const state = getManagerRequestState(booking);
+function getInboxPriorityScore(booking: Booking, hasOverbookRisk = false) {
   let score = 0;
-
-  if (booking.status === 'PENDING') score += 100;
-  if (state === 'NEED_VERIFICATION') score += 40;
-  if (state === 'NEEDS_ASSIGNMENT') score += 30;
-  if (getRequestType(booking) === 'OPEN_REQUEST') score += 10;
 
   switch (booking.priority) {
     case 'URGENT':
-      score += 50;
+      score += 400;
       break;
     case 'HIGH':
-      score += 30;
+      score += 300;
       break;
     case 'MEDIUM':
-      score += 15;
+      score += 200;
       break;
     default:
-      score += 5;
+      score += 100;
       break;
   }
+
+  if (hasOverbookRisk) score += 50;
+  if (!booking.ba_id) score += 30;
+  if (booking.status === 'PENDING') score += 20;
 
   return score;
 }

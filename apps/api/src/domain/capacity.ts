@@ -10,6 +10,14 @@ export type CapacityBooking = {
   status: BookingStatus;
 };
 
+export type CapacityClassification =
+  | 'BENCH'
+  | 'LOW'
+  | 'AVAILABLE'
+  | 'HIGH'
+  | 'FULL'
+  | 'OVERBOOKED';
+
 const officialStatuses = new Set<BookingStatus>([
   BookingStatus.APPROVED,
   BookingStatus.IN_PROGRESS
@@ -108,4 +116,59 @@ export function calculateBookedWorkingDays(
   }
 
   return bookedDays;
+}
+
+export function calculateBookingManDays(
+  booking: Pick<CapacityBooking, 'start_date' | 'end_date' | 'capacity_percent'>,
+  startDate = booking.start_date,
+  endDate = booking.end_date
+) {
+  const overlapStart = booking.start_date > startDate ? booking.start_date : startDate;
+  const overlapEnd = booking.end_date < endDate ? booking.end_date : endDate;
+
+  if (overlapStart > overlapEnd) {
+    return 0;
+  }
+
+  return workingDaysInRange(overlapStart, overlapEnd).length * (booking.capacity_percent / 100);
+}
+
+export function calculateUtilizationPercent(bookedManDays: number, availableManDays: number) {
+  if (availableManDays <= 0) {
+    return 0;
+  }
+
+  return Number(((bookedManDays / availableManDays) * 100).toFixed(1));
+}
+
+export function calculateBenchRate(benchBaCount: number, totalBaCount: number) {
+  if (totalBaCount <= 0) {
+    return 0;
+  }
+
+  return Number(((benchBaCount / totalBaCount) * 100).toFixed(1));
+}
+
+export function classifyCapacity(utilizationPercent: number): CapacityClassification {
+  if (utilizationPercent <= 0) {
+    return 'BENCH';
+  }
+
+  if (utilizationPercent < 50) {
+    return 'LOW';
+  }
+
+  if (utilizationPercent < 75) {
+    return 'AVAILABLE';
+  }
+
+  if (utilizationPercent < 100) {
+    return 'HIGH';
+  }
+
+  if (utilizationPercent === 100) {
+    return 'FULL';
+  }
+
+  return 'OVERBOOKED';
 }
