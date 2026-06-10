@@ -40,7 +40,7 @@ export function App() {
         />
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard" element={<ProtectedPage><LayoutShell suppressPageHeader><DashboardPage /></LayoutShell></ProtectedPage>} />
-        <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
+        <Route path="/timeline" element={<ProtectedPage><LayoutShell suppressPageHeader><TimelinePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />
         <Route path="/action-center" element={<RedirectPreserveSearch to="/manager/action-center" />} />
