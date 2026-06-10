@@ -28,6 +28,8 @@ import {
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { formatDate, priorityTone } from '@/lib/format';
 import { Avatar, BAIdentity } from '@/components/common';
+import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
+import { type RecommendationQuery } from '@/lib/recommendations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1881,6 +1883,36 @@ export function RequestDetailPanel({
   const assignmentHint = selectedBa?.level ?? booking.ba?.level ?? 'Needs assignment';
   const assignmentLabel = booking.ba_id ? 'Requested BA' : 'Assignment';
 
+  // Build the recommendation query from the booking. We always pass the
+  // date range, capacity, and project_id (so project_affinity is real). The
+  // manager opens the panel manually to avoid hitting the API on every
+  // keystroke in the capacity input above.
+  const recommendationQuery: RecommendationQuery | null = useMemo(() => {
+    if (!booking.start_date || !booking.end_date) return null;
+    if (booking.end_date < booking.start_date) return null;
+    const cap = capacityPercent;
+    if (!Number.isFinite(cap) || cap < 1 || cap > 100) return null;
+    return {
+      start_date: typeof booking.start_date === 'string'
+        ? booking.start_date.slice(0, 10)
+        : new Date(booking.start_date).toISOString().slice(0, 10),
+      end_date: typeof booking.end_date === 'string'
+        ? booking.end_date.slice(0, 10)
+        : new Date(booking.end_date).toISOString().slice(0, 10),
+      capacity_percent: cap,
+      project_id: booking.project_id,
+      // Exclude the currently-assigned BA so a manager can pick "show me
+      // alternatives" if they want; we keep this OFF by default because
+      // re-assigning to the same BA should be allowed.
+      limit: 5
+    };
+  }, [
+    booking.start_date,
+    booking.end_date,
+    booking.project_id,
+    capacityPercent
+  ]);
+
   return (
     <Card className="h-fit">
       <CardHeader className="gap-4 border-b border-slate-200 pb-5">
@@ -2126,6 +2158,12 @@ export function RequestDetailPanel({
                 <a href="/crm/ba">BA Directory</a>
               </Button>
             </div>
+
+            <RecommendationDropdown
+              query={recommendationQuery}
+              selectedBaId={selectedBaId}
+              onSelectCandidate={onSelectBa}
+            />
 
             <div className="relative">
               <div

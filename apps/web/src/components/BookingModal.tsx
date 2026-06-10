@@ -174,7 +174,8 @@ export function BookingModal({
                 ))}
               </select>
               <p className="text-xs text-slate-500">
-                Leave unassigned for BA Manager to assign later.
+                Leave unassigned — the BA Manager will pick from model
+                suggestions, then approve.
               </p>
             </Field>
             <Field label="Project name">
