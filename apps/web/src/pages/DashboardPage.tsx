@@ -526,7 +526,7 @@ function ManagerDashboard({
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Needs Attention"
           value={String(attentionCounts.all)}
@@ -831,7 +831,7 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
       <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
       <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
       <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
-      <span className="hidden text-slate-600 xl:block">{item.dateRange}</span>
+      <span className="text-slate-600">{item.dateRange}</span>
       <Badge
         tone={
           item.flag === 'OVERBOOKED'

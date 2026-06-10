@@ -1328,7 +1328,7 @@ export function ManagerInboxPage() {
   return (
     <div className="grid gap-5">
       {successMessage || saveForLaterMessage ? (
-        <div className="fixed right-4 top-4 z-[60] flex max-w-sm flex-col gap-3">
+        <div className="fixed left-4 right-4 top-4 z-[60] flex flex-col gap-3 sm:left-auto sm:max-w-sm">
           {successMessage ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
               <div className="flex items-start justify-between gap-3">

@@ -83,7 +83,12 @@ export function DataTable<T>({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className={cn('w-full text-left text-sm', tableClassName)}>
+        <table
+          className={cn(
+            'w-full min-w-[760px] text-left text-sm lg:min-w-0',
+            tableClassName
+          )}
+        >
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/60 text-xs font-semibold uppercase tracking-wide text-slate-500">
               {columns.map((column) => (

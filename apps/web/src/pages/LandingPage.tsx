@@ -197,7 +197,7 @@ function ProductPreview() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[148px_repeat(7,minmax(34px,1fr))] text-xs">
+            <div className="grid grid-cols-[104px_repeat(7,minmax(22px,1fr))] text-xs sm:grid-cols-[148px_repeat(7,minmax(34px,1fr))]">
               <div className="border-b border-r border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-500">
                 BA
               </div>
