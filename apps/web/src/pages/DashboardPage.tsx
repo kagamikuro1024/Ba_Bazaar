@@ -579,9 +579,9 @@ function ManagerDashboard({
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Card>
-          <CardContent className="p-0">
+      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.55fr)] 2xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <Card className="h-full">
+          <CardContent className="flex h-full flex-col p-0">
             <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-950">
@@ -626,7 +626,7 @@ function ManagerDashboard({
                 </button>
               ))}
             </div>
-            <div className="hidden grid-cols-[96px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_138px_116px_172px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
+            <div className="hidden grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
               <span>Priority</span>
               <span>Project</span>
               <span>Requester</span>
@@ -635,12 +635,12 @@ function ManagerDashboard({
               <span>Reason</span>
               <span className="text-right">Action</span>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="flex flex-1 flex-col divide-y divide-slate-100">
               {needsAttention.map((item) => (
                 <ManagerActionRow key={item.id} item={item} />
               ))}
               {filteredAttention.length === 0 ? (
-                <div className="p-5 text-sm text-slate-500">
+                <div className="flex flex-1 items-center p-5 text-sm text-slate-500">
                   No manager actions match this filter.
                 </div>
               ) : null}
@@ -826,7 +826,7 @@ function ManagerAlertLink({
 
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
-    <div className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[96px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_138px_116px_172px] xl:items-center">
+    <div className="grid flex-1 gap-3 px-4 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
       <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
       <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
       <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
@@ -843,19 +843,14 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
       >
         {formatManagerFlag(item.flag)}
       </Badge>
-      <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-        <Button size="sm" asChild>
-          <Link to={item.actionTo}>
-            {item.actionLabel}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-        {item.kind === 'booking' ? (
-          <Button variant="secondary" size="sm" asChild>
-            <Link to={`/manager/action-center?requestId=${item.booking.id}`}>Open</Link>
+        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+          <Button size="sm" asChild>
+            <Link to={item.actionTo}>
+              {item.actionLabel}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </Button>
-        ) : null}
-      </div>
+        </div>
     </div>
   );
 }
