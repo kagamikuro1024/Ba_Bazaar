@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
-  CalendarRange,
   ChevronDown,
   ChevronRight,
-  Search,
-  UserRound,
-  UsersRound,
-  Zap
+  Search
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
@@ -2146,34 +2142,30 @@ export function RequestDetailPanel({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <DetailStat
+        <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <RequestSummaryItem
             label={assignmentLabel}
             value={assignmentName}
             hint={assignmentHint}
-            tone="person"
-            icon={UserRound}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Requester"
             value={booking.requester.full_name}
             hint={booking.requester.email}
-            tone="requester"
-            icon={UsersRound}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Priority"
-            value={booking.priority}
+            value={
+              <Badge tone={priorityTone(booking.priority)} className="w-fit">
+                {booking.priority}
+              </Badge>
+            }
             hint="Decision order"
-            tone="priority"
-            icon={Zap}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Date Range"
             value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
             hint={`${capacityPercent}% capacity`}
-            tone="neutral"
-            icon={CalendarRange}
           />
         </div>
       </CardHeader>
@@ -2546,65 +2538,24 @@ function toTitleLabel(key: string) {
     .join(' ');
 }
 
-function DetailStat({
+function RequestSummaryItem({
   label,
   value,
-  hint,
-  tone,
-  icon: Icon
+  hint
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   hint: string;
-  tone: 'person' | 'requester' | 'priority' | 'neutral';
-  icon: typeof UserRound;
 }) {
-  const styles = {
-    person: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    requester: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    priority: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    neutral: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-400',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    }
-  } as const;
-  const style = styles[tone];
-  const priorityValueClass =
-    tone === 'priority'
-      ? value === 'URGENT'
-        ? 'inline-flex min-w-[116px] justify-center rounded-md bg-rose-100 px-2 py-1 text-center text-rose-800 ring-1 ring-rose-300'
-        : value === 'HIGH'
-          ? 'inline-flex min-w-[116px] justify-center rounded-md bg-amber-100 px-2 py-1 text-center text-amber-800 ring-1 ring-amber-300'
-          : value === 'MEDIUM'
-            ? 'inline-flex min-w-[116px] justify-center rounded-md bg-blue-50 px-2 py-1 text-center text-blue-700 ring-1 ring-blue-200'
-            : 'inline-flex min-w-[116px] justify-center rounded-md bg-gray-100 px-2 py-1 text-center text-gray-700 ring-1 ring-gray-200'
-      : style.value;
-
   return (
-    <div className={`rounded-xl border p-3 ${style.wrapper}`}>
-      <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-slate-400" />
-        <p className={`text-xs uppercase tracking-wide ${style.label}`}>{label}</p>
+    <div className="min-w-0 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <div className="mt-1 min-w-0 truncate text-sm font-semibold text-slate-950">
+        {value}
       </div>
-      <p className={`mt-3 text-sm font-semibold ${priorityValueClass}`}>{value}</p>
-      <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
+      <p className="mt-0.5 truncate text-xs text-slate-500">{hint}</p>
     </div>
   );
 }
