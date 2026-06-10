@@ -39,7 +39,7 @@ export function App() {
           }
         />
         <Route path="/" element={<LandingPage />} />
-        <Route path="/dashboard" element={<ProtectedPage><LayoutShell><DashboardPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/dashboard" element={<ProtectedPage><LayoutShell suppressPageHeader><DashboardPage /></LayoutShell></ProtectedPage>} />
         <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />
@@ -49,7 +49,7 @@ export function App() {
           path="/manager/action-center"
           element={
             <ProtectedPage>
-              <LayoutShell>
+              <LayoutShell suppressPageHeader>
                 <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
                   <ManagerInboxPage />
                 </RequireRole>

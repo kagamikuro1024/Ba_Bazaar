@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
-  CalendarRange,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
-  Search,
-  SlidersHorizontal,
-  UserRound,
-  UsersRound,
-  Zap
+  Search
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
@@ -27,6 +21,18 @@ import {
 } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { formatDate, priorityTone } from '@/lib/format';
+import {
+  ActiveFilterChips,
+  AdvancedFilterPopover,
+  DataToolbar,
+  DataTable,
+  FilterCard,
+  PageHeader,
+  Pagination,
+  QuickTabs,
+  type ActiveFilter,
+  type QuickTab
+} from '@/components';
 import { Avatar, BAIdentity } from '@/components/common';
 import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { type RecommendationQuery } from '@/lib/recommendations';
@@ -99,6 +105,51 @@ const stateLabelMap = {
   CANCELLED: 'Cancelled'
 } as const;
 
+const defaultFilters: FilterState = {
+  search: '',
+  priority: 'ALL',
+  status: 'ALL',
+  type: 'ALL',
+  sort: 'PRIORITY',
+  startDate: '',
+  endDate: '',
+  needsVerification: false,
+  overbookRisk: false
+};
+
+const priorityFilterOptions: Array<{
+  value: FilterState['priority'];
+  label: string;
+}> = [
+  { value: 'ALL', label: 'All' },
+  { value: 'URGENT', label: 'Urgent' },
+  { value: 'HIGH', label: 'High' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'LOW', label: 'Low' }
+];
+
+const statusFilterOptions: Array<{
+  value: FilterState['status'];
+  label: string;
+}> = [
+  { value: 'ALL', label: 'All' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'IN_PROGRESS', label: 'In progress' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' }
+];
+
+const requestTypeFilterOptions: Array<{
+  value: FilterState['type'];
+  label: string;
+}> = [
+  { value: 'ALL', label: 'All' },
+  { value: 'SPECIFIC_BA', label: 'Specific BA' },
+  { value: 'OPEN_REQUEST', label: 'Open Request' }
+];
+
 export function ManagerInboxPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -123,6 +174,8 @@ export function ManagerInboxPage() {
   const [pendingNavigationAction, setPendingNavigationAction] = useState<
     (() => void) | null
   >(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState<FilterState>(defaultFilters);
   const isMobile = useIsMobile();
   const pageSize = 10;
 
@@ -318,24 +371,109 @@ export function ManagerInboxPage() {
     };
   }, [bookings.data, summary.data]);
 
+  const quickTabs = useMemo<Array<QuickTab<InboxTab>>>(
+    () => [
+      { value: 'ALL', label: 'All', count: counts.ALL },
+      { value: 'URGENT', label: 'Urgent', count: counts.URGENT, tone: 'danger' },
+      {
+        value: 'UNASSIGNED',
+        label: 'Unassigned',
+        count: counts.UNASSIGNED,
+        tone: 'warning'
+      },
+      { value: 'PENDING', label: 'Pending', count: counts.PENDING, tone: 'warning' },
+      {
+        value: 'OVERBOOK_RISK',
+        label: 'Overbook risk',
+        count: counts.OVERBOOK_RISK,
+        tone: 'danger'
+      }
+    ],
+    [counts]
+  );
+
+  const activeAdvancedFilterCount = useMemo(
+    () =>
+      Number(filters.priority !== 'ALL') +
+      Number(filters.status !== 'ALL') +
+      Number(filters.type !== 'ALL') +
+      Number(Boolean(filters.startDate)) +
+      Number(Boolean(filters.endDate)) +
+      Number(filters.needsVerification) +
+      Number(filters.overbookRisk),
+    [filters]
+  );
+
+  const activeFilterChips: ActiveFilter[] = [];
+
+  if (filters.search) {
+    activeFilterChips.push({
+      id: 'search',
+      label: `Search: ${filters.search}`,
+      onRemove: () => setFilter({ search: '' })
+    });
+  }
+
+  if (filters.priority !== 'ALL') {
+    activeFilterChips.push({
+      id: 'priority',
+      label: `Priority: ${filters.priority}`,
+      onRemove: () => setFilter({ priority: 'ALL' })
+    });
+  }
+
+  if (filters.status !== 'ALL') {
+    activeFilterChips.push({
+      id: 'status',
+      label: `Status: ${filters.status.replaceAll('_', ' ')}`,
+      onRemove: () => setFilter({ status: 'ALL' })
+    });
+  }
+
+  if (filters.type !== 'ALL') {
+    activeFilterChips.push({
+      id: 'type',
+      label:
+        filters.type === 'OPEN_REQUEST' ? 'Type: Open Request' : 'Type: Specific BA',
+      onRemove: () => setFilter({ type: 'ALL' })
+    });
+  }
+
+  if (filters.startDate) {
+    activeFilterChips.push({
+      id: 'startDate',
+      label: `From: ${filters.startDate}`,
+      onRemove: () => setFilter({ startDate: '' })
+    });
+  }
+
+  if (filters.endDate) {
+    activeFilterChips.push({
+      id: 'endDate',
+      label: `To: ${filters.endDate}`,
+      onRemove: () => setFilter({ endDate: '' })
+    });
+  }
+
+  if (filters.needsVerification) {
+    activeFilterChips.push({
+      id: 'needsVerification',
+      label: 'Needs verification',
+      onRemove: () => setFilter({ needsVerification: false })
+    });
+  }
+
+  if (filters.overbookRisk) {
+    activeFilterChips.push({
+      id: 'overbookRisk',
+      label: 'Overbook risk',
+      onRemove: () => setFilter({ overbookRisk: false })
+    });
+  }
+
   const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const visiblePages = useMemo<(number | 'ellipsis-left' | 'ellipsis-right')[]>(() => {
-    if (totalPages <= 2) {
-      return Array.from({ length: totalPages }, (_, index) => index + 1);
-    }
-
-    if (safePage <= 2) {
-      return [1, 2, 'ellipsis-right', totalPages];
-    }
-
-    if (safePage >= totalPages - 1) {
-      return [1, 'ellipsis-left', totalPages - 1, totalPages];
-    }
-
-    return [1, 'ellipsis-left', safePage, 'ellipsis-right', totalPages];
-  }, [safePage, totalPages]);
   const paginatedBookings = filteredBookings.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize
@@ -902,6 +1040,49 @@ export function ManagerInboxPage() {
     });
   }
 
+  function toggleFilters() {
+    if (!filtersOpen) {
+      setFilterDraft(filters);
+    }
+    setFiltersOpen((current) => !current);
+  }
+
+  function updateFilterDraft(next: Partial<FilterState>) {
+    setFilterDraft((current) => ({ ...current, ...next }));
+  }
+
+  function clearFilterDraft() {
+    setFilterDraft((current) => ({
+      ...current,
+      priority: 'ALL',
+      status: 'ALL',
+      type: 'ALL',
+      startDate: '',
+      endDate: '',
+      needsVerification: false,
+      overbookRisk: false
+    }));
+  }
+
+  function applyFilterDraft() {
+    setFilter({
+      priority: filterDraft.priority,
+      status: filterDraft.status,
+      type: filterDraft.type,
+      startDate: filterDraft.startDate,
+      endDate: filterDraft.endDate,
+      needsVerification: filterDraft.needsVerification,
+      overbookRisk: filterDraft.overbookRisk
+    });
+    setFiltersOpen(false);
+  }
+
+  function clearAllFilters() {
+    setFilter(defaultFilters);
+    setFilterDraft(defaultFilters);
+    setFiltersOpen(false);
+  }
+
   function setPage(page: number) {
     runOrConfirmNavigation(() => {
       const nextPage = Math.max(1, Math.min(page, totalPages));
@@ -1023,6 +1204,123 @@ export function ManagerInboxPage() {
     );
   }
 
+  const managerInboxColumns = [
+    {
+      id: 'priority',
+      header: 'Priority',
+      className: 'w-32',
+      cell: (booking: Booking) => (
+        <Badge tone={priorityTone(booking.priority)} className={actionCenterBadgeClassName}>
+          {booking.priority}
+        </Badge>
+      )
+    },
+    {
+      id: 'type',
+      header: 'Type',
+      className: 'w-36',
+      cell: (booking: Booking) => <RequestTypeBadge booking={booking} />
+    },
+    {
+      id: 'project',
+      header: 'Project',
+      className: 'min-w-[18rem]',
+      cell: (booking: Booking) => {
+        const capacity = summary.data?.items.find(
+          (item) => item.ba_id === booking.ba_id
+        );
+        const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
+
+        return (
+          <div className="min-w-0 text-left">
+            <p className="truncate font-semibold text-slate-950">
+              {booking.project.name}
+            </p>
+            <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
+            <span className="mt-2 flex flex-wrap gap-1">
+              {riskFlags.map((flag) => (
+                <Badge
+                  key={flag}
+                  tone={
+                    flag === 'Normal'
+                      ? 'neutral'
+                      : flag === 'Overbook risk' || flag === 'Urgent'
+                        ? 'danger'
+                        : 'warning'
+                  }
+                >
+                  {flag}
+                </Badge>
+              ))}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'requester',
+      header: 'Requester',
+      className: 'min-w-[11rem]',
+      cell: (booking: Booking) => (
+        <span className="block truncate text-slate-600">
+          {booking.requester.full_name}
+        </span>
+      )
+    },
+    {
+      id: 'ba',
+      header: 'Requested / Assigned BA',
+      className: 'min-w-[13rem]',
+      cell: (booking: Booking) => (
+        <span className="block truncate text-slate-600">
+          {booking.ba?.full_name ?? 'Unassigned'}
+        </span>
+      )
+    },
+    {
+      id: 'dateRange',
+      header: 'Date Range',
+      className: 'min-w-[11rem]',
+      cell: (booking: Booking) => (
+        <span className="text-slate-600">
+          {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+        </span>
+      )
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      className: 'w-36',
+      cell: (booking: Booking) => <RequestStateBadge booking={booking} />
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      headerClassName: 'text-right',
+      className: 'w-36 text-right',
+      cell: (booking: Booking) => {
+        const actionLabel = getRequestActionLabel(booking, canManageInbox);
+
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant={actionLabel === 'View' ? 'secondary' : 'default'}
+            className="min-w-24"
+            onClick={(event) => {
+              event.stopPropagation();
+              openDetail(booking.id);
+            }}
+            aria-label={`${actionLabel} ${booking.title}`}
+          >
+            {actionLabel}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        );
+      }
+    }
+  ];
+
   return (
     <div className="grid gap-5">
       {successMessage || saveForLaterMessage ? (
@@ -1059,40 +1357,11 @@ export function ManagerInboxPage() {
           ) : null}
         </div>
       ) : null}
-      {filters.needsVerification || filters.overbookRisk ? (
-        <div
-          className={[
-            'flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 text-sm',
-            filters.overbookRisk
-              ? 'border border-rose-200 bg-rose-50 text-rose-800'
-              : 'border border-amber-200 bg-amber-50 text-amber-900'
-          ].join(' ')}
-        >
-          <span className="font-semibold">Active alert filter:</span>
-          {filters.needsVerification ? (
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 font-medium text-amber-700 ring-1 ring-amber-200">
-              Needs verification
-            </span>
-          ) : null}
-          {filters.overbookRisk ? (
-            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 font-medium text-rose-700 ring-1 ring-rose-200">
-              Overbook risk
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setFilter({ needsVerification: false, overbookRisk: false })}
-            className={[
-              'ml-auto inline-flex items-center rounded-md px-3 py-1.5 text-sm font-semibold transition-colors',
-              filters.overbookRisk
-                ? 'bg-white text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100'
-                : 'bg-white text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100'
-            ].join(' ')}
-          >
-            Clear
-          </button>
-        </div>
-      ) : null}
+      <PageHeader
+        eyebrow="Manager workspace"
+        title="Action Center"
+        description="Review, assign, approve, and resolve BA booking requests."
+      />
       {approve.error ||
       reject.error ||
       assign.error ||
@@ -1137,118 +1406,117 @@ export function ManagerInboxPage() {
         </Card>
       ) : null}
 
-      <Card>
-        <CardContent className="grid gap-3 p-4 lg:p-5">
-          <div className="grid gap-3 2xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] 2xl:items-center">
-            <label className="relative block 2xl:min-w-0">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={filters.search}
-                onChange={(event) => setFilter({ search: event.target.value })}
-                placeholder="Search requests, projects, or requesters"
-                className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm"
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-2 2xl:justify-start">
-              {[
-                ['ALL', `All (${counts.ALL})`],
-                ['URGENT', `Urgent (${counts.URGENT})`],
-                ['UNASSIGNED', `Unassigned (${counts.UNASSIGNED})`],
-                ['PENDING', `Pending (${counts.PENDING})`],
-                ['OVERBOOK_RISK', `Overbook Risk (${counts.OVERBOOK_RISK})`]
-              ].map(([tab, label]) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => selectTab(tab as InboxTab)}
-                  className={[
-                    'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-                    activeTab === tab
-                      ? 'border-blue-200 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
-                  ].join(' ')}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+      <FilterCard>
+        <div className="grid gap-3">
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] 2xl:items-center">
+            <QuickTabs<InboxTab>
+              tabs={quickTabs}
+              value={activeTab}
+              onChange={selectTab}
+              className="2xl:justify-start"
+            />
+            <DataToolbar
+              searchPlaceholder="Filter by project, requester, or BA..."
+              searchValue={filters.search}
+              onSearchChange={(search) => setFilter({ search })}
+              activeFilterCount={activeAdvancedFilterCount}
+              filtersOpen={filtersOpen}
+              onFiltersToggle={toggleFilters}
+              className="2xl:justify-end"
+            />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[repeat(3,minmax(0,180px))_repeat(2,minmax(0,156px))_auto] 2xl:items-center">
-            <select
-              value={filters.priority}
-              onChange={(event) =>
-                setFilter({ priority: event.target.value as FilterState['priority'] })
-              }
-              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
-            >
-              <option value="ALL">Priority: All</option>
-              <option value="LOW">Priority: Low</option>
-              <option value="MEDIUM">Priority: Medium</option>
-              <option value="HIGH">Priority: High</option>
-              <option value="URGENT">Priority: Urgent</option>
-            </select>
-            <select
-              value={filters.status}
-              onChange={(event) =>
-                setFilter({ status: event.target.value as FilterState['status'] })
-              }
-              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
-            >
-              <option value="ALL">Status: All</option>
-              <option value="PENDING">Pending</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="IN_PROGRESS">In progress</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-            <select
-              value={filters.type}
-              onChange={(event) =>
-                setFilter({ type: event.target.value as FilterState['type'] })
-              }
-              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
-            >
-              <option value="ALL">Type: All</option>
-              <option value="SPECIFIC_BA">Specific BA</option>
-              <option value="OPEN_REQUEST">Open Request</option>
-            </select>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(event) => setFilter({ startDate: event.target.value })}
-              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+          <ActiveFilterChips
+            filters={activeFilterChips}
+            onClearAll={clearAllFilters}
+            className="border-t border-slate-100 pt-3"
+          />
+
+          <AdvancedFilterPopover
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            title="Filter requests"
+            width={380}
+            footer={
+              <>
+                <Button type="button" variant="ghost" onClick={clearFilterDraft}>
+                  Clear
+                </Button>
+                <Button type="button" onClick={applyFilterDraft}>
+                  Apply
+                </Button>
+              </>
+            }
+          >
+            <FilterOptionGroup
+              label="Priority"
+              options={priorityFilterOptions}
+              value={filterDraft.priority}
+              onChange={(priority) => updateFilterDraft({ priority })}
             />
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={(event) => setFilter({ endDate: event.target.value })}
-              className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm"
+            <FilterOptionGroup
+              label="Status"
+              options={statusFilterOptions}
+              value={filterDraft.status}
+              onChange={(status) => updateFilterDraft({ status })}
             />
-            <button
-              type="button"
-              onClick={() =>
-                setFilter({
-                  search: '',
-                  priority: 'ALL',
-                  status: 'ALL',
-                  type: 'ALL',
-                  sort: 'PRIORITY',
-                  startDate: '',
-                  endDate: '',
-                  needsVerification: false,
-                  overbookRisk: false
-                })
-              }
-              className="inline-flex h-10 w-fit items-center justify-center gap-2 justify-self-start rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:text-blue-800 md:col-span-2 xl:col-span-3 2xl:col-span-1"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Reset filters
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+            <FilterOptionGroup
+              label="Request type"
+              options={requestTypeFilterOptions}
+              value={filterDraft.type}
+              onChange={(type) => updateFilterDraft({ type })}
+            />
+            <div className="grid gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Date range
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="date"
+                  value={filterDraft.startDate}
+                  onChange={(event) =>
+                    updateFilterDraft({ startDate: event.target.value })
+                  }
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                />
+                <input
+                  type="date"
+                  value={filterDraft.endDate}
+                  onChange={(event) =>
+                    updateFilterDraft({ endDate: event.target.value })
+                  }
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Flags
+              </p>
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={filterDraft.needsVerification}
+                  onChange={(event) =>
+                    updateFilterDraft({ needsVerification: event.target.checked })
+                  }
+                />
+                Needs verification
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={filterDraft.overbookRisk}
+                  onChange={(event) =>
+                    updateFilterDraft({ overbookRisk: event.target.checked })
+                  }
+                />
+                Overbook risk
+              </label>
+            </div>
+          </AdvancedFilterPopover>
+        </div>
+      </FilterCard>
 
       <div className="grid items-start gap-5">
         <div className="grid gap-3">
@@ -1273,144 +1541,27 @@ export function ManagerInboxPage() {
               </select>
             </div>
           </div>
-          <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500 2xl:grid 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:gap-3 2xl:items-center">
-            <span>Priority</span>
-            <span>Type</span>
-            <span>Project</span>
-            <span>Requester</span>
-            <span>Requested / Assigned BA</span>
-            <span>Date Range</span>
-            <span>Status</span>
-            <span>Action</span>
-          </div>
-          {paginatedBookings.map((booking) => {
-            const selected = selectedBooking?.id === booking.id;
-            const capacity = summary.data?.items.find(
-              (item) => item.ba_id === booking.ba_id
-            );
-            const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
-            const actionLabel = getRequestActionLabel(booking);
-
-            return (
-              <button
-                key={booking.id}
-                type="button"
-                onClick={() => openDetail(booking.id)}
-                className={[
-                  'grid w-full gap-3 rounded-lg border bg-white p-3 text-left text-sm shadow-sm transition 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:items-center 2xl:text-center',
-                  selected
-                    ? 'border-blue-400 ring-1 ring-blue-400'
-                    : 'border-slate-200 hover:border-slate-300'
-                ].join(' ')}
-              >
-                <Badge
-                  tone={priorityTone(booking.priority)}
-                  className={actionCenterBadgeClassName}
-                >
-                  {booking.priority}
-                </Badge>
-                <RequestTypeBadge booking={booking} />
-                <div className="min-w-0 text-left">
-                  <p className="truncate font-semibold text-slate-950">
-                    {booking.project.name}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
-                  <span className="mt-2 flex flex-wrap gap-1">
-                    {riskFlags.map((flag) => (
-                      <Badge
-                        key={flag}
-                        tone={
-                          flag === 'Normal'
-                            ? 'neutral'
-                            : flag === 'Overbook risk' || flag === 'Urgent'
-                              ? 'danger'
-                              : 'warning'
-                        }
-                      >
-                        {flag}
-                      </Badge>
-                    ))}
-                  </span>
-                </div>
-                <span className="min-w-0 truncate text-slate-600">
-                  {booking.requester.full_name}
-                </span>
-                <span className="min-w-0 truncate text-slate-600">
-                  {booking.ba?.full_name ?? 'Unassigned'}
-                </span>
-                <span className="text-slate-600">
-                  {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
-                </span>
-                <RequestStateBadge booking={booking} />
-                <span className="inline-flex items-center justify-center gap-1 font-semibold text-blue-700">
-                  {actionLabel} <ChevronRight className="h-4 w-4" />
-                </span>
-              </button>
-            );
-          })}
-
-          {filteredBookings.length === 0 ? (
-            <Card>
-              <CardContent className="p-5 text-sm text-slate-500">
-                No requests match the current filters.
-              </CardContent>
-            </Card>
-          ) : null}
-          {filteredBookings.length > 0 ? (
-            <Card>
-              <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-                <span>
-                  Showing {(safePage - 1) * pageSize + 1}-
-                  {Math.min(safePage * pageSize, filteredBookings.length)} of{' '}
-                  {filteredBookings.length} requests
-                </span>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage(safePage - 1)}
-                    disabled={safePage <= 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    {visiblePages.map((page, index) =>
-                      typeof page === 'number' ? (
-                        <button
-                          key={page}
-                          type="button"
-                          onClick={() => setPage(page)}
-                          className={[
-                            'inline-flex min-w-9 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors',
-                            page === safePage
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
-                          ].join(' ')}
-                        >
-                          {page}
-                        </button>
-                      ) : (
-                        <span
-                          key={`${page}-${index}`}
-                          className="inline-flex min-w-9 items-center justify-center px-1 text-sm font-semibold text-slate-400"
-                        >
-                          ...
-                        </span>
-                      )
-                    )}
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage(safePage + 1)}
-                    disabled={safePage >= totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+          <DataTable<Booking>
+            rows={paginatedBookings}
+            columns={managerInboxColumns}
+            rowKey={(booking) => booking.id}
+            onRowClick={(booking) => openDetail(booking.id)}
+            rowClassName={(booking) =>
+              selectedBooking?.id === booking.id
+                ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-300'
+                : undefined
+            }
+            emptyState="No requests match the current filters."
+            isLoading={bookings.isLoading || bas.isLoading || summary.isLoading}
+            loadingState="Loading requests..."
+          />
+          <Pagination
+            page={safePage}
+            pageSize={pageSize}
+            total={filteredBookings.length}
+            onPageChange={setPage}
+            className="rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
         </div>
 
         {!isMobile && selectedBooking ? (
@@ -1991,34 +2142,30 @@ export function RequestDetailPanel({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <DetailStat
+        <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <RequestSummaryItem
             label={assignmentLabel}
             value={assignmentName}
             hint={assignmentHint}
-            tone="person"
-            icon={UserRound}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Requester"
             value={booking.requester.full_name}
             hint={booking.requester.email}
-            tone="requester"
-            icon={UsersRound}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Priority"
-            value={booking.priority}
+            value={
+              <Badge tone={priorityTone(booking.priority)} className="w-fit">
+                {booking.priority}
+              </Badge>
+            }
             hint="Decision order"
-            tone="priority"
-            icon={Zap}
           />
-          <DetailStat
+          <RequestSummaryItem
             label="Date Range"
             value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
             hint={`${capacityPercent}% capacity`}
-            tone="neutral"
-            icon={CalendarRange}
           />
         </div>
       </CardHeader>
@@ -2391,65 +2538,24 @@ function toTitleLabel(key: string) {
     .join(' ');
 }
 
-function DetailStat({
+function RequestSummaryItem({
   label,
   value,
-  hint,
-  tone,
-  icon: Icon
+  hint
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   hint: string;
-  tone: 'person' | 'requester' | 'priority' | 'neutral';
-  icon: typeof UserRound;
 }) {
-  const styles = {
-    person: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    requester: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    priority: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-500',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    },
-    neutral: {
-      wrapper: 'border-slate-200 bg-white',
-      label: 'text-slate-400',
-      value: 'text-slate-950',
-      hint: 'text-slate-500'
-    }
-  } as const;
-  const style = styles[tone];
-  const priorityValueClass =
-    tone === 'priority'
-      ? value === 'URGENT'
-        ? 'inline-flex min-w-[116px] justify-center rounded-md bg-rose-100 px-2 py-1 text-center text-rose-800 ring-1 ring-rose-300'
-        : value === 'HIGH'
-          ? 'inline-flex min-w-[116px] justify-center rounded-md bg-amber-100 px-2 py-1 text-center text-amber-800 ring-1 ring-amber-300'
-          : value === 'MEDIUM'
-            ? 'inline-flex min-w-[116px] justify-center rounded-md bg-blue-50 px-2 py-1 text-center text-blue-700 ring-1 ring-blue-200'
-            : 'inline-flex min-w-[116px] justify-center rounded-md bg-gray-100 px-2 py-1 text-center text-gray-700 ring-1 ring-gray-200'
-      : style.value;
-
   return (
-    <div className={`rounded-xl border p-3 ${style.wrapper}`}>
-      <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-slate-400" />
-        <p className={`text-xs uppercase tracking-wide ${style.label}`}>{label}</p>
+    <div className="min-w-0 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <div className="mt-1 min-w-0 truncate text-sm font-semibold text-slate-950">
+        {value}
       </div>
-      <p className={`mt-3 text-sm font-semibold ${priorityValueClass}`}>{value}</p>
-      <p className={`mt-1 text-xs ${style.hint}`}>{hint}</p>
+      <p className="mt-0.5 truncate text-xs text-slate-500">{hint}</p>
     </div>
   );
 }
@@ -2510,7 +2616,48 @@ function getRequestRiskFlags(booking: Booking, riskCapacity: number) {
   return flags.length > 0 ? flags : ['Normal'];
 }
 
-function getRequestActionLabel(booking: Booking) {
+function FilterOptionGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChange
+}: {
+  label: string;
+  options: Array<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={[
+              'rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors',
+              value === option.value
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
+            ].join(' ')}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getRequestActionLabel(booking: Booking, canManageActions = true) {
+  if (!canManageActions) {
+    return 'View';
+  }
+
   if (!booking.ba_id) {
     return 'Assign';
   }
