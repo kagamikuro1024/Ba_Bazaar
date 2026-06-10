@@ -39,6 +39,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { FilterCard, PageHeader, StatCard } from '@/components';
 import { cn } from '@/lib/utils';
 
 type TimeframeMode = 'week' | 'month' | 'quarter' | 'custom';
@@ -100,18 +101,24 @@ export function DashboardPage() {
 
   const dashboardCopy = isManagerDashboard
     ? {
+        eyebrow: 'Manager workspace',
         title: 'Manager Dashboard',
+        description: 'See what needs manager action first, then jump into the action list.',
         loading: 'Loading manager dashboard...',
         error: 'Could not load manager dashboard. Check API connection and retry.'
       }
     : isBaDashboard
       ? {
+          eyebrow: 'BA workspace',
           title: 'BA Dashboard',
+          description: 'Track active assignments, upcoming work, and recent schedule changes.',
           loading: 'Loading your dashboard...',
           error: 'Could not load your dashboard. Check API connection and retry.'
         }
       : {
+          eyebrow: 'Requester workspace',
           title: 'PM/PO Dashboard',
+          description: 'Review your booking requests and follow their approval status.',
           loading: 'Loading your dashboard...',
           error: 'Could not load your dashboard. Check API connection and retry.'
         };
@@ -311,6 +318,24 @@ export function DashboardPage() {
 
   return (
     <div className="grid gap-5">
+      <PageHeader
+        eyebrow={dashboardCopy.eyebrow}
+        title={dashboardCopy.title}
+        description={dashboardCopy.description}
+        actions={
+          isManagerDashboard ? (
+            <>
+              <Button variant="secondary" asChild>
+                <Link to="/reports">View reports</Link>
+              </Button>
+              <Button asChild>
+                <Link to="/manager/action-center">Open Action Center</Link>
+              </Button>
+            </>
+          ) : null
+        }
+      />
+
       {isLoading ? (
         <Card>
           <CardContent className="p-5 text-sm text-slate-600">
@@ -346,24 +371,14 @@ export function DashboardPage() {
 
               return (
                 <Link key={item.title} to={item.to}>
-                  <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
-                    <CardContent className="flex items-start justify-between p-5">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">{item.title}</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-950">
-                          {item.count}
-                        </p>
-                        <p className="mt-2 text-sm text-slate-500">{item.description}</p>
-                      </div>
-                      <Icon
-                        className={
-                          item.title === 'Rejected / Cancelled'
-                            ? 'h-6 w-6 text-rose-500'
-                            : 'h-6 w-6 text-blue-600'
-                        }
-                      />
-                    </CardContent>
-                  </Card>
+                  <StatCard
+                    label={item.title}
+                    value={String(item.count)}
+                    hint={item.description}
+                    icon={Icon}
+                    tone={item.title === 'Rejected / Cancelled' ? 'danger' : 'info'}
+                    className="h-full"
+                  />
                 </Link>
               );
             })}
@@ -417,102 +432,98 @@ function ManagerDashboard({
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-slate-950">
-            Action-first command center
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            {summary
-              ? `${formatDate(summary.timeframe.from)} - ${formatDate(summary.timeframe.to)}`
-              : 'Select a timeframe to load manager actions'}
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-[auto_auto_auto] lg:flex lg:items-center">
-          <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
-            {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onTimeframeModeChange(mode)}
-                className={cn(
-                  'rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition-colors sm:text-sm',
-                  timeframeMode === mode
-                    ? 'bg-white text-slate-950 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-950'
-                )}
-              >
-                {mode}
-              </button>
-            ))}
+      <FilterCard>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">
+              Action-first command center
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {summary
+                ? `${formatDate(summary.timeframe.from)} - ${formatDate(summary.timeframe.to)}`
+                : 'Select a timeframe to load manager actions'}
+            </p>
           </div>
-          {timeframeMode === 'custom' ? (
-            <>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(event) => onCustomFromChange(event.target.value)}
-                className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-              />
-              <input
-                type="date"
-                value={customTo}
-                onChange={(event) => onCustomToChange(event.target.value)}
-                className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-              />
-            </>
-          ) : null}
+          <div className="grid gap-2 sm:grid-cols-[auto_auto_auto] lg:flex lg:items-center">
+            <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+              {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onTimeframeModeChange(mode)}
+                  className={cn(
+                    'rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition-colors sm:text-sm',
+                    timeframeMode === mode
+                      ? 'bg-white text-slate-950 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-950'
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            {timeframeMode === 'custom' ? (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(event) => onCustomFromChange(event.target.value)}
+                  className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+                />
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(event) => onCustomToChange(event.target.value)}
+                  className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+                />
+              </>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </FilterCard>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <MetricTile
-          title="Pending Requests"
-          value={actionCounts?.pending_requests ?? 0}
+        <StatCard
+          label="Pending Requests"
+          value={String(actionCounts?.pending_requests ?? 0)}
           hint="Need review"
           icon={ClipboardList}
           tone="warning"
-          to="/manager/action-center?status=PENDING"
         />
-        <MetricTile
-          title="Unassigned"
-          value={actionCounts?.unassigned_requests ?? 0}
+        <StatCard
+          label="Unassigned"
+          value={String(actionCounts?.unassigned_requests ?? 0)}
           hint="Needs BA"
           icon={UsersRound}
           tone="warning"
-          to="/manager/action-center?type=OPEN_REQUEST"
         />
-        <MetricTile
-          title="Overbooked BA"
-          value={actionCounts?.overbooked_ba ?? 0}
+        <StatCard
+          label="Overbooked BA"
+          value={String(actionCounts?.overbooked_ba ?? 0)}
           hint="Capacity risk"
           icon={AlertCircle}
           tone="danger"
-          to="/timeline"
         />
-        <MetricTile
-          title="Bench BA"
-          value={actionCounts?.bench_ba ?? 0}
+        <StatCard
+          label="Bench BA"
+          value={String(actionCounts?.bench_ba ?? 0)}
           hint={`${team?.bench_rate_percent ?? 0}% bench rate`}
           icon={UserRound}
           tone="neutral"
-          to="/crm/ba"
         />
-        <MetricTile
-          title="Team Utilization"
+        <StatCard
+          label="Team Utilization"
           value={`${team?.team_utilization_percent ?? 0}%`}
           hint={`${team?.total_ba ?? 0} active BA`}
           icon={Gauge}
           tone="success"
-          to="/reports"
         />
-        <MetricTile
-          title="Man-days"
-          value={team?.total_man_days ?? 0}
+        <StatCard
+          label="Man-days"
+          value={String(team?.total_man_days ?? 0)}
           hint="Booked this period"
           icon={BarChart3}
           tone="info"
-          to="/reports"
         />
       </div>
 
@@ -646,48 +657,6 @@ function ManagerDashboard({
         </Card>
       </div>
     </>
-  );
-}
-
-function MetricTile({
-  title,
-  value,
-  hint,
-  icon: Icon,
-  tone,
-  to
-}: {
-  title: string;
-  value: number | string;
-  hint: string;
-  icon: typeof ClipboardList;
-  tone: 'warning' | 'danger' | 'neutral' | 'success' | 'info';
-  to: string;
-}) {
-  const toneClass = {
-    warning: 'text-amber-700 bg-amber-50',
-    danger: 'text-rose-700 bg-rose-50',
-    neutral: 'text-slate-700 bg-slate-100',
-    success: 'text-emerald-700 bg-emerald-50',
-    info: 'text-blue-700 bg-blue-50'
-  }[tone];
-
-  return (
-    <Link
-      to={to}
-      className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase text-slate-500">{title}</p>
-          <p className="mt-2 text-2xl font-bold text-slate-950">{value}</p>
-          <p className="mt-1 text-xs text-slate-500">{hint}</p>
-        </div>
-        <span className={cn('rounded-md p-2', toneClass)}>
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-    </Link>
   );
 }
 
