@@ -1416,7 +1416,7 @@ export function ManagerInboxPage() {
               className="2xl:justify-start"
             />
             <DataToolbar
-              searchPlaceholder="Search requests, projects, requesters, or BAs"
+              searchPlaceholder="Filter by project, requester, or BA..."
               searchValue={filters.search}
               onSearchChange={(search) => setFilter({ search })}
               activeFilterCount={activeAdvancedFilterCount}

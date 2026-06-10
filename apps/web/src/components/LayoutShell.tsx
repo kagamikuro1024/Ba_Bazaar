@@ -451,7 +451,9 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             {sidebarCollapsed ? null : (
               <>
-                <span className="min-w-0 flex-1 truncate">Search requests, BA...</span>
+                <span className="min-w-0 flex-1 truncate">
+                  Search requests, BAs, pages...
+                </span>
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
                   Ctrl K
                 </span>

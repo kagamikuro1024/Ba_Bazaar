@@ -407,9 +407,9 @@ export function GlobalSearchModal({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search requests, BA, projects..."
+            placeholder="Search requests, BAs, pages..."
             className="h-10 flex-1 border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-            aria-label="Search requests, BA, projects"
+            aria-label="Search requests, BAs, pages"
           />
           {query ? (
             <button
