@@ -52,6 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
     }
 
+    function handleAuthRefresh() {
+      setSession(getStoredSession());
+    }
+
     function handleStorage(event: StorageEvent) {
       if (event.key === 'ba-bazaar-auth-session') {
         setSession(getStoredSession());
@@ -59,9 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     window.addEventListener('auth:logout', handleAuthLogout as EventListener);
+    window.addEventListener('auth:refresh', handleAuthRefresh as EventListener);
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('auth:logout', handleAuthLogout as EventListener);
+      window.removeEventListener('auth:refresh', handleAuthRefresh as EventListener);
       window.removeEventListener('storage', handleStorage);
     };
   }, []);
