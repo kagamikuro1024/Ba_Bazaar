@@ -1,6 +1,7 @@
 import type { BAProfile, BookingStatus } from '@/lib/api';
 import { Badge } from './ui/badge';
 import { statusTone } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export function Avatar({ name, url }: { name: string; url?: string | null }) {
   if (url) {
@@ -47,15 +48,20 @@ export function StatusBadge({ status }: { status: BookingStatus | BAProfile['sta
   return <Badge tone={statusTone(status)}>{status.replaceAll('_', ' ')}</Badge>;
 }
 
+// Back-compat alias — prefer importing StatusBadge from '@/components'.
+export const LegacyStatusBadge = StatusBadge;
+
 export function Field({
   label,
-  children
+  children,
+  className
 }: {
   label: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <label className="grid gap-1 text-sm">
+    <label className={cn('grid gap-1 text-sm', className)}>
       <span className="font-medium text-slate-700">{label}</span>
       {children}
     </label>

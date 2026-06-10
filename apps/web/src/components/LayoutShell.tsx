@@ -32,6 +32,12 @@ import {
 
 type LayoutShellProps = {
   children: ReactNode;
+  /**
+   * If true, suppress the LayoutShell's auto-injected page title/intro.
+   * Set this on pages that render their own <PageHeader /> from
+   * @/components to avoid duplicate titles.
+   */
+  suppressPageHeader?: boolean;
 };
 
 type PageIntro = {
@@ -126,7 +132,7 @@ function getPageHeader(introKey: string, role?: UserRole): PageIntro | undefined
   return pageIntros[introKey];
 }
 
-export function LayoutShell({ children }: LayoutShellProps) {
+export function LayoutShell({ children, suppressPageHeader = false }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
   const role = user?.role;
@@ -542,7 +548,13 @@ export function LayoutShell({ children }: LayoutShellProps) {
         </Card>
 
         <main className="grid min-w-0 gap-5">
-          {pageHeader ? (
+          {/*
+            Page-level header is owned by each page via <PageHeader />
+            from @/components. LayoutShell still injects a fallback
+            title/intro for pages that haven't migrated yet — pages can
+            opt out with `suppressPageHeader` to avoid duplicates.
+          */}
+          {!suppressPageHeader && pageHeader ? (
             <div>
               <h1 className="text-2xl font-bold text-slate-950">{pageHeader.title}</h1>
               <p className="mt-1 text-sm text-slate-500">{pageHeader.body}</p>

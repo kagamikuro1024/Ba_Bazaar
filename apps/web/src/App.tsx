@@ -61,7 +61,7 @@ export function App() {
           path="/crm/ba"
           element={
             <ProtectedPage>
-              <LayoutShell>
+              <LayoutShell suppressPageHeader>
                 <RequireRole roles={['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']}>
                   <BADirectoryPage />
                 </RequireRole>
