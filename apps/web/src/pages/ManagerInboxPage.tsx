@@ -4,7 +4,6 @@ import {
   AlertCircle,
   CalendarRange,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Search,
   UserRound,
@@ -30,8 +29,10 @@ import {
   ActiveFilterChips,
   AdvancedFilterPopover,
   DataToolbar,
+  DataTable,
   FilterCard,
   PageHeader,
+  Pagination,
   QuickTabs,
   type ActiveFilter,
   type QuickTab
@@ -477,21 +478,6 @@ export function ManagerInboxPage() {
   const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const visiblePages = useMemo<(number | 'ellipsis-left' | 'ellipsis-right')[]>(() => {
-    if (totalPages <= 2) {
-      return Array.from({ length: totalPages }, (_, index) => index + 1);
-    }
-
-    if (safePage <= 2) {
-      return [1, 2, 'ellipsis-right', totalPages];
-    }
-
-    if (safePage >= totalPages - 1) {
-      return [1, 'ellipsis-left', totalPages - 1, totalPages];
-    }
-
-    return [1, 'ellipsis-left', safePage, 'ellipsis-right', totalPages];
-  }, [safePage, totalPages]);
   const paginatedBookings = filteredBookings.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize
@@ -1222,6 +1208,108 @@ export function ManagerInboxPage() {
     );
   }
 
+  const managerInboxColumns = [
+    {
+      id: 'priority',
+      header: 'Priority',
+      className: 'w-32',
+      cell: (booking: Booking) => (
+        <Badge tone={priorityTone(booking.priority)} className={actionCenterBadgeClassName}>
+          {booking.priority}
+        </Badge>
+      )
+    },
+    {
+      id: 'type',
+      header: 'Type',
+      className: 'w-36',
+      cell: (booking: Booking) => <RequestTypeBadge booking={booking} />
+    },
+    {
+      id: 'project',
+      header: 'Project',
+      className: 'min-w-[18rem]',
+      cell: (booking: Booking) => {
+        const capacity = summary.data?.items.find(
+          (item) => item.ba_id === booking.ba_id
+        );
+        const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
+
+        return (
+          <div className="min-w-0 text-left">
+            <p className="truncate font-semibold text-slate-950">
+              {booking.project.name}
+            </p>
+            <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
+            <span className="mt-2 flex flex-wrap gap-1">
+              {riskFlags.map((flag) => (
+                <Badge
+                  key={flag}
+                  tone={
+                    flag === 'Normal'
+                      ? 'neutral'
+                      : flag === 'Overbook risk' || flag === 'Urgent'
+                        ? 'danger'
+                        : 'warning'
+                  }
+                >
+                  {flag}
+                </Badge>
+              ))}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
+      id: 'requester',
+      header: 'Requester',
+      className: 'min-w-[11rem]',
+      cell: (booking: Booking) => (
+        <span className="block truncate text-slate-600">
+          {booking.requester.full_name}
+        </span>
+      )
+    },
+    {
+      id: 'ba',
+      header: 'Requested / Assigned BA',
+      className: 'min-w-[13rem]',
+      cell: (booking: Booking) => (
+        <span className="block truncate text-slate-600">
+          {booking.ba?.full_name ?? 'Unassigned'}
+        </span>
+      )
+    },
+    {
+      id: 'dateRange',
+      header: 'Date Range',
+      className: 'min-w-[11rem]',
+      cell: (booking: Booking) => (
+        <span className="text-slate-600">
+          {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+        </span>
+      )
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      className: 'w-36',
+      cell: (booking: Booking) => <RequestStateBadge booking={booking} />
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      className: 'w-32',
+      cell: (booking: Booking) => (
+        <span className="inline-flex items-center justify-center gap-1 font-semibold text-blue-700">
+          {getRequestActionLabel(booking)}
+          <ChevronRight className="h-4 w-4" />
+        </span>
+      )
+    }
+  ];
+
   return (
     <div className="grid gap-5">
       {successMessage || saveForLaterMessage ? (
@@ -1442,144 +1530,27 @@ export function ManagerInboxPage() {
               </select>
             </div>
           </div>
-          <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500 2xl:grid 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:gap-3 2xl:items-center">
-            <span>Priority</span>
-            <span>Type</span>
-            <span>Project</span>
-            <span>Requester</span>
-            <span>Requested / Assigned BA</span>
-            <span>Date Range</span>
-            <span>Status</span>
-            <span>Action</span>
-          </div>
-          {paginatedBookings.map((booking) => {
-            const selected = selectedBooking?.id === booking.id;
-            const capacity = summary.data?.items.find(
-              (item) => item.ba_id === booking.ba_id
-            );
-            const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
-            const actionLabel = getRequestActionLabel(booking);
-
-            return (
-              <button
-                key={booking.id}
-                type="button"
-                onClick={() => openDetail(booking.id)}
-                className={[
-                  'grid w-full gap-3 rounded-lg border bg-white p-3 text-left text-sm shadow-sm transition 2xl:grid-cols-[128px_128px_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_150px_128px_120px] 2xl:items-center 2xl:text-center',
-                  selected
-                    ? 'border-blue-400 ring-1 ring-blue-400'
-                    : 'border-slate-200 hover:border-slate-300'
-                ].join(' ')}
-              >
-                <Badge
-                  tone={priorityTone(booking.priority)}
-                  className={actionCenterBadgeClassName}
-                >
-                  {booking.priority}
-                </Badge>
-                <RequestTypeBadge booking={booking} />
-                <div className="min-w-0 text-left">
-                  <p className="truncate font-semibold text-slate-950">
-                    {booking.project.name}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
-                  <span className="mt-2 flex flex-wrap gap-1">
-                    {riskFlags.map((flag) => (
-                      <Badge
-                        key={flag}
-                        tone={
-                          flag === 'Normal'
-                            ? 'neutral'
-                            : flag === 'Overbook risk' || flag === 'Urgent'
-                              ? 'danger'
-                              : 'warning'
-                        }
-                      >
-                        {flag}
-                      </Badge>
-                    ))}
-                  </span>
-                </div>
-                <span className="min-w-0 truncate text-slate-600">
-                  {booking.requester.full_name}
-                </span>
-                <span className="min-w-0 truncate text-slate-600">
-                  {booking.ba?.full_name ?? 'Unassigned'}
-                </span>
-                <span className="text-slate-600">
-                  {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
-                </span>
-                <RequestStateBadge booking={booking} />
-                <span className="inline-flex items-center justify-center gap-1 font-semibold text-blue-700">
-                  {actionLabel} <ChevronRight className="h-4 w-4" />
-                </span>
-              </button>
-            );
-          })}
-
-          {filteredBookings.length === 0 ? (
-            <Card>
-              <CardContent className="p-5 text-sm text-slate-500">
-                No requests match the current filters.
-              </CardContent>
-            </Card>
-          ) : null}
-          {filteredBookings.length > 0 ? (
-            <Card>
-              <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-                <span>
-                  Showing {(safePage - 1) * pageSize + 1}-
-                  {Math.min(safePage * pageSize, filteredBookings.length)} of{' '}
-                  {filteredBookings.length} requests
-                </span>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage(safePage - 1)}
-                    disabled={safePage <= 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    {visiblePages.map((page, index) =>
-                      typeof page === 'number' ? (
-                        <button
-                          key={page}
-                          type="button"
-                          onClick={() => setPage(page)}
-                          className={[
-                            'inline-flex min-w-9 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors',
-                            page === safePage
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
-                          ].join(' ')}
-                        >
-                          {page}
-                        </button>
-                      ) : (
-                        <span
-                          key={`${page}-${index}`}
-                          className="inline-flex min-w-9 items-center justify-center px-1 text-sm font-semibold text-slate-400"
-                        >
-                          ...
-                        </span>
-                      )
-                    )}
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPage(safePage + 1)}
-                    disabled={safePage >= totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+          <DataTable<Booking>
+            rows={paginatedBookings}
+            columns={managerInboxColumns}
+            rowKey={(booking) => booking.id}
+            onRowClick={(booking) => openDetail(booking.id)}
+            rowClassName={(booking) =>
+              selectedBooking?.id === booking.id
+                ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-300'
+                : undefined
+            }
+            emptyState="No requests match the current filters."
+            isLoading={bookings.isLoading || bas.isLoading || summary.isLoading}
+            loadingState="Loading requests..."
+          />
+          <Pagination
+            page={safePage}
+            pageSize={pageSize}
+            total={filteredBookings.length}
+            onPageChange={setPage}
+            className="rounded-xl border border-slate-200 bg-white shadow-sm"
+          />
         </div>
 
         {!isMobile && selectedBooking ? (

@@ -23,6 +23,8 @@ type DataTableProps<T> = {
   rowKey: (row: T) => string;
   /** Optional click handler for a row. */
   onRowClick?: (row: T) => void;
+  /** Optional per-row className for selected/error/highlight states. */
+  rowClassName?: (row: T) => string | undefined;
   /** Show the search input in the table header. */
   search?: {
     value: string;
@@ -54,6 +56,7 @@ export function DataTable<T>({
   columns,
   rowKey,
   onRowClick,
+  rowClassName,
   search,
   emptyState,
   loadingState,
@@ -98,7 +101,8 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
                   'border-b border-slate-100 last:border-b-0',
-                  onRowClick && 'cursor-pointer hover:bg-slate-50'
+                  onRowClick && 'cursor-pointer hover:bg-slate-50',
+                  rowClassName?.(row)
                 )}
               >
                 {columns.map((column) => (
