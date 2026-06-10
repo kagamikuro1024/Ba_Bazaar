@@ -25,6 +25,7 @@ import {
 } from 'date-fns';
 import {
   AlertTriangle,
+  ArrowUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +36,7 @@ import { apiFetch, type BAProfile, type Booking, type Project } from '@/lib/api'
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { BAIdentity, StatusBadge } from '@/components/common';
 import { BookingModal } from '@/components/BookingModal';
+import { PageHeader } from '@/components';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -89,6 +91,15 @@ type TimelineColumn = {
   subLabel: string;
   start: Date;
   end: Date;
+};
+
+type QuarterProjectTag = {
+  id: string;
+  name: string;
+  color: string;
+  totalCapacity: number;
+  bookingCount: number;
+  hasOverbookRisk: boolean;
 };
 
 function usePrefersCoarsePointer() {
@@ -311,10 +322,181 @@ function formatTimelinePeriodLabel(
   )}`;
 }
 
+void formatTimelinePeriodLabel;
+
 function sortSelectionRange(selection: DraftSelection) {
   return selection.start <= selection.end
     ? { start: selection.start, end: selection.end }
     : { start: selection.end, end: selection.start };
+}
+
+function normalizeAnchorDate(viewMode: TimelineViewMode, value: Date) {
+  if (viewMode === 'month') {
+    return startOfMonth(value);
+  }
+
+  if (viewMode === 'quarter') {
+    return startOfQuarter(value);
+  }
+
+  return startOfWeek(value, { weekStartsOn: 1 });
+}
+
+function formatBaSortMode(sortMode: BASortMode) {
+  if (sortMode === 'capacity_desc') {
+    return 'Capacity high to low';
+  }
+
+  if (sortMode === 'capacity_asc') {
+    return 'Capacity low to high';
+  }
+
+  return 'A to Z';
+}
+
+function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
+  const projectMap = new Map<string, QuarterProjectTag>();
+
+  for (const booking of bookings) {
+    if (
+      !rangesOverlap(
+        booking.start_date,
+        booking.end_date,
+        format(column.start, 'yyyy-MM-dd'),
+        format(column.end, 'yyyy-MM-dd')
+      )
+    ) {
+      continue;
+    }
+
+    const current = projectMap.get(booking.project_id) ?? {
+      id: booking.project_id,
+      name: booking.project.name,
+      color: booking.project.color,
+      totalCapacity: 0,
+      bookingCount: 0,
+      hasOverbookRisk: false
+    };
+
+    current.totalCapacity += booking.capacity_percent;
+    current.bookingCount += 1;
+    current.hasOverbookRisk =
+      current.hasOverbookRisk ||
+      (booking.status !== 'REJECTED' &&
+        booking.status !== 'CANCELLED' &&
+        booking.capacity_percent >= 100);
+    projectMap.set(booking.project_id, current);
+  }
+
+  return Array.from(projectMap.values()).sort(
+    (left, right) =>
+      Number(right.hasOverbookRisk) - Number(left.hasOverbookRisk) ||
+      right.totalCapacity - left.totalCapacity ||
+      right.bookingCount - left.bookingCount ||
+      left.name.localeCompare(right.name)
+  );
+}
+
+function computeQuarterSummaryRowHeight(
+  columns: TimelineColumn[],
+  bookings: Booking[],
+  hasOverbookRisk: boolean,
+  isMobile: boolean
+) {
+  const visibleTagLimit = isMobile ? 2 : 3;
+  const headerHeight = isMobile ? 48 : 56;
+  const tagHeight = isMobile ? 34 : 42;
+  const footerHeight = hasOverbookRisk ? (isMobile ? 28 : 34) : 14;
+  const emptyStateHeight = isMobile ? 34 : 72;
+  const hiddenRowHeight = isMobile ? 22 : 28;
+  const containerPadding = isMobile ? 24 : 32;
+
+  const contentHeight = columns.reduce((maxHeight, column) => {
+    const tagCount = getQuarterProjectTags(bookings, column).length;
+
+    if (tagCount === 0) {
+      return Math.max(maxHeight, emptyStateHeight);
+    }
+
+    const visibleCount = Math.min(tagCount, visibleTagLimit);
+    const hiddenCount = Math.max(0, tagCount - visibleCount);
+    const monthHeight =
+      visibleCount * tagHeight + (hiddenCount > 0 ? hiddenRowHeight : 0);
+
+    return Math.max(maxHeight, monthHeight);
+  }, 0);
+
+  return headerHeight + contentHeight + footerHeight + containerPadding;
+}
+
+function buildWeekPickerSections(year: number) {
+  return Array.from({ length: 12 }, (_, monthIndex) => {
+    const monthStart = new Date(year, monthIndex, 1);
+    const monthEnd = endOfMonth(monthStart);
+    const weeks: Array<{ start: Date; end: Date; label: string }> = [];
+    let cursor = startOfWeek(monthStart, { weekStartsOn: 1 });
+
+    while (cursor <= monthEnd) {
+      const weekEnd = endOfWeek(cursor, { weekStartsOn: 1 });
+      weeks.push({
+        start: cursor,
+        end: weekEnd,
+        label: `Tuáº§n ${format(cursor, 'II')}`
+      });
+      cursor = addDays(weekEnd, 1);
+    }
+
+    return {
+      monthLabel: format(monthStart, 'MMMM yyyy'),
+      weeks
+    };
+  });
+}
+
+function formatTimelinePeriodLabelUi(
+  viewMode: TimelineViewMode,
+  timelineStart: Date,
+  timelineEnd: Date
+) {
+  if (viewMode === 'week') {
+    return `Week ${format(timelineStart, 'II')} · ${format(timelineStart, 'dd/MM')} - ${format(
+      timelineEnd,
+      'dd/MM'
+    )}`;
+  }
+
+  if (viewMode === 'month') {
+    return format(timelineStart, 'MMMM yyyy');
+  }
+
+  return `Q${format(timelineStart, 'Q')} · ${format(timelineStart, 'MMM yyyy')} - ${format(
+    endOfQuarter(timelineStart),
+    'MMM yyyy'
+  )}`;
+}
+
+function buildWeekPickerSectionsUi(year: number) {
+  return Array.from({ length: 12 }, (_, monthIndex) => {
+    const monthStart = new Date(year, monthIndex, 1);
+    const monthEnd = endOfMonth(monthStart);
+    const weeks: Array<{ start: Date; end: Date; label: string }> = [];
+    let cursor = startOfWeek(monthStart, { weekStartsOn: 1 });
+
+    while (cursor <= monthEnd) {
+      const weekEnd = endOfWeek(cursor, { weekStartsOn: 1 });
+      weeks.push({
+        start: cursor,
+        end: weekEnd,
+        label: `Week ${format(cursor, 'II')}`
+      });
+      cursor = addDays(weekEnd, 1);
+    }
+
+    return {
+      monthLabel: format(monthStart, 'MMMM yyyy'),
+      weeks
+    };
+  });
 }
 
 function isTextSelectionTarget(target: EventTarget | null) {
@@ -377,7 +559,10 @@ export function TimelinePage() {
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [baSortMode, setBaSortMode] = useState<BASortMode>('name');
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => Number(format(new Date(), 'yyyy')));
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const periodPickerRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const prefersCoarsePointer = usePrefersCoarsePointer();
@@ -395,6 +580,37 @@ export function TimelinePage() {
     window.localStorage.setItem(timelineViewModeStorageKey, viewMode);
   }, [viewMode]);
 
+  useEffect(() => {
+    setPickerYear(Number(format(anchorDate, 'yyyy')));
+  }, [anchorDate]);
+
+  useEffect(() => {
+    if (!periodPickerOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: Event) {
+      const target = event.target as Node;
+      if (periodPickerRef.current?.contains(target)) {
+        return;
+      }
+      setPeriodPickerOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setPeriodPickerOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [periodPickerOpen]);
+
   const columns = useMemo(
     () => buildTimelineColumns(viewMode, anchorDate),
     [anchorDate, viewMode]
@@ -402,7 +618,7 @@ export function TimelinePage() {
   const timelineStart = columns[0]?.start ?? anchorDate;
   const timelineEnd = columns[columns.length - 1]?.end ?? anchorDate;
   const periodLabel = useMemo(
-    () => formatTimelinePeriodLabel(viewMode, timelineStart, timelineEnd),
+    () => formatTimelinePeriodLabelUi(viewMode, timelineStart, timelineEnd),
     [timelineEnd, timelineStart, viewMode]
   );
 
@@ -491,24 +707,22 @@ export function TimelinePage() {
     () =>
       sortedVisibleBas.map((ba) => {
         const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+        const riskCapacity = capacityByBaId.get(ba.id)?.risk_capacity ?? 0;
+        const hasOverbookRisk = riskCapacity > 100;
         return {
           ba,
           bookings: baBookings,
-          desktopRowMinHeight: computeRowMinHeight(
-            columns,
-            baBookings,
-            desktopBarBaseTop,
-            72
-          ),
-          mobileRowMinHeight: computeRowMinHeight(
-            columns,
-            baBookings,
-            mobileBarBaseTop,
-            120
-          )
+          desktopRowMinHeight:
+            viewMode === 'quarter'
+              ? computeQuarterSummaryRowHeight(columns, baBookings, hasOverbookRisk, false)
+              : computeRowMinHeight(columns, baBookings, desktopBarBaseTop, 72),
+          mobileRowMinHeight:
+            viewMode === 'quarter'
+              ? computeQuarterSummaryRowHeight(columns, baBookings, hasOverbookRisk, true)
+              : computeRowMinHeight(columns, baBookings, mobileBarBaseTop, 120)
         };
       }),
-    [columns, sortedVisibleBas, visibleBookings]
+    [capacityByBaId, columns, sortedVisibleBas, viewMode, visibleBookings]
   );
 
   function cycleBaSortMode() {
@@ -621,6 +835,11 @@ export function TimelinePage() {
     });
   }
 
+  function handleSelectPeriod(nextDate: Date) {
+    setAnchorDate(normalizeAnchorDate(viewMode, nextDate));
+    setPeriodPickerOpen(false);
+  }
+
   return (
     <div className="grid gap-5">
       {successMessage ? (
@@ -638,6 +857,18 @@ export function TimelinePage() {
           </CardContent>
         </Card>
       ) : null}
+      <PageHeader
+        eyebrow="Planning"
+        title="Timeline"
+        description="Plan BA workload on the Gantt timeline. Filter by BA or project, move between periods, and review assignment pressure quickly."
+        actions={
+          canCreateBooking ? (
+            <Button className="hidden lg:inline-flex" onClick={openCreateBooking}>
+              <Plus className="h-4 w-4" /> Create booking
+            </Button>
+          ) : null
+        }
+      />
       <div>
         <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-full lg:flex-nowrap lg:items-center">
           <select
@@ -664,33 +895,47 @@ export function TimelinePage() {
               </option>
             ))}
           </select>
-          {canCreateBooking ? (
-            <Button
-              className="hidden lg:ml-auto lg:inline-flex"
-              onClick={openCreateBooking}
-            >
-              <Plus className="h-4 w-4" /> Create booking
-            </Button>
-          ) : null}
         </div>
       </div>
       <Card className="overflow-hidden">
         <CardHeader className="gap-0 p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
-            <div className="flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start">
+            <div
+              ref={periodPickerRef}
+              className="relative flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start"
+            >
               <Button variant="secondary" size="icon" onClick={() => move(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button
-                variant="secondary"
-                className="flex-1 px-3 sm:min-w-56 sm:flex-none"
-                onClick={() => setAnchorDate(initialWeek)}
-              >
-                {periodLabel}
-              </Button>
+              <div className="flex flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
+                <Button
+                  variant="secondary"
+                  className="min-w-0 flex-1 justify-between px-3"
+                  onClick={() => setPeriodPickerOpen((current) => !current)}
+                >
+                  <span className="truncate">{periodLabel}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="shrink-0 px-3"
+                  onClick={() => setAnchorDate(normalizeAnchorDate(viewMode, new Date()))}
+                >
+                  Today
+                </Button>
+              </div>
               <Button variant="secondary" size="icon" onClick={() => move(1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
+              {periodPickerOpen ? (
+                <PeriodPickerPopover
+                  viewMode={viewMode}
+                  pickerYear={pickerYear}
+                  anchorDate={anchorDate}
+                  onYearChange={setPickerYear}
+                  onSelect={handleSelectPeriod}
+                />
+              ) : null}
             </div>
             <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
               <span className="hidden sm:inline">View mode</span>
@@ -699,7 +944,10 @@ export function TimelinePage() {
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setViewMode(mode)}
+                    onClick={() => {
+                      setViewMode(mode);
+                      setAnchorDate((current) => normalizeAnchorDate(mode, current));
+                    }}
                     className={cn(
                       'w-full rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
                       viewMode === mode
@@ -792,9 +1040,19 @@ export function TimelinePage() {
                     type="button"
                     onClick={cycleBaSortMode}
                     className="pointer-events-auto h-14 border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                    title="Sort BA by capacity"
+                    title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
                   >
-                    BA
+                    <span className="flex items-center gap-1">
+                      BA
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                      <span className="text-[10px] normal-case text-slate-400">
+                        {baSortMode === 'capacity_desc'
+                          ? 'High-Low'
+                          : baSortMode === 'capacity_asc'
+                            ? 'Low-High'
+                            : 'A-Z'}
+                      </span>
+                    </span>
                     {baSortMode === 'capacity_desc'
                       ? ' ↓'
                       : baSortMode === 'capacity_asc'
@@ -807,7 +1065,7 @@ export function TimelinePage() {
                       className={cn(
                         'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
                         isCurrentTimelineColumn(column, currentDate) &&
-                          'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                          'bg-blue-50/80 text-blue-700'
                       )}
                     >
                       <div>
@@ -825,7 +1083,7 @@ export function TimelinePage() {
                     className={cn(
                       'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
                       isCurrentTimelineColumn(column, currentDate) &&
-                        'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
+                        'bg-blue-50/80 text-blue-700'
                     )}
                   >
                     <div>
@@ -845,6 +1103,7 @@ export function TimelinePage() {
                     <MobileTimelineRow
                       key={ba.id}
                       ba={ba}
+                      viewMode={viewMode}
                       columns={columns}
                       bookings={baBookings}
                       rowMinHeight={mobileRowMinHeight}
@@ -855,6 +1114,10 @@ export function TimelinePage() {
                           ?.risk_capacity ?? 0) > 100
                       }
                       currentDate={currentDate}
+                      riskCapacity={
+                        summary.data?.items.find((item) => item.ba_id === ba.id)
+                          ?.risk_capacity ?? 0
+                      }
                       onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
@@ -869,6 +1132,7 @@ export function TimelinePage() {
                     <TimelineRow
                       key={ba.id}
                       ba={ba}
+                      viewMode={viewMode}
                       columns={columns}
                       bookings={baBookings}
                       rowMinHeight={desktopRowMinHeight}
@@ -886,6 +1150,10 @@ export function TimelinePage() {
                           ?.risk_capacity ?? 0) > 100
                       }
                       currentDate={currentDate}
+                      riskCapacity={
+                        summary.data?.items.find((item) => item.ba_id === ba.id)
+                          ?.risk_capacity ?? 0
+                      }
                       onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
@@ -925,11 +1193,11 @@ export function TimelinePage() {
                       />
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs font-bold transition-all duration-200 ease-out',
+                          'inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-md border px-1.5 py-0.5 text-xs font-bold transition-all duration-200 ease-out',
                           (capacity?.risk_capacity ?? 0) > 100 &&
-                            'bg-rose-600 text-white',
+                            'border-rose-800 bg-rose-700 text-white shadow-sm shadow-rose-200',
                           (capacity?.risk_capacity ?? 0) <= 100 &&
-                            capacityColor(capacity?.risk_capacity ?? 0),
+                            `border-slate-200 ${capacityColor(capacity?.risk_capacity ?? 0)}`,
                           compactMobileInfo
                             ? 'max-w-0 -translate-x-2 opacity-0'
                             : 'max-w-28 translate-x-0 opacity-100'
@@ -939,7 +1207,6 @@ export function TimelinePage() {
                           <AlertTriangle className="h-3 w-3" />
                         ) : null}
                         {capacity?.risk_capacity ?? 0}%
-                        {(capacity?.risk_capacity ?? 0) > 100 ? ' Overbooked' : ''}
                       </span>
                     </div>
                   );
@@ -952,9 +1219,19 @@ export function TimelinePage() {
                 type="button"
                 onClick={cycleBaSortMode}
                 className="pointer-events-auto h-14 w-[260px] border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                title="Sort BA by capacity"
+                title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
               >
-                BA
+                <span className="flex items-center gap-1">
+                  BA
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  <span className="text-[10px] normal-case text-slate-400">
+                    {baSortMode === 'capacity_desc'
+                      ? 'High-Low'
+                      : baSortMode === 'capacity_asc'
+                        ? 'Low-High'
+                        : 'A-Z'}
+                  </span>
+                </span>
                 {baSortMode === 'capacity_desc'
                   ? ' ↓'
                   : baSortMode === 'capacity_asc'
@@ -969,28 +1246,59 @@ export function TimelinePage() {
                   <div
                     key={ba.id}
                     className={cn(
-                      'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
-                      isAlternateRow ? 'bg-sky-50' : 'bg-white'
+                      viewMode === 'quarter'
+                        ? 'pointer-events-auto grid w-[260px] grid-rows-[auto_minmax(0,1fr)_auto] border-b border-r p-3'
+                        : 'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                      (capacity?.risk_capacity ?? 0) > 100
+                        ? 'bg-rose-50 ring-1 ring-inset ring-rose-300'
+                        : isAlternateRow
+                          ? 'bg-sky-50'
+                          : 'bg-white'
                     )}
                     style={{ height: desktopRowMinHeight }}
                     onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    <BAIdentity ba={ba} />
-                    {(capacity?.risk_capacity ?? 0) > 100 ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-xs font-bold text-white">
-                        <AlertTriangle className="h-3 w-3" />
-                        {capacity?.risk_capacity ?? 0}% Overbooked
-                      </span>
+                    {viewMode === 'quarter' ? (
+                      <>
+                        <div className="h-[34px]" />
+                        <div className="flex items-start justify-between gap-3">
+                          <BAIdentity ba={ba} />
+                          <span
+                            className={cn(
+                              'shrink-0 self-start text-sm font-bold',
+                              (capacity?.risk_capacity ?? 0) > 100
+                                ? 'inline-flex items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 py-1 text-[11px] text-white shadow-sm shadow-rose-200'
+                                : capacityColor(capacity?.risk_capacity ?? 0)
+                            )}
+                          >
+                            {(capacity?.risk_capacity ?? 0) > 100 ? (
+                              <AlertTriangle className="h-3 w-3" />
+                            ) : null}
+                            {capacity?.risk_capacity ?? 0}%
+                          </span>
+                        </div>
+                        <div className="h-6" />
+                      </>
                     ) : (
-                      <span
-                        className={cn(
-                          'text-sm font-bold',
-                          capacityColor(capacity?.risk_capacity ?? 0)
+                      <>
+                        <BAIdentity ba={ba} />
+                        {(capacity?.risk_capacity ?? 0) > 100 ? (
+                          <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
+                            <AlertTriangle className="h-3 w-3" />
+                            {capacity?.risk_capacity ?? 0}%
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'text-sm font-bold',
+                              capacityColor(capacity?.risk_capacity ?? 0)
+                            )}
+                          >
+                            {capacity?.risk_capacity ?? 0}%
+                          </span>
                         )}
-                      >
-                        {capacity?.risk_capacity ?? 0}%
-                      </span>
+                      </>
                     )}
                   </div>
                 );
@@ -1028,6 +1336,7 @@ export function TimelinePage() {
 
 function TimelineRow({
   ba,
+  viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1036,6 +1345,7 @@ function TimelineRow({
   allowDragSelection,
   hasOverbookRisk,
   currentDate,
+  riskCapacity,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -1044,6 +1354,7 @@ function TimelineRow({
   onBookingClick
 }: {
   ba: BAProfile;
+  viewMode: TimelineViewMode;
   columns: TimelineColumn[];
   bookings: Booking[];
   rowMinHeight: number;
@@ -1052,6 +1363,7 @@ function TimelineRow({
   allowDragSelection: boolean;
   hasOverbookRisk: boolean;
   currentDate: Date;
+  riskCapacity: number;
   activeSelection: DraftSelection | null;
   onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
   onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
@@ -1059,6 +1371,24 @@ function TimelineRow({
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
+  if (viewMode === 'quarter') {
+    return (
+      <QuarterTimelineRow
+        ba={ba}
+        columns={columns}
+        bookings={bookings}
+        rowMinHeight={rowMinHeight}
+        isAlternateRow={isAlternateRow}
+        canCreateBooking={canCreateBooking}
+        hasOverbookRisk={hasOverbookRisk}
+        currentDate={currentDate}
+        riskCapacity={riskCapacity}
+        onEmptyClick={onEmptyClick}
+        onBookingClick={onBookingClick}
+      />
+    );
+  }
+
   const layouts = computeBookingLayouts(columns, bookings);
   const selectedRange = activeSelection ? sortSelectionRange(activeSelection) : null;
 
@@ -1083,8 +1413,9 @@ function TimelineRow({
             className={cn(
               'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
               dayCellBackground(isAlternateRow),
+              hasOverbookRisk && 'bg-rose-50/60',
               isCurrentTimelineColumn(column, currentDate) &&
-                'bg-blue-50 ring-1 ring-inset ring-blue-200',
+                'bg-blue-50/75 text-slate-500',
               canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
               isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
             )}
@@ -1160,6 +1491,7 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
+  viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1167,10 +1499,12 @@ function MobileTimelineRow({
   canCreateBooking,
   hasOverbookRisk,
   currentDate,
+  riskCapacity,
   onEmptyClick,
   onBookingClick
 }: {
   ba: BAProfile;
+  viewMode: TimelineViewMode;
   columns: TimelineColumn[];
   bookings: Booking[];
   rowMinHeight: number;
@@ -1178,9 +1512,28 @@ function MobileTimelineRow({
   canCreateBooking: boolean;
   hasOverbookRisk: boolean;
   currentDate: Date;
+  riskCapacity: number;
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
+  if (viewMode === 'quarter') {
+    return (
+      <MobileQuarterTimelineRow
+        ba={ba}
+        columns={columns}
+        bookings={bookings}
+        rowMinHeight={rowMinHeight}
+        isAlternateRow={isAlternateRow}
+        canCreateBooking={canCreateBooking}
+        hasOverbookRisk={hasOverbookRisk}
+        currentDate={currentDate}
+        riskCapacity={riskCapacity}
+        onEmptyClick={onEmptyClick}
+        onBookingClick={onBookingClick}
+      />
+    );
+  }
+
   const layouts = computeBookingLayouts(columns, bookings);
 
   return (
@@ -1191,8 +1544,9 @@ function MobileTimelineRow({
           className={cn(
             'group select-none border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
             dayCellBackground(isAlternateRow),
+            hasOverbookRisk && 'bg-rose-50/60',
             isCurrentTimelineColumn(column, currentDate) &&
-              'bg-blue-50 ring-1 ring-inset ring-blue-200',
+              'bg-blue-50/75 text-slate-500',
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           style={{ minHeight: rowMinHeight }}
@@ -1246,6 +1600,275 @@ function MobileTimelineRow({
     </>
   );
 }
+
+function QuarterTimelineRow({
+  ba,
+  columns,
+  bookings,
+  rowMinHeight,
+  isAlternateRow,
+  canCreateBooking,
+  hasOverbookRisk,
+  currentDate,
+  riskCapacity,
+  onEmptyClick,
+  onBookingClick
+}: {
+  ba: BAProfile;
+  columns: TimelineColumn[];
+  bookings: Booking[];
+  rowMinHeight: number;
+  isAlternateRow: boolean;
+  canCreateBooking: boolean;
+  hasOverbookRisk: boolean;
+  currentDate: Date;
+  riskCapacity: number;
+  onEmptyClick: (column: TimelineColumn) => void;
+  onBookingClick: (booking: Booking) => void;
+}) {
+  return (
+    <>
+      <div
+        className={cn(
+          'border-b border-r',
+          hasOverbookRisk ? 'bg-rose-50/70' : isAlternateRow ? 'bg-sky-50' : 'bg-white'
+        )}
+        style={{ height: rowMinHeight }}
+        aria-hidden="true"
+      />
+      <div className="relative col-span-full hidden" />
+      {columns.map((column) => {
+        const projectTags = getQuarterProjectTags(bookings, column);
+        const visibleTags = projectTags.slice(0, 3);
+        const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
+        const currentMonth = isCurrentTimelineColumn(column, currentDate);
+
+        return (
+          <div
+            key={`${ba.id}-${column.id}`}
+            className={cn(
+              'grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-3 text-left transition',
+              hasOverbookRisk
+                ? 'bg-rose-50/70'
+                : isAlternateRow
+                  ? 'bg-sky-50/55'
+                  : 'bg-white',
+              currentMonth && 'bg-blue-50/75',
+              hasOverbookRisk && 'border-rose-300',
+              canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
+            )}
+            style={{ height: rowMinHeight }}
+            onClick={() => {
+              if (projectTags.length === 0 && canCreateBooking) {
+                onEmptyClick(column);
+              }
+            }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {column.label}
+                </p>
+                <p className="text-xs text-slate-400">{column.subLabel}</p>
+              </div>
+              {currentMonth ? (
+                <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  Current
+                </span>
+              ) : null}
+            </div>
+            {projectTags.length > 0 ? (
+              <div className="grid content-start gap-2 overflow-hidden">
+                {visibleTags.map((tag) => {
+                  const relatedBooking = bookings.find(
+                    (booking) => booking.project_id === tag.id
+                  );
+                  return (
+                    <button
+                      key={`${ba.id}-${column.id}-${tag.id}`}
+                      type="button"
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                        tag.hasOverbookRisk || hasOverbookRisk
+                          ? 'border-rose-300 bg-rose-100 text-rose-900'
+                          : 'border-slate-200 bg-white text-slate-700'
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (relatedBooking) {
+                          onBookingClick(relatedBooking);
+                        }
+                      }}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span className="truncate">{tag.name}</span>
+                      </span>
+                      <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                        {tag.totalCapacity}%
+                      </span>
+                    </button>
+                  );
+                })}
+                {hiddenCount > 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-500">
+                    +{hiddenCount} more project{hiddenCount > 1 ? 's' : ''}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  'flex flex-1 items-center justify-center rounded-xl border border-dashed px-3 text-center text-xs font-medium',
+                  hasOverbookRisk
+                    ? 'border-rose-300 bg-rose-50 text-rose-700'
+                    : 'border-slate-200 bg-slate-50 text-slate-400'
+                )}
+              >
+                {canCreateBooking ? 'No project summary in this month' : 'No project'}
+              </div>
+            )}
+            <div className="flex h-6 items-end">
+              {hasOverbookRisk ? (
+                <div className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-100 px-2 py-1 text-[11px] font-bold text-rose-900">
+                  <AlertTriangle className="h-3 w-3" />
+                  {riskCapacity}%
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function MobileQuarterTimelineRow({
+  ba,
+  columns,
+  bookings,
+  rowMinHeight,
+  isAlternateRow,
+  canCreateBooking,
+  hasOverbookRisk,
+  currentDate,
+  riskCapacity,
+  onEmptyClick,
+  onBookingClick
+}: {
+  ba: BAProfile;
+  columns: TimelineColumn[];
+  bookings: Booking[];
+  rowMinHeight: number;
+  isAlternateRow: boolean;
+  canCreateBooking: boolean;
+  hasOverbookRisk: boolean;
+  currentDate: Date;
+  riskCapacity: number;
+  onEmptyClick: (column: TimelineColumn) => void;
+  onBookingClick: (booking: Booking) => void;
+}) {
+  return (
+    <>
+      {columns.map((column) => {
+        const projectTags = getQuarterProjectTags(bookings, column);
+        const visibleTags = projectTags.slice(0, 2);
+        const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
+        const currentMonth = isCurrentTimelineColumn(column, currentDate);
+
+        return (
+          <div
+            key={`${ba.id}-${column.id}`}
+            className={cn(
+              'grid grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-2 text-left',
+              hasOverbookRisk
+                ? 'bg-rose-50/70'
+                : isAlternateRow
+                  ? 'bg-sky-50/55'
+                  : 'bg-white',
+              currentMonth && 'bg-blue-50/75',
+              hasOverbookRisk && 'border-rose-300',
+              canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
+            )}
+            style={{ height: rowMinHeight }}
+            onClick={() => {
+              if (projectTags.length === 0 && canCreateBooking) {
+                onEmptyClick(column);
+              }
+            }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {column.label}
+                </p>
+                <p className="text-[11px] text-slate-400">{column.subLabel}</p>
+              </div>
+              {currentMonth ? (
+                <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                  Now
+                </span>
+              ) : null}
+            </div>
+            <div className="grid gap-1.5 overflow-hidden">
+              {visibleTags.map((tag) => {
+                const relatedBooking = bookings.find(
+                  (booking) => booking.project_id === tag.id
+                );
+                return (
+                  <button
+                    key={`${ba.id}-${column.id}-${tag.id}`}
+                    type="button"
+                    className={cn(
+                      'flex items-center gap-1 rounded-md border px-2 py-1.5 text-[11px] font-semibold',
+                      tag.hasOverbookRisk || hasOverbookRisk
+                        ? 'border-rose-300 bg-rose-100 text-rose-900'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (relatedBooking) {
+                        onBookingClick(relatedBooking);
+                      }
+                    }}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-sm"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span className="truncate">{tag.name}</span>
+                  </button>
+                );
+              })}
+              {hiddenCount > 0 ? (
+                <div className="rounded-md border border-dashed border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-500">
+                  +{hiddenCount}
+                </div>
+              ) : null}
+              {projectTags.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-200 px-2 py-1.5 text-[11px] text-slate-400">
+                  No project
+                </div>
+              ) : null}
+            </div>
+            <div className="flex h-5 items-end">
+              {hasOverbookRisk ? (
+                <div className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                  <AlertTriangle className="h-3 w-3" />
+                  {riskCapacity}%
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function MobileBAIdentity({
   ba,
   compact,
@@ -1297,6 +1920,287 @@ function MobileBAIdentity({
     </button>
   );
 }
+
+function PeriodPickerPopover({
+  viewMode,
+  pickerYear,
+  anchorDate,
+  onYearChange,
+  onSelect
+}: {
+  viewMode: TimelineViewMode;
+  pickerYear: number;
+  anchorDate: Date;
+  onYearChange: (year: number) => void;
+  onSelect: (date: Date) => void;
+}) {
+  const weekSections = useMemo(() => buildWeekPickerSectionsUi(pickerYear), [pickerYear]);
+
+  return (
+    <div className="absolute left-0 top-full z-30 mt-3 w-[min(92vw,34rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear - 1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {viewMode === 'week'
+              ? 'Pick a week'
+              : viewMode === 'month'
+                ? 'Pick a month'
+                : 'Pick a quarter'}
+          </p>
+          <p className="text-base font-bold text-slate-950">{pickerYear}</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear + 1)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="max-h-[24rem] overflow-y-auto p-4">
+        {viewMode === 'week' ? (
+          <div className="grid gap-4">
+            {weekSections.map((section) => (
+              <div key={section.monthLabel} className="grid gap-2">
+                <p className="text-sm font-semibold text-slate-800">{section.monthLabel}</p>
+                <div className="grid gap-2">
+                  {section.weeks.map((week) => {
+                    const selected =
+                      format(startOfWeek(anchorDate, { weekStartsOn: 1 }), 'yyyy-MM-dd') ===
+                      format(week.start, 'yyyy-MM-dd');
+                    return (
+                      <button
+                        key={`${section.monthLabel}-${format(week.start, 'yyyy-MM-dd')}`}
+                        type="button"
+                        onClick={() => onSelect(week.start)}
+                        className={cn(
+                          'flex items-center justify-between rounded-lg border px-3 py-2 text-left transition',
+                          selected
+                            ? 'border-blue-300 bg-blue-50 text-blue-800'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        )}
+                      >
+                        <span className="text-sm font-semibold">{week.label}</span>
+                        <span className="text-xs text-slate-500">
+                          {format(week.start, 'dd/MM')} - {format(week.end, 'dd/MM')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {viewMode === 'month' ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 12 }, (_, monthIndex) => {
+              const monthDate = new Date(pickerYear, monthIndex, 1);
+              const selected =
+                format(startOfMonth(anchorDate), 'yyyy-MM') === format(monthDate, 'yyyy-MM');
+              return (
+                <button
+                  key={format(monthDate, 'yyyy-MM')}
+                  type="button"
+                  onClick={() => onSelect(monthDate)}
+                  className={cn(
+                    'rounded-2xl border px-3 py-4 text-left transition',
+                    selected
+                      ? 'border-blue-300 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  <p className="text-sm font-semibold">{format(monthDate, 'MMMM')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{format(monthDate, 'MM/yyyy')}</p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {viewMode === 'quarter' ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[0, 1, 2, 3].map((quarterIndex) => {
+              const quarterDate = startOfQuarter(new Date(pickerYear, quarterIndex * 3, 1));
+              const quarterEnd = endOfQuarter(quarterDate);
+              const selected =
+                format(startOfQuarter(anchorDate), 'yyyy-MM-dd') ===
+                format(quarterDate, 'yyyy-MM-dd');
+              return (
+                <button
+                  key={format(quarterDate, 'yyyy-MM-dd')}
+                  type="button"
+                  onClick={() => onSelect(quarterDate)}
+                  className={cn(
+                    'rounded-2xl border px-4 py-4 text-left transition',
+                    selected
+                      ? 'border-blue-300 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  <p className="text-base font-semibold">Q{format(quarterDate, 'Q')}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {format(quarterDate, 'MMM yyyy')} - {format(quarterEnd, 'MMM yyyy')}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PeriodPickerModal({
+  open,
+  viewMode,
+  pickerYear,
+  anchorDate,
+  onYearChange,
+  onClose,
+  onSelect
+}: {
+  open: boolean;
+  viewMode: TimelineViewMode;
+  pickerYear: number;
+  anchorDate: Date;
+  onYearChange: (year: number) => void;
+  onClose: () => void;
+  onSelect: (date: Date) => void;
+}) {
+  const weekSections = useMemo(() => buildWeekPickerSections(pickerYear), [pickerYear]);
+
+  return (
+    <Modal
+      title={
+        viewMode === 'week'
+          ? 'Select week'
+          : viewMode === 'month'
+            ? 'Select month'
+            : 'Select quarter'
+      }
+      open={open}
+      onClose={onClose}
+    >
+      <div className="grid gap-4">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Timeframe year
+            </p>
+            <p className="text-lg font-bold text-slate-950">{pickerYear}</p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {viewMode === 'week' ? (
+          <div className="grid max-h-[60vh] gap-4 overflow-y-auto pr-1">
+            {weekSections.map((section) => (
+              <div key={section.monthLabel} className="grid gap-2">
+                <p className="text-sm font-semibold capitalize text-slate-800">
+                  {section.monthLabel}
+                </p>
+                <div className="grid gap-2">
+                  {section.weeks.map((week) => {
+                    const selected =
+                      format(startOfWeek(anchorDate, { weekStartsOn: 1 }), 'yyyy-MM-dd') ===
+                      format(week.start, 'yyyy-MM-dd');
+                    return (
+                      <button
+                        key={`${section.monthLabel}-${format(week.start, 'yyyy-MM-dd')}`}
+                        type="button"
+                        onClick={() => onSelect(week.start)}
+                        className={cn(
+                          'flex items-center justify-between rounded-xl border px-3 py-2 text-left transition',
+                          selected
+                            ? 'border-blue-300 bg-blue-50 text-blue-800'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        )}
+                      >
+                        <span className="text-sm font-semibold">{week.label}</span>
+                        <span className="text-xs text-slate-500">
+                          {format(week.start, 'dd/MM')} - {format(week.end, 'dd/MM')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {viewMode === 'month' ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 12 }, (_, monthIndex) => {
+              const monthDate = new Date(pickerYear, monthIndex, 1);
+              const selected =
+                format(startOfMonth(anchorDate), 'yyyy-MM') === format(monthDate, 'yyyy-MM');
+              return (
+                <button
+                  key={format(monthDate, 'yyyy-MM')}
+                  type="button"
+                  onClick={() => onSelect(monthDate)}
+                  className={cn(
+                    'rounded-xl border px-3 py-4 text-left transition',
+                    selected
+                      ? 'border-blue-300 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  <p className="text-sm font-semibold">{format(monthDate, 'MMMM')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{format(monthDate, 'MM/yyyy')}</p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {viewMode === 'quarter' ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[0, 1, 2, 3].map((quarterIndex) => {
+              const quarterDate = startOfQuarter(new Date(pickerYear, quarterIndex * 3, 1));
+              const quarterEnd = endOfQuarter(quarterDate);
+              const selected =
+                format(startOfQuarter(anchorDate), 'yyyy-MM-dd') ===
+                format(quarterDate, 'yyyy-MM-dd');
+              return (
+                <button
+                  key={format(quarterDate, 'yyyy-MM-dd')}
+                  type="button"
+                  onClick={() => onSelect(quarterDate)}
+                  className={cn(
+                    'rounded-2xl border px-4 py-4 text-left transition',
+                    selected
+                      ? 'border-blue-300 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  <p className="text-base font-semibold">Q{format(quarterDate, 'Q')}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {format(quarterDate, 'MM/yyyy')} - {format(quarterEnd, 'MM/yyyy')}
+                  </p>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Strategic summary view
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+void PeriodPickerModal;
 
 function rangesOverlap(
   firstStart: string,
