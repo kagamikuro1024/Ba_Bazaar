@@ -1300,13 +1300,28 @@ export function ManagerInboxPage() {
     {
       id: 'action',
       header: 'Action',
-      className: 'w-32',
-      cell: (booking: Booking) => (
-        <span className="inline-flex items-center justify-center gap-1 font-semibold text-blue-700">
-          {getRequestActionLabel(booking)}
-          <ChevronRight className="h-4 w-4" />
-        </span>
-      )
+      headerClassName: 'text-right',
+      className: 'w-36 text-right',
+      cell: (booking: Booking) => {
+        const actionLabel = getRequestActionLabel(booking, canManageInbox);
+
+        return (
+          <Button
+            type="button"
+            size="sm"
+            variant={actionLabel === 'View' ? 'secondary' : 'default'}
+            className="min-w-24"
+            onClick={(event) => {
+              event.stopPropagation();
+              openDetail(booking.id);
+            }}
+            aria-label={`${actionLabel} ${booking.title}`}
+          >
+            {actionLabel}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        );
+      }
     }
   ];
 
@@ -2687,7 +2702,11 @@ function FilterOptionGroup<T extends string>({
   );
 }
 
-function getRequestActionLabel(booking: Booking) {
+function getRequestActionLabel(booking: Booking, canManageActions = true) {
+  if (!canManageActions) {
+    return 'View';
+  }
+
   if (!booking.ba_id) {
     return 'Assign';
   }
