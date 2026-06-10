@@ -332,8 +332,12 @@ export function getManagerRequestMessage(booking: Booking) {
   return 'Ready for manager review';
 }
 
-function normalizeSkillTagEntry(entry: any) {
-  if (!entry || typeof entry !== 'object') {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function normalizeSkillTagEntry(entry: unknown): unknown {
+  if (!isRecord(entry)) {
     return entry;
   }
 
@@ -356,8 +360,8 @@ function normalizeSkillTagEntry(entry: any) {
   return entry;
 }
 
-function normalizeBAProfile(ba: any) {
-  if (!ba || typeof ba !== 'object') {
+function normalizeBAProfile(ba: unknown): unknown {
+  if (!isRecord(ba)) {
     return ba;
   }
 
@@ -368,13 +372,13 @@ function normalizeBAProfile(ba: any) {
   return normalized;
 }
 
-function normalizeBooking(booking: any) {
-  if (!booking || typeof booking !== 'object') {
+function normalizeBooking(booking: unknown): unknown {
+  if (!isRecord(booking)) {
     return booking;
   }
 
   const normalized = { ...booking };
-  if (normalized.ba && typeof normalized.ba === 'object') {
+  if (isRecord(normalized.ba)) {
     normalized.ba = normalizeBAProfile(normalized.ba);
   }
   if (normalized.project == null && normalized.project_name) {
@@ -388,12 +392,12 @@ function normalizeBooking(booking: any) {
   return normalized;
 }
 
-function normalizeApiData(value: any): any {
+function normalizeApiData(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(normalizeApiData);
   }
 
-  if (!value || typeof value !== 'object') {
+  if (!isRecord(value)) {
     return value;
   }
 
@@ -405,7 +409,7 @@ function normalizeApiData(value: any): any {
     return normalizeBooking(value);
   }
 
-  const normalized: Record<string, any> = {};
+  const normalized: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value)) {
     normalized[key] = normalizeApiData(nested);
   }

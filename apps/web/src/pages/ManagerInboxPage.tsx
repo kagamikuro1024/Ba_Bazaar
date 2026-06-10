@@ -178,9 +178,12 @@ export function ManagerInboxPage() {
   });
 
   const filteredBookings = useMemo(() => {
+    const capacityByBaId = new Map(
+      (summary.data?.items ?? []).map((item) => [item.ba_id, item])
+    );
     const riskBaIds = new Set(
-      (summary.data?.items ?? [])
-        .filter((item) => item.risk_capacity > 100)
+      [...capacityByBaId.values()]
+        .filter((item) => item.risk_capacity > 100 || item.approved_capacity > 100)
         .map((item) => item.ba_id)
     );
 
@@ -245,15 +248,41 @@ export function ManagerInboxPage() {
         }
 
         if (filters.sort === 'CAPACITY_RISK') {
-          const leftRisk = riskBaIds.has(left.ba_id ?? '') ? 1 : 0;
-          const rightRisk = riskBaIds.has(right.ba_id ?? '') ? 1 : 0;
+          const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
+          const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
+          const leftRisk =
+            leftCapacity &&
+            (leftCapacity.approved_capacity > 100 || leftCapacity.risk_capacity > 100)
+              ? 1
+              : 0;
+          const rightRisk =
+            rightCapacity &&
+            (rightCapacity.approved_capacity > 100 || rightCapacity.risk_capacity > 100)
+              ? 1
+              : 0;
           if (leftRisk !== rightRisk) {
             return rightRisk - leftRisk;
           }
         }
 
-        const leftScore = getInboxPriorityScore(left, riskBaIds.has(left.ba_id ?? ''));
-        const rightScore = getInboxPriorityScore(right, riskBaIds.has(right.ba_id ?? ''));
+        const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
+        const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
+        const leftScore = getInboxPriorityScore(left, {
+          hasCapacityRisk: Boolean(
+            leftCapacity &&
+            leftCapacity.approved_capacity <= 100 &&
+            leftCapacity.risk_capacity > 100
+          ),
+          hasOverbooked: Boolean(leftCapacity && leftCapacity.approved_capacity > 100)
+        });
+        const rightScore = getInboxPriorityScore(right, {
+          hasCapacityRisk: Boolean(
+            rightCapacity &&
+            rightCapacity.approved_capacity <= 100 &&
+            rightCapacity.risk_capacity > 100
+          ),
+          hasOverbooked: Boolean(rightCapacity && rightCapacity.approved_capacity > 100)
+        });
         if (leftScore !== rightScore) {
           return rightScore - leftScore;
         }
@@ -1272,7 +1301,12 @@ export function ManagerInboxPage() {
                     : 'border-slate-200 hover:border-slate-300'
                 ].join(' ')}
               >
-                <Badge tone={priorityTone(booking.priority)} className={actionCenterBadgeClassName}>{booking.priority}</Badge>
+                <Badge
+                  tone={priorityTone(booking.priority)}
+                  className={actionCenterBadgeClassName}
+                >
+                  {booking.priority}
+                </Badge>
                 <RequestTypeBadge booking={booking} />
                 <div className="min-w-0 text-left">
                   <p className="truncate font-semibold text-slate-950">
@@ -2382,7 +2416,8 @@ function DetailStat({
   );
 }
 
-const actionCenterBadgeClassName = 'inline-flex w-full min-w-[128px] justify-center text-center';
+const actionCenterBadgeClassName =
+  'inline-flex w-full min-w-[128px] justify-center text-center';
 
 function RequestTypeBadge({ booking }: { booking: Booking }) {
   return (
@@ -2588,8 +2623,11 @@ function isSortOption(value: string | null): value is FilterState['sort'] {
   );
 }
 
-function getInboxPriorityScore(booking: Booking, hasOverbookRisk = false) {
-  let score = 0;
+function getInboxPriorityScore(
+  booking: Booking,
+  flags: { hasCapacityRisk?: boolean; hasOverbooked?: boolean } = {}
+) {
+  let score = getInboxStatusScore(booking.status);
 
   switch (booking.priority) {
     case 'URGENT':
@@ -2606,9 +2644,26 @@ function getInboxPriorityScore(booking: Booking, hasOverbookRisk = false) {
       break;
   }
 
-  if (hasOverbookRisk) score += 50;
-  if (!booking.ba_id) score += 30;
-  if (booking.status === 'PENDING') score += 20;
+  if (flags.hasOverbooked) score += 60;
+  else if (flags.hasCapacityRisk) score += 40;
+  if (!booking.ba_id) score += 50;
 
   return score;
+}
+
+function getInboxStatusScore(status: BookingStatus) {
+  switch (status) {
+    case 'PENDING':
+      return 1000;
+    case 'REJECTED':
+      return 300;
+    case 'APPROVED':
+      return 100;
+    case 'COMPLETED':
+      return 50;
+    case 'CANCELLED':
+      return 0;
+    default:
+      return 80;
+  }
 }

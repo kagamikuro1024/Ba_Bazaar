@@ -5,7 +5,14 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { BAStatus, BookingPriority, BookingStatus, Prisma, User, UserRole } from '@prisma/client';
+import {
+  BAStatus,
+  BookingPriority,
+  BookingStatus,
+  Prisma,
+  User,
+  UserRole
+} from '@prisma/client';
 import { canApproveCapacity, getRangeCapacity } from '../domain/capacity';
 import {
   optionalString,
@@ -13,7 +20,12 @@ import {
   requireDate,
   requireString
 } from '../common/parse';
-import { canApproveBooking, canAssignBooking, canCreateBookingRequest, canCreateDirectBooking } from '../auth/rbac';
+import {
+  canApproveBooking,
+  canAssignBooking,
+  canCreateBookingRequest,
+  canCreateDirectBooking
+} from '../auth/rbac';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseDateOnly, toDateKey } from '../domain/date';
 import { syncBookingStatuses } from './bookings.utils';
@@ -113,9 +125,20 @@ export class BookingsService {
       include: this.includeRelations()
     });
 
-    await this.audit(currentUser, 'CREATE_BOOKING_REQUEST', 'Booking', booking.id, null, booking);
+    await this.audit(
+      currentUser,
+      'CREATE_BOOKING_REQUEST',
+      'Booking',
+      booking.id,
+      null,
+      booking
+    );
     if (normalized.ba_id) {
-      await this.notifyManagers('BOOKING_REQUEST_CREATED', 'New booking request', booking);
+      await this.notifyManagers(
+        'BOOKING_REQUEST_CREATED',
+        'New booking request',
+        booking
+      );
     } else {
       await this.notifyManagers(
         'BOOKING_NEEDS_ASSIGNMENT',
@@ -132,7 +155,12 @@ export class BookingsService {
 
   async createDirect(currentUser: User, input: BookingInput) {
     if (!canCreateDirectBooking(currentUser.role)) {
-      await this.auditDenied(currentUser, 'CREATE_DIRECT_BOOKING', 'Permission', currentUser.id);
+      await this.auditDenied(
+        currentUser,
+        'CREATE_DIRECT_BOOKING',
+        'Permission',
+        currentUser.id
+      );
       throw new ForbiddenException('Manager role required to create direct booking');
     }
 
@@ -140,7 +168,7 @@ export class BookingsService {
     if (!normalized.ba_id) {
       throw new BadRequestException('BA is required for direct bookings');
     }
-    
+
     const existing = await this.getBaBookings(normalized.ba_id);
     const approval = canApproveCapacity(
       existing,
@@ -168,7 +196,14 @@ export class BookingsService {
       include: this.includeRelations()
     });
 
-    await this.audit(currentUser, 'CREATE_DIRECT_BOOKING', 'Booking', booking.id, null, booking);
+    await this.audit(
+      currentUser,
+      'CREATE_DIRECT_BOOKING',
+      'Booking',
+      booking.id,
+      null,
+      booking
+    );
     await this.notifyAssignedBA(booking, 'BOOKING_APPROVED', 'Booking assigned');
     return booking;
   }
@@ -191,11 +226,16 @@ export class BookingsService {
     }
 
     const data = {
+      ba_id: input.ba_id ? requireString(input.ba_id, 'ba_id') : undefined,
       title: input.title,
       description: input.description,
       notes: input.notes,
-      project_id: input.project_id ? requireString(input.project_id, 'project_id') : undefined,
-      start_date: input.start_date ? requireDate(input.start_date, 'start_date') : undefined,
+      project_id: input.project_id
+        ? requireString(input.project_id, 'project_id')
+        : undefined,
+      start_date: input.start_date
+        ? requireDate(input.start_date, 'start_date')
+        : undefined,
       end_date: input.end_date ? requireDate(input.end_date, 'end_date') : undefined,
       capacity_percent:
         input.capacity_percent !== undefined
@@ -205,15 +245,28 @@ export class BookingsService {
     };
 
     if (data.start_date && data.end_date && data.end_date < data.start_date) {
-      throw new BadRequestException('end_date must be greater than or equal to start_date');
+      throw new BadRequestException(
+        'end_date must be greater than or equal to start_date'
+      );
     }
 
     const nextStartDate = data.start_date ?? booking.start_date;
     const nextEndDate = data.end_date ?? booking.end_date;
     const nextCapacity = data.capacity_percent ?? booking.capacity_percent;
+    const nextBaId = data.ba_id ?? booking.ba_id;
 
-    if ((manager && isOfficialBooking(booking.status)) || requesterCanProposeChanges) {
-      const existing = await this.getBaBookings(booking.ba_id);
+    if (data.ba_id) {
+      const ba = await this.prisma.bAProfile.findUnique({ where: { id: data.ba_id } });
+      if (!ba || ba.status !== BAStatus.ACTIVE) {
+        throw new BadRequestException('Only active BA can be booked');
+      }
+    }
+
+    if (
+      ((manager && isOfficialBooking(booking.status)) || requesterCanProposeChanges) &&
+      nextBaId
+    ) {
+      const existing = await this.getBaBookings(nextBaId);
       const approval = canApproveCapacity(
         existing,
         nextStartDate,
@@ -297,7 +350,12 @@ export class BookingsService {
     });
 
     await this.audit(currentUser, 'ASSIGN_BOOKING_BA', 'Booking', id, booking, updated);
-    await this.notifyRequester(updated, 'BOOKING_ASSIGNED', 'BA assigned', `Assigned BA: ${ba.full_name}`);
+    await this.notifyRequester(
+      updated,
+      'BOOKING_ASSIGNED',
+      'BA assigned',
+      `Assigned BA: ${ba.full_name}`
+    );
     await this.notifyAssignedBA(updated, 'BOOKING_ASSIGNED', 'Booking assigned');
     return updated;
   }
@@ -366,7 +424,9 @@ export class BookingsService {
     });
 
     if (effectiveChanges.ba_id) {
-      const ba = await this.prisma.bAProfile.findUnique({ where: { id: effectiveChanges.ba_id } });
+      const ba = await this.prisma.bAProfile.findUnique({
+        where: { id: effectiveChanges.ba_id }
+      });
       if (!ba || ba.status !== BAStatus.ACTIVE) {
         throw new BadRequestException('Only active BA can be booked');
       }
@@ -378,12 +438,20 @@ export class BookingsService {
     const nextCapacity = effectiveChanges.capacity_percent ?? booking.capacity_percent;
 
     if (nextEndDate < nextStartDate) {
-      throw new BadRequestException('end_date must be greater than or equal to start_date');
+      throw new BadRequestException(
+        'end_date must be greater than or equal to start_date'
+      );
     }
 
     if (nextBaId) {
       const existing = await this.getBaBookings(nextBaId);
-      const approval = canApproveCapacity(existing, nextStartDate, nextEndDate, nextCapacity, booking.id);
+      const approval = canApproveCapacity(
+        existing,
+        nextStartDate,
+        nextEndDate,
+        nextCapacity,
+        booking.id
+      );
       if (!approval.allowed) {
         throw new BadRequestException(
           `Cannot approve booking changes because capacity exceeds 100% on ${approval.blocking_day}`
@@ -409,9 +477,24 @@ export class BookingsService {
       include: this.includeRelations()
     });
 
-    await this.audit(currentUser, 'APPROVE_BOOKING_CHANGES', 'Booking', id, booking, updated);
-    await this.notifyRequester(updated, 'BOOKING_CHANGES_APPROVED', 'Booking changes approved');
-    await this.notifyAssignedBA(updated, 'BOOKING_CHANGES_APPROVED', 'Booking changes approved');
+    await this.audit(
+      currentUser,
+      'APPROVE_BOOKING_CHANGES',
+      'Booking',
+      id,
+      booking,
+      updated
+    );
+    await this.notifyRequester(
+      updated,
+      'BOOKING_CHANGES_APPROVED',
+      'Booking changes approved'
+    );
+    await this.notifyAssignedBA(
+      updated,
+      'BOOKING_CHANGES_APPROVED',
+      'Booking changes approved'
+    );
     return updated;
   }
 
@@ -492,7 +575,12 @@ export class BookingsService {
     overrides?: Record<string, unknown>
   ) {
     if (!canApproveBooking(currentUser.role)) {
-      await this.auditDenied(currentUser, 'APPROVE_BOOKING_CHANGES_PARTIAL', 'Booking', id);
+      await this.auditDenied(
+        currentUser,
+        'APPROVE_BOOKING_CHANGES_PARTIAL',
+        'Booking',
+        id
+      );
       throw new ForbiddenException('Manager role required to approve booking changes');
     }
 
@@ -522,7 +610,9 @@ export class BookingsService {
     const effectiveChanges = this.normalizePartialBookingInput(fieldChanges);
 
     if (effectiveChanges.ba_id) {
-      const ba = await this.prisma.bAProfile.findUnique({ where: { id: effectiveChanges.ba_id } });
+      const ba = await this.prisma.bAProfile.findUnique({
+        where: { id: effectiveChanges.ba_id }
+      });
       if (!ba || ba.status !== BAStatus.ACTIVE) {
         throw new BadRequestException('Only active BA can be booked');
       }
@@ -534,12 +624,20 @@ export class BookingsService {
     const nextCapacity = effectiveChanges.capacity_percent ?? booking.capacity_percent;
 
     if (nextEndDate < nextStartDate) {
-      throw new BadRequestException('end_date must be greater than or equal to start_date');
+      throw new BadRequestException(
+        'end_date must be greater than or equal to start_date'
+      );
     }
 
     if (nextBaId) {
       const existing = await this.getBaBookings(nextBaId);
-      const approval = canApproveCapacity(existing, nextStartDate, nextEndDate, nextCapacity, booking.id);
+      const approval = canApproveCapacity(
+        existing,
+        nextStartDate,
+        nextEndDate,
+        nextCapacity,
+        booking.id
+      );
       if (!approval.allowed) {
         throw new BadRequestException(
           `Cannot approve booking field changes because capacity exceeds 100% on ${approval.blocking_day}`
@@ -576,7 +674,14 @@ export class BookingsService {
       include: this.includeRelations()
     });
 
-    await this.audit(currentUser, 'APPROVE_BOOKING_CHANGES_PARTIAL', 'Booking', id, booking, updated);
+    await this.audit(
+      currentUser,
+      'APPROVE_BOOKING_CHANGES_PARTIAL',
+      'Booking',
+      id,
+      booking,
+      updated
+    );
     await this.notifyRequester(
       updated,
       'BOOKING_CHANGES_PARTIALLY_APPROVED',
@@ -593,7 +698,12 @@ export class BookingsService {
 
   async rejectFields(currentUser: User, id: string, fields: string[]) {
     if (!canApproveBooking(currentUser.role)) {
-      await this.auditDenied(currentUser, 'REJECT_BOOKING_CHANGES_PARTIAL', 'Booking', id);
+      await this.auditDenied(
+        currentUser,
+        'REJECT_BOOKING_CHANGES_PARTIAL',
+        'Booking',
+        id
+      );
       throw new ForbiddenException('Manager role required to reject booking changes');
     }
 
@@ -631,7 +741,14 @@ export class BookingsService {
       include: this.includeRelations()
     });
 
-    await this.audit(currentUser, 'REJECT_BOOKING_CHANGES_PARTIAL', 'Booking', id, booking, updated);
+    await this.audit(
+      currentUser,
+      'REJECT_BOOKING_CHANGES_PARTIAL',
+      'Booking',
+      id,
+      booking,
+      updated
+    );
     await this.notifyRequester(
       updated,
       'BOOKING_CHANGES_PARTIALLY_REJECTED',
@@ -706,7 +823,9 @@ export class BookingsService {
 
   async mySchedule(currentUser: User) {
     await syncBookingStatuses(this.prisma);
-    const ba = await this.prisma.bAProfile.findFirst({ where: { user_id: currentUser.id } });
+    const ba = await this.prisma.bAProfile.findFirst({
+      where: { user_id: currentUser.id }
+    });
     if (!ba) {
       if (canApproveBooking(currentUser.role)) {
         return [];
@@ -717,7 +836,9 @@ export class BookingsService {
     return this.prisma.booking.findMany({
       where: {
         ba_id: ba.id,
-        status: { in: [BookingStatus.APPROVED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED] }
+        status: {
+          in: [BookingStatus.APPROVED, BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED]
+        }
       },
       include: this.includeRelations(),
       orderBy: { start_date: 'asc' }
@@ -727,7 +848,7 @@ export class BookingsService {
   private async normalizeBookingInput(input: BookingInput) {
     const baId = input.ba_id?.trim() || null;
     let ba = null;
-    
+
     if (baId) {
       ba = await this.prisma.bAProfile.findUnique({ where: { id: baId } });
       if (!ba || ba.status !== BAStatus.ACTIVE) {
@@ -738,12 +859,16 @@ export class BookingsService {
     const startDate = requireDate(input.start_date, 'start_date');
     const endDate = requireDate(input.end_date, 'end_date');
     if (endDate < startDate) {
-      throw new BadRequestException('end_date must be greater than or equal to start_date');
+      throw new BadRequestException(
+        'end_date must be greater than or equal to start_date'
+      );
     }
 
     const projectId = input.project_id
       ? requireString(input.project_id, 'project_id')
-      : await this.findOrCreateProjectId(requireString(input.project_name, 'project_name'));
+      : await this.findOrCreateProjectId(
+          requireString(input.project_name, 'project_name')
+        );
 
     return {
       ba_id: baId,
@@ -787,7 +912,7 @@ export class BookingsService {
     if (!baId) {
       return null;
     }
-    
+
     const existing = await this.getBaBookings(baId);
     const capacity = getRangeCapacity(existing, startDate, endDate);
     const warningDay = capacity.daily.find(
@@ -805,7 +930,8 @@ export class BookingsService {
       approved_capacity: warningDay.approved_capacity,
       pending_capacity: warningDay.pending_capacity,
       requested_capacity: capacityPercent,
-      risk_capacity: warningDay.approved_capacity + warningDay.pending_capacity + capacityPercent
+      risk_capacity:
+        warningDay.approved_capacity + warningDay.pending_capacity + capacityPercent
     };
   }
 
@@ -850,7 +976,11 @@ export class BookingsService {
     } as const;
   }
 
-  private async notifyManagers(type: string, title: string, booking: { id: string; title: string }) {
+  private async notifyManagers(
+    type: string,
+    title: string,
+    booking: { id: string; title: string }
+  ) {
     const managers = await this.prisma.user.findMany({
       where: { role: UserRole.BA_MANAGER }
     });
@@ -932,7 +1062,12 @@ export class BookingsService {
     });
   }
 
-  private async auditDenied(user: User, action: string, targetType: string, targetId: string) {
+  private async auditDenied(
+    user: User,
+    action: string,
+    targetType: string,
+    targetId: string
+  ) {
     await this.prisma.auditLog
       .create({
         data: {
@@ -949,16 +1084,34 @@ export class BookingsService {
   private normalizePartialBookingInput(input: Record<string, unknown>) {
     return {
       ba_id: input.ba_id === undefined ? undefined : requireString(input.ba_id, 'ba_id'),
-      project_id: input.project_id === undefined ? undefined : requireString(input.project_id, 'project_id'),
+      project_id:
+        input.project_id === undefined
+          ? undefined
+          : requireString(input.project_id, 'project_id'),
       title: input.title === undefined ? undefined : requireString(input.title, 'title'),
-      description: input.description === undefined ? undefined : requireString(input.description, 'description'),
+      description:
+        input.description === undefined
+          ? undefined
+          : requireString(input.description, 'description'),
       notes: input.notes === undefined ? undefined : optionalString(input.notes),
-      start_date: input.start_date === undefined ? undefined : requireDate(input.start_date, 'start_date'),
-      end_date: input.end_date === undefined ? undefined : requireDate(input.end_date, 'end_date'),
+      start_date:
+        input.start_date === undefined
+          ? undefined
+          : requireDate(input.start_date, 'start_date'),
+      end_date:
+        input.end_date === undefined
+          ? undefined
+          : requireDate(input.end_date, 'end_date'),
       capacity_percent:
-        input.capacity_percent === undefined ? undefined : requireCapacityPercent(input.capacity_percent),
-      priority: input.priority === undefined ? undefined : (input.priority as BookingPriority),
-      manager_comment: input.manager_comment === undefined ? undefined : optionalString(input.manager_comment)
+        input.capacity_percent === undefined
+          ? undefined
+          : requireCapacityPercent(input.capacity_percent),
+      priority:
+        input.priority === undefined ? undefined : (input.priority as BookingPriority),
+      manager_comment:
+        input.manager_comment === undefined
+          ? undefined
+          : optionalString(input.manager_comment)
     };
   }
 

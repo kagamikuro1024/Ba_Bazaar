@@ -84,17 +84,38 @@ const navigation: Array<{
   icon: typeof Home;
   roles: UserRole[];
 }> = [
-    { to: '/dashboard', label: 'Dashboard', icon: Home, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
-    { to: '/manager/action-center', label: 'Action Center', icon: Inbox, roles: ['BA_MANAGER', 'ADMIN'] },
-    { to: '/timeline', label: 'Timeline', icon: CalendarDays, roles: ['BA_MANAGER', 'PM_PO', 'ADMIN'] },
-    { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
-    { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
-    { to: '/crm/ba', label: 'BA Directory', icon: Users, roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN'] },
-    { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] }
-  ];
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    icon: Home,
+    roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']
+  },
+  {
+    to: '/manager/action-center',
+    label: 'Action Center',
+    icon: Inbox,
+    roles: ['BA_MANAGER', 'ADMIN']
+  },
+  {
+    to: '/timeline',
+    label: 'Timeline',
+    icon: CalendarDays,
+    roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']
+  },
+  { to: '/my-schedule', label: 'My Schedule', icon: ClipboardList, roles: ['BA'] },
+  { to: '/my-requests', label: 'My Requests', icon: FolderKanban, roles: ['PM_PO'] },
+  {
+    to: '/crm/ba',
+    label: 'BA Directory',
+    icon: Users,
+    roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']
+  },
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] }
+];
 
 function getIntroKey(pathname: string) {
-  if (pathname === '/manager/inbox' || pathname === '/action-center') return '/manager/action-center';
+  if (pathname === '/manager/inbox' || pathname === '/action-center')
+    return '/manager/action-center';
   if (pathname.startsWith('/crm/ba/')) return '/crm/ba/profile';
   return pageIntros[pathname] ? pathname : '';
 }
@@ -136,7 +157,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const [pendingNavPath, setPendingNavPath] = useState('');
   const [navActionPending, setNavActionPending] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => globalSearchStorage.load());
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    globalSearchStorage.load()
+  );
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -159,7 +182,8 @@ export function LayoutShell({ children }: LayoutShellProps) {
     enabled: Boolean(user)
   });
   const markRead = useMutation({
-    mutationFn: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
+    mutationFn: (id: string) =>
+      apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] })
   });
   const me = useQuery({
@@ -191,7 +215,7 @@ export function LayoutShell({ children }: LayoutShellProps) {
 
     if (role === 'BA') {
       return visibleNavigation.filter((item) =>
-        ['/dashboard', '/my-schedule', '/crm/ba'].includes(item.to)
+        ['/dashboard', '/my-schedule', '/timeline'].includes(item.to)
       );
     }
 
@@ -246,7 +270,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Node;
 
-      if (notificationRef.current?.contains(target) || userMenuRef.current?.contains(target)) {
+      if (
+        notificationRef.current?.contains(target) ||
+        userMenuRef.current?.contains(target)
+      ) {
         return;
       }
 
@@ -308,10 +335,12 @@ export function LayoutShell({ children }: LayoutShellProps) {
   const commitRecentSearch = useCallback((term: string) => {
     const cleaned = term.trim();
     if (!cleaned) return;
-    setRecentSearches((current) => [
-      cleaned,
-      ...current.filter((value) => value !== cleaned)
-    ].slice(0, globalSearchStorage.limit));
+    setRecentSearches((current) =>
+      [cleaned, ...current.filter((value) => value !== cleaned)].slice(
+        0,
+        globalSearchStorage.limit
+      )
+    );
   }, []);
 
   return (
@@ -367,7 +396,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   <CardContent className="p-0">
                     <div className="flex items-center justify-between border-b px-4 py-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-950">Notifications</p>
+                        <p className="text-sm font-semibold text-slate-950">
+                          Notifications
+                        </p>
                         <p className="text-xs text-slate-500">{unreadCount} unread</p>
                       </div>
                       <Button variant="ghost" size="sm" asChild>
@@ -379,7 +410,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                       onWheel={(event) => event.stopPropagation()}
                     >
                       {recentNotifications.length === 0 ? (
-                        <div className="p-4 text-sm text-slate-600">No notifications yet.</div>
+                        <div className="p-4 text-sm text-slate-600">
+                          No notifications yet.
+                        </div>
                       ) : (
                         recentNotifications.map((item) => (
                           <Link
@@ -394,7 +427,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                                <p className="text-sm font-semibold text-slate-950">
+                                  {item.title}
+                                </p>
                                 <p className="mt-1 whitespace-pre-line text-sm text-slate-600">
                                   {item.message}
                                 </p>
@@ -424,7 +459,11 @@ export function LayoutShell({ children }: LayoutShellProps) {
                 onClick={() => setUserMenuOpen((current) => !current)}
               >
                 {user?.avatar_url ? (
-                  <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <span className="text-sm font-semibold text-slate-700">
                     {(user?.full_name ?? 'U')
@@ -440,7 +479,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   <CardContent className="p-2">
                     <div className="border-b border-slate-100 px-2 py-2">
                       <p className="truncate text-sm font-semibold text-slate-950">
-                        {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
+                        {me.data?.user.full_name ??
+                          user?.full_name ??
+                          'Authenticated user'}
                       </p>
                       <p className="text-xs text-slate-500">{displayRole}</p>
                     </div>
@@ -609,7 +650,10 @@ export function LayoutShell({ children }: LayoutShellProps) {
       ) : null}
 
       {canCreateBooking && (
-        <BookingModal open={bookingModalOpen} onClose={() => setBookingModalOpen(false)} />
+        <BookingModal
+          open={bookingModalOpen}
+          onClose={() => setBookingModalOpen(false)}
+        />
       )}
 
       <GlobalSearchModal
@@ -628,7 +672,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-slate-950">Unsaved changes</h2>
+                <h2 className="text-base font-semibold text-slate-950">
+                  Unsaved changes
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
                   Review these edits before leaving Action Center.
                 </p>
@@ -692,7 +738,9 @@ export function LayoutShell({ children }: LayoutShellProps) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">There are unsaved edits in this review.</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  There are unsaved edits in this review.
+                </p>
               )}
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">

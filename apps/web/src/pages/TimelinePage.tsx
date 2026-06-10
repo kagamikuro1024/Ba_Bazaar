@@ -14,15 +14,22 @@ import {
   differenceInCalendarDays,
   eachDayOfInterval,
   endOfMonth,
+  endOfQuarter,
   endOfWeek,
   format,
   isSameDay,
   parseISO,
   startOfMonth,
   startOfQuarter,
-  startOfWeek,
+  startOfWeek
 } from 'date-fns';
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus
+} from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { apiFetch, type BAProfile, type Booking, type Project } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
@@ -74,6 +81,7 @@ type CapacityDetail = {
 };
 
 type TimelineViewMode = 'week' | 'month' | 'quarter';
+type BASortMode = 'name' | 'capacity_desc' | 'capacity_asc';
 
 type TimelineColumn = {
   id: string;
@@ -85,9 +93,7 @@ type TimelineColumn = {
 
 function usePrefersCoarsePointer() {
   const [isCoarsePointer, setIsCoarsePointer] = useState(() =>
-    typeof window === 'undefined'
-      ? false
-      : window.matchMedia('(pointer: coarse)').matches
+    typeof window === 'undefined' ? false : window.matchMedia('(pointer: coarse)').matches
   );
 
   useEffect(() => {
@@ -122,7 +128,10 @@ function dayCellBackground(isAlternateRow: boolean) {
 }
 
 function bookingBarClass(status: Booking['status'], hasOverbookRisk = false) {
-  if (hasOverbookRisk && (status === 'APPROVED' || status === 'IN_PROGRESS' || status === 'PENDING')) {
+  if (
+    hasOverbookRisk &&
+    (status === 'APPROVED' || status === 'IN_PROGRESS' || status === 'PENDING')
+  ) {
     return 'border border-rose-500 bg-rose-600 text-white shadow-rose-200';
   }
 
@@ -147,7 +156,10 @@ type BookingLayout = {
   lane: number;
 };
 
-function computeBookingLayouts(columns: TimelineColumn[], bookings: Booking[]): BookingLayout[] {
+function computeBookingLayouts(
+  columns: TimelineColumn[],
+  bookings: Booking[]
+): BookingLayout[] {
   if (columns.length === 0) return [];
   const first = columns[0].start;
   const last = columns[columns.length - 1].end;
@@ -162,7 +174,9 @@ function computeBookingLayouts(columns: TimelineColumn[], bookings: Booking[]): 
       return { booking, start, end };
     })
     .filter(
-      (item): item is {
+      (
+        item
+      ): item is {
         booking: Booking;
         start: Date;
         end: Date;
@@ -210,7 +224,10 @@ function computeRowMinHeight(
   return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
 }
 
-function buildTimelineColumns(viewMode: TimelineViewMode, anchorDate: Date): TimelineColumn[] {
+function buildTimelineColumns(
+  viewMode: TimelineViewMode,
+  anchorDate: Date
+): TimelineColumn[] {
   if (viewMode === 'month') {
     const start = startOfMonth(anchorDate);
     const end = endOfMonth(start);
@@ -220,9 +237,10 @@ function buildTimelineColumns(viewMode: TimelineViewMode, anchorDate: Date): Tim
 
     while (cursor <= end) {
       const weekStart = cursor < start ? start : cursor;
-      const weekEnd = endOfWeek(cursor, { weekStartsOn: 1 }) > end
-        ? end
-        : endOfWeek(cursor, { weekStartsOn: 1 });
+      const weekEnd =
+        endOfWeek(cursor, { weekStartsOn: 1 }) > end
+          ? end
+          : endOfWeek(cursor, { weekStartsOn: 1 });
       columns.push({
         id: `week-${weekIndex}-${format(weekStart, 'yyyy-MM-dd')}`,
         label: `Week ${weekIndex}`,
@@ -252,13 +270,45 @@ function buildTimelineColumns(viewMode: TimelineViewMode, anchorDate: Date): Tim
     });
   }
 
-  return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) }).map((day) => ({
-    id: format(day, 'yyyy-MM-dd'),
-    label: format(day, 'EEE'),
-    subLabel: format(day, 'dd/MM'),
-    start: day,
-    end: day
-  }));
+  return eachDayOfInterval({ start: anchorDate, end: addDays(anchorDate, 6) }).map(
+    (day) => ({
+      id: format(day, 'yyyy-MM-dd'),
+      label: format(day, 'EEE'),
+      subLabel: format(day, 'dd/MM'),
+      start: day,
+      end: day
+    })
+  );
+}
+
+function isCurrentTimelineColumn(column: TimelineColumn, currentDate: Date) {
+  const currentKey = format(currentDate, 'yyyy-MM-dd');
+  return (
+    format(column.start, 'yyyy-MM-dd') <= currentKey &&
+    format(column.end, 'yyyy-MM-dd') >= currentKey
+  );
+}
+
+function formatTimelinePeriodLabel(
+  viewMode: TimelineViewMode,
+  timelineStart: Date,
+  timelineEnd: Date
+) {
+  if (viewMode === 'week') {
+    return `Tuần ${format(timelineStart, 'II')} · ${format(timelineStart, 'dd/MM')} - ${format(
+      timelineEnd,
+      'dd/MM'
+    )}`;
+  }
+
+  if (viewMode === 'month') {
+    return `Tháng ${format(timelineStart, 'MM/yyyy')}`;
+  }
+
+  return `Q${format(timelineStart, 'Q')} · ${format(timelineStart, 'MM/yyyy')} - ${format(
+    endOfQuarter(timelineStart),
+    'MM/yyyy'
+  )}`;
 }
 
 function sortSelectionRange(selection: DraftSelection) {
@@ -326,11 +376,13 @@ export function TimelinePage() {
   const [compactMobileInfo, setCompactMobileInfo] = useState(false);
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [baSortMode, setBaSortMode] = useState<BASortMode>('name');
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const prefersCoarsePointer = usePrefersCoarsePointer();
-  const allowDragSelection = canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
+  const allowDragSelection =
+    canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
   const currentDate = useMemo(() => new Date(), []);
 
   useEffect(() => {
@@ -343,9 +395,16 @@ export function TimelinePage() {
     window.localStorage.setItem(timelineViewModeStorageKey, viewMode);
   }, [viewMode]);
 
-  const columns = useMemo(() => buildTimelineColumns(viewMode, anchorDate), [anchorDate, viewMode]);
+  const columns = useMemo(
+    () => buildTimelineColumns(viewMode, anchorDate),
+    [anchorDate, viewMode]
+  );
   const timelineStart = columns[0]?.start ?? anchorDate;
   const timelineEnd = columns[columns.length - 1]?.end ?? anchorDate;
+  const periodLabel = useMemo(
+    () => formatTimelinePeriodLabel(viewMode, timelineStart, timelineEnd),
+    [timelineEnd, timelineStart, viewMode]
+  );
 
   const bas = useQuery({
     queryKey: ['ba-directory', role],
@@ -361,7 +420,12 @@ export function TimelinePage() {
     queryFn: () => apiFetch<Booking[]>('/api/bookings')
   });
   const summary = useQuery({
-    queryKey: ['capacity-summary', role, format(timelineStart, 'yyyy-MM-dd'), format(timelineEnd, 'yyyy-MM-dd')],
+    queryKey: [
+      'capacity-summary',
+      role,
+      format(timelineStart, 'yyyy-MM-dd'),
+      format(timelineEnd, 'yyyy-MM-dd')
+    ],
     queryFn: () =>
       apiFetch<{
         average_capacity: number;
@@ -379,7 +443,8 @@ export function TimelinePage() {
   });
 
   const timelineBas = useMemo(
-    () => (bas.data ?? []).filter((ba) => ba.status === 'ACTIVE' || ba.status === 'ON_LEAVE'),
+    () =>
+      (bas.data ?? []).filter((ba) => ba.status === 'ACTIVE' || ba.status === 'ON_LEAVE'),
     [bas.data]
   );
   const visibleBas = useMemo(
@@ -396,9 +461,35 @@ export function TimelinePage() {
   const visibleBookings = (bookings.data ?? []).filter(
     (booking) => !projectFilter || booking.project_id === projectFilter
   );
+  const capacityByBaId = useMemo(
+    () => new Map((summary.data?.items ?? []).map((item) => [item.ba_id, item])),
+    [summary.data]
+  );
+  const sortedVisibleBas = useMemo(() => {
+    const basToSort = [...visibleBas];
+    if (baSortMode === 'capacity_desc') {
+      return basToSort.sort(
+        (left, right) =>
+          (capacityByBaId.get(right.id)?.risk_capacity ?? 0) -
+            (capacityByBaId.get(left.id)?.risk_capacity ?? 0) ||
+          left.full_name.localeCompare(right.full_name)
+      );
+    }
+
+    if (baSortMode === 'capacity_asc') {
+      return basToSort.sort(
+        (left, right) =>
+          (capacityByBaId.get(left.id)?.risk_capacity ?? 0) -
+            (capacityByBaId.get(right.id)?.risk_capacity ?? 0) ||
+          left.full_name.localeCompare(right.full_name)
+      );
+    }
+
+    return basToSort.sort((left, right) => left.full_name.localeCompare(right.full_name));
+  }, [baSortMode, capacityByBaId, visibleBas]);
   const rowData = useMemo(
     () =>
-      visibleBas.map((ba) => {
+      sortedVisibleBas.map((ba) => {
         const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
         return {
           ba,
@@ -409,11 +500,26 @@ export function TimelinePage() {
             desktopBarBaseTop,
             72
           ),
-          mobileRowMinHeight: computeRowMinHeight(columns, baBookings, mobileBarBaseTop, 120)
+          mobileRowMinHeight: computeRowMinHeight(
+            columns,
+            baBookings,
+            mobileBarBaseTop,
+            120
+          )
         };
       }),
-    [columns, visibleBas, visibleBookings]
+    [columns, sortedVisibleBas, visibleBookings]
   );
+
+  function cycleBaSortMode() {
+    setBaSortMode((current) =>
+      current === 'name'
+        ? 'capacity_desc'
+        : current === 'capacity_desc'
+          ? 'capacity_asc'
+          : 'name'
+    );
+  }
 
   const move = (direction: number) =>
     setAnchorDate((current) =>
@@ -577,10 +683,10 @@ export function TimelinePage() {
               </Button>
               <Button
                 variant="secondary"
-                className="flex-1 px-3 sm:flex-none"
+                className="flex-1 px-3 sm:min-w-56 sm:flex-none"
                 onClick={() => setAnchorDate(initialWeek)}
               >
-                Today
+                {periodLabel}
               </Button>
               <Button variant="secondary" size="icon" onClick={() => move(1)}>
                 <ChevronRight className="h-4 w-4" />
@@ -682,13 +788,25 @@ export function TimelinePage() {
             >
               {!isMobile && (
                 <>
-                  <div className="h-14 border-b border-r bg-white" aria-hidden="true" />
+                  <button
+                    type="button"
+                    onClick={cycleBaSortMode}
+                    className="pointer-events-auto h-14 border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                    title="Sort BA by capacity"
+                  >
+                    BA
+                    {baSortMode === 'capacity_desc'
+                      ? ' ↓'
+                      : baSortMode === 'capacity_asc'
+                        ? ' ↑'
+                        : ''}
+                  </button>
                   {columns.map((column) => (
                     <div
                       key={column.id}
                       className={cn(
                         'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
-                        column.start <= currentDate && column.end >= currentDate &&
+                        isCurrentTimelineColumn(column, currentDate) &&
                           'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
                       )}
                     >
@@ -706,7 +824,7 @@ export function TimelinePage() {
                     key={column.id}
                     className={cn(
                       'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
-                      column.start <= currentDate && column.end >= currentDate &&
+                      isCurrentTimelineColumn(column, currentDate) &&
                         'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-300'
                     )}
                   >
@@ -733,9 +851,10 @@ export function TimelinePage() {
                       isAlternateRow={isAlternateRow}
                       canCreateBooking={canCreateBooking}
                       hasOverbookRisk={
-                        (summary.data?.items.find((item) => item.ba_id === ba.id)?.risk_capacity ??
-                          0) > 100
+                        (summary.data?.items.find((item) => item.ba_id === ba.id)
+                          ?.risk_capacity ?? 0) > 100
                       }
+                      currentDate={currentDate}
                       onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
@@ -763,9 +882,10 @@ export function TimelinePage() {
                       onSelectionMove={updateSelection}
                       onSelectionEnd={finishSelection}
                       hasOverbookRisk={
-                        (summary.data?.items.find((item) => item.ba_id === ba.id)?.risk_capacity ??
-                          0) > 100
+                        (summary.data?.items.find((item) => item.ba_id === ba.id)
+                          ?.risk_capacity ?? 0) > 100
                       }
+                      currentDate={currentDate}
                       onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
@@ -806,7 +926,8 @@ export function TimelinePage() {
                       <span
                         className={cn(
                           'inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs font-bold transition-all duration-200 ease-out',
-                          (capacity?.risk_capacity ?? 0) > 100 && 'bg-rose-600 text-white',
+                          (capacity?.risk_capacity ?? 0) > 100 &&
+                            'bg-rose-600 text-white',
                           (capacity?.risk_capacity ?? 0) <= 100 &&
                             capacityColor(capacity?.risk_capacity ?? 0),
                           compactMobileInfo
@@ -827,9 +948,19 @@ export function TimelinePage() {
             </div>
           ) : (
             <div className="pointer-events-none absolute left-0 top-0 z-20 hidden lg:block">
-              <div className="h-14 w-[260px] border-b border-r bg-white p-3 text-xs font-bold uppercase text-slate-500">
+              <button
+                type="button"
+                onClick={cycleBaSortMode}
+                className="pointer-events-auto h-14 w-[260px] border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                title="Sort BA by capacity"
+              >
                 BA
-              </div>
+                {baSortMode === 'capacity_desc'
+                  ? ' ↓'
+                  : baSortMode === 'capacity_asc'
+                    ? ' ↑'
+                    : ''}
+              </button>
               {rowData.map(({ ba, desktopRowMinHeight }, index) => {
                 const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
                 const isAlternateRow = index % 2 === 1;
@@ -904,6 +1035,7 @@ function TimelineRow({
   canCreateBooking,
   allowDragSelection,
   hasOverbookRisk,
+  currentDate,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -919,6 +1051,7 @@ function TimelineRow({
   canCreateBooking: boolean;
   allowDragSelection: boolean;
   hasOverbookRisk: boolean;
+  currentDate: Date;
   activeSelection: DraftSelection | null;
   onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
   onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
@@ -939,7 +1072,9 @@ function TimelineRow({
       <div className="relative col-span-full hidden" />
       {columns.map((column) => {
         const isSelected = Boolean(
-          selectedRange && column.start >= selectedRange.start && column.start <= selectedRange.end
+          selectedRange &&
+          column.start >= selectedRange.start &&
+          column.start <= selectedRange.end
         );
 
         return (
@@ -948,6 +1083,8 @@ function TimelineRow({
             className={cn(
               'group select-none border-b border-r p-1 text-left text-xs text-slate-400',
               dayCellBackground(isAlternateRow),
+              isCurrentTimelineColumn(column, currentDate) &&
+                'bg-blue-50 ring-1 ring-inset ring-blue-200',
               canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
               isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
             )}
@@ -1004,7 +1141,9 @@ function TimelineRow({
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
                 <span className="inline-flex min-w-0 items-center gap-1">
-                  {hasOverbookRisk ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                  {hasOverbookRisk ? (
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                  ) : null}
                   <span className="truncate">
                     {booking.project.name} · {booking.capacity_percent}%
                     {hasOverbookRisk ? ' · Overbooked' : ''}
@@ -1027,6 +1166,7 @@ function MobileTimelineRow({
   isAlternateRow,
   canCreateBooking,
   hasOverbookRisk,
+  currentDate,
   onEmptyClick,
   onBookingClick
 }: {
@@ -1037,6 +1177,7 @@ function MobileTimelineRow({
   isAlternateRow: boolean;
   canCreateBooking: boolean;
   hasOverbookRisk: boolean;
+  currentDate: Date;
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
@@ -1050,6 +1191,8 @@ function MobileTimelineRow({
           className={cn(
             'group select-none border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
             dayCellBackground(isAlternateRow),
+            isCurrentTimelineColumn(column, currentDate) &&
+              'bg-blue-50 ring-1 ring-inset ring-blue-200',
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           style={{ minHeight: rowMinHeight }}
@@ -1088,7 +1231,9 @@ function MobileTimelineRow({
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
                 <span className="inline-flex min-w-0 items-center gap-1">
-                  {hasOverbookRisk ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                  {hasOverbookRisk ? (
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                  ) : null}
                   <span className="truncate">
                     {booking.project.name} · {booking.capacity_percent}%
                   </span>
@@ -1153,8 +1298,16 @@ function MobileBAIdentity({
   );
 }
 
-function rangesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
-  return parseISO(firstStart) <= parseISO(secondEnd) && parseISO(firstEnd) >= parseISO(secondStart);
+function rangesOverlap(
+  firstStart: string,
+  firstEnd: string,
+  secondStart: string,
+  secondEnd: string
+) {
+  return (
+    parseISO(firstStart) <= parseISO(secondEnd) &&
+    parseISO(firstEnd) >= parseISO(secondStart)
+  );
 }
 
 function BookingDetailModal({
@@ -1199,7 +1352,12 @@ function BookingDetailModal({
         item.ba_id === booking.ba_id &&
         item.status !== 'REJECTED' &&
         item.status !== 'CANCELLED' &&
-        rangesOverlap(item.start_date, item.end_date, booking.start_date, booking.end_date)
+        rangesOverlap(
+          item.start_date,
+          item.end_date,
+          booking.start_date,
+          booking.end_date
+        )
     );
   }, [allBookings, booking]);
   const projectBreakdown = useMemo(() => {
@@ -1219,7 +1377,9 @@ function BookingDetailModal({
         dateRanges: []
       };
       current.capacity += item.capacity_percent;
-      current.dateRanges.push(`${formatDate(item.start_date)} - ${formatDate(item.end_date)}`);
+      current.dateRanges.push(
+        `${formatDate(item.start_date)} - ${formatDate(item.end_date)}`
+      );
       projectMap.set(item.project_id, current);
     }
 
@@ -1247,9 +1407,9 @@ function BookingDetailModal({
   const now = new Date();
   const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
   const startStr = booking
-    ? (typeof booking.start_date === 'string'
+    ? typeof booking.start_date === 'string'
       ? booking.start_date.slice(0, 10)
-      : new Date(booking.start_date).toISOString().slice(0, 10))
+      : new Date(booking.start_date).toISOString().slice(0, 10)
     : '';
   const canCancel = booking?.status === 'APPROVED' && startStr > todayStr;
   const updateCapacity = useMutation({
@@ -1315,7 +1475,9 @@ function BookingDetailModal({
 
   const maxRiskCapacity = capacityDetail.data?.max_risk_capacity ?? 0;
   const isOverbooked = maxRiskCapacity > 100;
-  const firstOverbookDay = capacityDetail.data?.daily.find((day) => day.risk_capacity > 100);
+  const firstOverbookDay = capacityDetail.data?.daily.find(
+    (day) => day.risk_capacity > 100
+  );
 
   return (
     <Modal title="Booking Detail" open={Boolean(booking)} onClose={onClose}>
@@ -1347,7 +1509,8 @@ function BookingDetailModal({
               <div>
                 <p className="font-semibold">Overbooked capacity</p>
                 <p className="mt-1 text-xs text-rose-700">
-                  Max risk capacity {maxRiskCapacity}%{firstOverbookDay ? ` on ${formatDate(firstOverbookDay.date)}` : ''}.
+                  Max risk capacity {maxRiskCapacity}%
+                  {firstOverbookDay ? ` on ${formatDate(firstOverbookDay.date)}` : ''}.
                 </p>
               </div>
               <AlertTriangle className="h-5 w-5 shrink-0 text-rose-700" />
@@ -1361,8 +1524,12 @@ function BookingDetailModal({
               <div className="grid gap-1">
                 {projectBreakdown.map((item) => (
                   <div key={item.project} className="rounded-md bg-white/70 px-3 py-2">
-                    <p className="font-semibold">{item.project}: {item.capacity}%</p>
-                    <p className="mt-1 text-xs text-rose-700">{item.dateRanges.join(', ')}</p>
+                    <p className="font-semibold">
+                      {item.project}: {item.capacity}%
+                    </p>
+                    <p className="mt-1 text-xs text-rose-700">
+                      {item.dateRanges.join(', ')}
+                    </p>
                   </div>
                 ))}
               </div>

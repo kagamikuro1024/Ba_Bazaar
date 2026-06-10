@@ -7,7 +7,6 @@ import {
   CalendarRange,
   ClipboardList,
   Gauge,
-  Plus,
   Sparkles,
   UserRound,
   UsersRound
@@ -55,14 +54,12 @@ type ManagerActionItem =
   | {
       id: string;
       kind: 'booking';
-      type: 'PENDING_REQUEST' | 'UNASSIGNED_REQUEST' | 'URGENT_REQUEST' | 'CAPACITY_RISK';
       priority: Booking['priority'];
       project: string;
       requester: string;
       dateRange: string;
-      capacity: string;
       assignedBa: string;
-      flag: 'URGENT' | 'UNASSIGNED' | 'CAPACITY_RISK' | 'PENDING';
+      flag: 'URGENT' | 'HIGH' | 'UNASSIGNED' | 'CAPACITY_RISK' | 'PENDING';
       actionLabel: string;
       actionTo: string;
       booking: Booking;
@@ -70,14 +67,12 @@ type ManagerActionItem =
   | {
       id: string;
       kind: 'ba';
-      type: 'OVERBOOKED_BA' | 'BENCH_BA';
-      priority: 'HIGH' | 'LOW';
+      priority: 'URGENT';
       project: string;
       requester: string;
       dateRange: string;
-      capacity: string;
       assignedBa: string;
-      flag: 'OVERBOOKED' | 'BENCH';
+      flag: 'OVERBOOKED';
       actionLabel: string;
       actionTo: string;
     };
@@ -101,6 +96,7 @@ export function DashboardPage() {
     () => resolveDashboardRange(timeframeMode, customFrom, customTo),
     [customFrom, customTo, timeframeMode]
   );
+  const todayKey = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
   const dashboardCopy = isManagerDashboard
     ? {
@@ -149,18 +145,59 @@ export function DashboardPage() {
     const allBookings = bookings.data ?? [];
     const timeframeBookings = isManagerDashboard
       ? allBookings.filter((booking) =>
-          rangesOverlap(booking.start_date, booking.end_date, managerRange.from, managerRange.to)
+          rangesOverlap(
+            booking.start_date,
+            booking.end_date,
+            managerRange.from,
+            managerRange.to
+          )
         )
       : allBookings;
     const pending = timeframeBookings.filter((booking) => booking.status === 'PENDING');
     const approved = timeframeBookings.filter(
       (booking) => booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS'
     );
-    const completed = timeframeBookings.filter((booking) => booking.status === 'COMPLETED');
+    const completed = timeframeBookings.filter(
+      (booking) => booking.status === 'COMPLETED'
+    );
+    const currentAssignments = timeframeBookings
+      .filter(
+        (booking) =>
+          booking.start_date.slice(0, 10) <= todayKey &&
+          booking.end_date.slice(0, 10) >= todayKey &&
+          (booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS')
+      )
+      .sort(
+        (left, right) =>
+          new Date(left.end_date).getTime() - new Date(right.end_date).getTime()
+      );
+    const upcomingWork = timeframeBookings
+      .filter(
+        (booking) =>
+          booking.start_date.slice(0, 10) > todayKey &&
+          booking.status === 'APPROVED'
+      )
+      .sort(
+        (left, right) =>
+          new Date(left.start_date).getTime() - new Date(right.start_date).getTime()
+      );
+    const completedWork = timeframeBookings
+      .filter(
+        (booking) =>
+          booking.status === 'COMPLETED' ||
+          ((booking.status === 'APPROVED' || booking.status === 'IN_PROGRESS') &&
+            booking.end_date.slice(0, 10) < todayKey)
+      )
+      .sort(
+        (left, right) =>
+          new Date(right.end_date).getTime() - new Date(left.end_date).getTime()
+      );
     const rejectedOrCancelled = timeframeBookings.filter(
       (booking) => booking.status === 'REJECTED' || booking.status === 'CANCELLED'
     );
-    const specific = pending.filter((booking) => getRequestType(booking) === 'SPECIFIC_BA');
+    const specific = pending.filter(
+      (booking) => getRequestType(booking) === 'SPECIFIC_BA'
+    );
     const open = pending.filter((booking) => getRequestType(booking) === 'OPEN_REQUEST');
     const urgent = pending.filter((booking) => booking.priority === 'URGENT');
     const byRiskBa = new Set(
@@ -171,16 +208,22 @@ export function DashboardPage() {
     const verificationCount = pending.filter(
       (booking) => getManagerRequestState(booking) === 'NEED_VERIFICATION'
     ).length;
-    const overbookCount = pending.filter((booking) => booking.ba_id && byRiskBa.has(booking.ba_id)).length;
-    const upcoming = [...timeframeBookings]
-      .filter((booking) => booking.status !== 'CANCELLED' && booking.status !== 'REJECTED')
-      .sort((left, right) => new Date(left.start_date).getTime() - new Date(right.start_date).getTime())
-      .slice(0, 4);
+    const overbookCount = pending.filter(
+      (booking) => booking.ba_id && byRiskBa.has(booking.ba_id)
+    ).length;
+    const upcoming = isBaDashboard
+      ? upcomingWork.slice(0, 4)
+      : [...timeframeBookings]
+          .sort(
+            (left, right) =>
+              new Date(right.created_at).getTime() -
+              new Date(left.created_at).getTime()
+          )
+          .slice(0, 4);
     const actionItems = buildManagerActionItems(
       pending,
       managerSummary.data,
-      managerRange,
-      byRiskBa
+      managerRange
     );
 
     return {
@@ -188,6 +231,9 @@ export function DashboardPage() {
       pending,
       approved,
       completed,
+      currentAssignments,
+      upcomingWork,
+      completedWork,
       rejectedOrCancelled,
       specific,
       open,
@@ -197,7 +243,15 @@ export function DashboardPage() {
       upcoming,
       actionItems
     };
-  }, [bookings.data, isManagerDashboard, managerRange, managerSummary.data, summary.data]);
+  }, [
+    bookings.data,
+    isBaDashboard,
+    isManagerDashboard,
+    managerRange,
+    managerSummary.data,
+    summary.data,
+    todayKey
+  ]);
 
   const cards = isManagerDashboard
     ? []
@@ -205,24 +259,24 @@ export function DashboardPage() {
       ? [
           {
             title: 'Active Assignments',
-            count: dashboardData.approved.length,
-            description: 'Approved or in progress',
+            count: dashboardData.currentAssignments.length,
+            description: 'Running today',
             icon: CalendarRange,
-            to: '/my-schedule'
+            to: '/my-schedule?tab=current'
           },
           {
             title: 'Upcoming Work',
-            count: dashboardData.upcoming.length,
-            description: 'Visible on your schedule',
+            count: dashboardData.upcomingWork.length,
+            description: 'Future approved work',
             icon: ClipboardList,
-            to: '/my-schedule'
+            to: '/my-schedule?tab=upcoming'
           },
           {
             title: 'Completed',
-            count: dashboardData.completed.length,
+            count: dashboardData.completedWork.length,
             description: 'Finished assignments',
             icon: Sparkles,
-            to: '/my-schedule'
+            to: '/my-schedule?tab=completed'
           }
         ]
       : [
@@ -253,20 +307,23 @@ export function DashboardPage() {
     bookings.isLoading ||
     (isManagerDashboard && (summary.isLoading || managerSummary.isLoading));
   const hasError =
-    bookings.error ||
-    (isManagerDashboard && (summary.error || managerSummary.error));
+    bookings.error || (isManagerDashboard && (summary.error || managerSummary.error));
 
   return (
     <div className="grid gap-5">
       {isLoading ? (
         <Card>
-          <CardContent className="p-5 text-sm text-slate-600">{dashboardCopy.loading}</CardContent>
+          <CardContent className="p-5 text-sm text-slate-600">
+            {dashboardCopy.loading}
+          </CardContent>
         </Card>
       ) : null}
 
       {hasError ? (
         <Card>
-          <CardContent className="p-5 text-sm text-rose-700">{dashboardCopy.error}</CardContent>
+          <CardContent className="p-5 text-sm text-rose-700">
+            {dashboardCopy.error}
+          </CardContent>
         </Card>
       ) : null}
 
@@ -283,22 +340,6 @@ export function DashboardPage() {
         />
       ) : (
         <>
-          {!isBaDashboard ? (
-            <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-blue-950">Create a BA booking request</p>
-                <p className="mt-1 text-sm text-blue-700">
-                  Request a specific BA or leave it open for manager assignment.
-                </p>
-              </div>
-              <Button asChild>
-                <Link to="/timeline">
-                  <Plus className="h-4 w-4" /> Create Request
-                </Link>
-              </Button>
-            </div>
-          ) : null}
-
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {cards.map((item) => {
               const Icon = item.icon;
@@ -309,7 +350,9 @@ export function DashboardPage() {
                     <CardContent className="flex items-start justify-between p-5">
                       <div>
                         <p className="text-sm font-medium text-slate-500">{item.title}</p>
-                        <p className="mt-2 text-3xl font-bold text-slate-950">{item.count}</p>
+                        <p className="mt-2 text-3xl font-bold text-slate-950">
+                          {item.count}
+                        </p>
                         <p className="mt-2 text-sm text-slate-500">{item.description}</p>
                       </div>
                       <Icon
@@ -329,7 +372,7 @@ export function DashboardPage() {
           <Card>
             <CardContent className="grid gap-3 p-5">
               <h2 className="text-base font-semibold text-slate-950">
-                {isBaDashboard ? 'Your upcoming assignments' : 'Your recent requests'}
+                {isBaDashboard ? 'Upcoming Work' : 'Your recent requests'}
               </h2>
               {dashboardData.upcoming.map((booking) => (
                 <UserBookingRow key={booking.id} booking={booking} role={role} />
@@ -338,7 +381,7 @@ export function DashboardPage() {
               {dashboardData.upcoming.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-500">
                   {isBaDashboard
-                    ? 'No assignments are currently on your schedule.'
+                    ? 'No upcoming approved work has been assigned yet.'
                     : 'No booking requests found for your account.'}
                 </div>
               ) : null}
@@ -376,7 +419,9 @@ function ManagerDashboard({
     <>
       <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-950">Action-first command center</p>
+          <p className="text-sm font-semibold text-slate-950">
+            Action-first command center
+          </p>
           <p className="mt-1 text-sm text-slate-500">
             {summary
               ? `${formatDate(summary.timeframe.from)} - ${formatDate(summary.timeframe.to)}`
@@ -475,32 +520,35 @@ function ManagerDashboard({
         <CardContent className="p-0">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
-              <h2 className="text-base font-semibold text-slate-950">Priority Action List</h2>
+              <h2 className="text-base font-semibold text-slate-950">
+                Priority Action List
+              </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Urgent, unassigned, overbooked and bench cases appear first.
+                Pending, urgent, high priority, unassigned, overbooked and capacity risk
+                cases.
               </p>
             </div>
             <Button variant="secondary" size="sm" asChild>
               <Link to="/manager/action-center">Open Action Center</Link>
             </Button>
           </div>
-          <div className="hidden grid-cols-[115px_105px_minmax(0,1.2fr)_minmax(0,1fr)_150px_110px_minmax(0,1fr)_105px_125px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
-            <span>Type</span>
+          <div className="hidden grid-cols-[105px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_150px_120px_125px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
             <span>Priority</span>
             <span>Project</span>
             <span>Requester</span>
+            <span>Requested / Assigned BA</span>
             <span>Date Range</span>
-            <span>Capacity</span>
-            <span>Assigned BA</span>
             <span>Flag</span>
             <span>Action</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {actions.slice(0, 12).map((item) => (
+            {actions.slice(0, 5).map((item) => (
               <ManagerActionRow key={item.id} item={item} />
             ))}
             {actions.length === 0 ? (
-              <div className="p-5 text-sm text-slate-500">No manager actions in this timeframe.</div>
+              <div className="p-5 text-sm text-slate-500">
+                No manager actions in this timeframe.
+              </div>
             ) : null}
           </div>
         </CardContent>
@@ -510,7 +558,9 @@ function ManagerDashboard({
         <Card>
           <CardContent className="grid gap-4 p-5">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-slate-950">Project Effort Distribution</h2>
+              <h2 className="text-base font-semibold text-slate-950">
+                Project Effort Distribution
+              </h2>
               <Badge tone="info">{summary?.project_effort.length ?? 0} projects</Badge>
             </div>
             <div className="grid gap-3">
@@ -539,7 +589,9 @@ function ManagerDashboard({
                 </div>
               ))}
               {summary?.project_effort.length === 0 ? (
-                <p className="text-sm text-slate-500">No approved effort in this timeframe.</p>
+                <p className="text-sm text-slate-500">
+                  No approved effort in this timeframe.
+                </p>
               ) : null}
             </div>
           </CardContent>
@@ -547,21 +599,33 @@ function ManagerDashboard({
 
         <Card>
           <CardContent className="grid gap-4 p-5">
-            <h2 className="text-base font-semibold text-slate-950">Capacity Distribution</h2>
+            <h2 className="text-base font-semibold text-slate-950">
+              Capacity Distribution
+            </h2>
             <div className="grid gap-2 text-sm">
               {summary
                 ? Object.entries(summary.capacity_distribution).map(([label, count]) => (
-                    <div key={label} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                      <span className="capitalize text-slate-600">{label.replace('_', ' ')}</span>
+                    <div
+                      key={label}
+                      className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"
+                    >
+                      <span className="capitalize text-slate-600">
+                        {label.replace('_', ' ')}
+                      </span>
                       <span className="font-semibold text-slate-950">{count}</span>
                     </div>
                   ))
                 : null}
             </div>
             <div className="grid gap-2">
-              <h3 className="text-sm font-semibold text-slate-800">Utilization watchlist</h3>
+              <h3 className="text-sm font-semibold text-slate-800">
+                Utilization watchlist
+              </h3>
               {(summary?.ba_utilization ?? [])
-                .filter((row) => row.capacity_label === 'OVERBOOKED' || row.capacity_label === 'BENCH')
+                .filter(
+                  (row) =>
+                    row.capacity_label === 'OVERBOOKED' || row.capacity_label === 'BENCH'
+                )
                 .slice(0, 5)
                 .map((row) => (
                   <Link
@@ -569,7 +633,9 @@ function ManagerDashboard({
                     to={`/crm/ba/${row.ba_id}`}
                     className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
                   >
-                    <span className="min-w-0 truncate font-medium text-slate-800">{row.ba_name}</span>
+                    <span className="min-w-0 truncate font-medium text-slate-800">
+                      {row.ba_name}
+                    </span>
                     <Badge tone={capacityBadgeTone(row.capacity_label)}>
                       {capacityLabelText(row.capacity_label)}
                     </Badge>
@@ -607,7 +673,10 @@ function MetricTile({
   }[tone];
 
   return (
-    <Link to={to} className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
+    <Link
+      to={to}
+      className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase text-slate-500">{title}</p>
@@ -624,23 +693,27 @@ function MetricTile({
 
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
-    <div className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[115px_105px_minmax(0,1.2fr)_minmax(0,1fr)_150px_110px_minmax(0,1fr)_105px_125px] xl:items-center">
-      <div className="flex flex-wrap items-center gap-2 xl:block">
-        <Badge tone={item.flag === 'OVERBOOKED' || item.flag === 'URGENT' ? 'danger' : item.flag === 'BENCH' ? 'neutral' : 'warning'}>
-          {item.type.replace('_', ' ')}
-        </Badge>
-        <span className="text-xs text-slate-500 xl:hidden">{item.dateRange}</span>
-      </div>
+    <div className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[105px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_150px_120px_125px] xl:items-center">
       <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
       <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
       <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
-      <span className="hidden text-slate-600 xl:block">{item.dateRange}</span>
-      <span className="font-semibold text-slate-800">{item.capacity}</span>
       <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
-      <Badge tone={item.flag === 'OVERBOOKED' || item.flag === 'URGENT' ? 'danger' : item.flag === 'BENCH' ? 'neutral' : 'warning'}>
-        {item.flag}
+      <span className="hidden text-slate-600 xl:block">{item.dateRange}</span>
+      <Badge
+        tone={
+          item.flag === 'OVERBOOKED' || item.flag === 'URGENT'
+            ? 'danger'
+            : item.flag === 'HIGH' || item.flag === 'CAPACITY_RISK'
+              ? 'warning'
+              : 'neutral'
+        }
+      >
+        {formatManagerFlag(item.flag)}
       </Badge>
-      <Link to={item.actionTo} className="inline-flex items-center font-semibold text-blue-700">
+      <Link
+        to={item.actionTo}
+        className="inline-flex items-center font-semibold text-blue-700"
+      >
         {item.actionLabel} <ArrowRight className="ml-1 h-4 w-4" />
       </Link>
     </div>
@@ -648,20 +721,32 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
 }
 
 function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) {
-  const target = role === 'BA' ? '/my-schedule' : `/my-requests?requestId=${booking.id}`;
+  const target =
+    role === 'BA'
+      ? `/my-schedule?tab=upcoming&bookingId=${booking.id}`
+      : `/my-requests?requestId=${booking.id}`;
 
   return (
     <Link to={target}>
       <div className="grid gap-4 rounded-lg border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-base font-semibold text-slate-950">{booking.title}</p>
+            <p className="truncate text-base font-semibold text-slate-950">
+              {booking.title}
+            </p>
             <Badge>{booking.status.replace('_', ' ')}</Badge>
           </div>
           <p className="mt-2 text-sm text-slate-500">{booking.project.name}</p>
         </div>
 
-        <MetaItem label={role === 'BA' ? 'Requester' : 'BA'} value={role === 'BA' ? booking.requester.full_name : booking.ba?.full_name ?? 'Auto assign'} />
+        <MetaItem
+          label={role === 'BA' ? 'Requester' : 'BA'}
+          value={
+            role === 'BA'
+              ? booking.requester.full_name
+              : (booking.ba?.full_name ?? 'Auto assign')
+          }
+        />
         <MetaItem
           label="Date range"
           value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
@@ -689,38 +774,39 @@ function MetaItem({ label, value }: { label: string; value: string }) {
 function buildManagerActionItems(
   pendingBookings: Booking[],
   summary: ManagerDashboardSummary | undefined,
-  range: { from: string; to: string },
-  riskBaIds: Set<string>
+  range: { from: string; to: string }
 ): ManagerActionItem[] {
+  const utilizationByBa = new Map(
+    (summary?.ba_utilization ?? []).map((row) => [row.ba_id, row])
+  );
   const bookingActions: ManagerActionItem[] = pendingBookings.map((booking) => {
     const state = getManagerRequestState(booking);
     const isUrgent = booking.priority === 'URGENT';
+    const isHigh = booking.priority === 'HIGH';
     const isUnassigned = !booking.ba_id;
-    const hasCapacityRisk = Boolean(booking.ba_id && riskBaIds.has(booking.ba_id));
-    const type = isUrgent
-      ? 'URGENT_REQUEST'
-      : isUnassigned
-        ? 'UNASSIGNED_REQUEST'
-        : hasCapacityRisk
-          ? 'CAPACITY_RISK'
-          : 'PENDING_REQUEST';
-    const flag = isUrgent
-      ? 'URGENT'
-      : isUnassigned
-        ? 'UNASSIGNED'
-        : hasCapacityRisk
-          ? 'CAPACITY_RISK'
-          : 'PENDING';
+    const utilization = booking.ba_id ? utilizationByBa.get(booking.ba_id) : undefined;
+    const hasCapacityRisk = Boolean(
+      utilization &&
+      utilization.approved_capacity <= 100 &&
+      utilization.approved_capacity + booking.capacity_percent > 100
+    );
+    const flag = hasCapacityRisk
+      ? 'CAPACITY_RISK'
+      : isUrgent
+        ? 'URGENT'
+        : isHigh
+          ? 'HIGH'
+          : isUnassigned
+            ? 'UNASSIGNED'
+            : 'PENDING';
 
     return {
       id: `booking-${booking.id}`,
       kind: 'booking',
-      type,
       priority: booking.priority,
       project: booking.project.name,
       requester: booking.requester.full_name,
       dateRange: `${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`,
-      capacity: `${booking.capacity_percent}%`,
       assignedBa: booking.ba?.full_name ?? 'Unassigned',
       flag,
       actionLabel: state === 'NEEDS_ASSIGNMENT' ? 'Assign BA' : 'Review',
@@ -731,53 +817,62 @@ function buildManagerActionItems(
 
   const utilizationRows = summary?.ba_utilization ?? [];
   const overbookedActions: ManagerActionItem[] = utilizationRows
-    .filter((row) => row.capacity_label === 'OVERBOOKED')
+    .filter((row) => row.approved_capacity > 100)
     .map((row) => ({
       id: `overbooked-${row.ba_id}`,
       kind: 'ba',
-      type: 'OVERBOOKED_BA',
-      priority: 'HIGH',
+      priority: 'URGENT',
       project: summarizeProjectNames(row.current_projects),
       requester: 'Capacity monitor',
       dateRange: `${formatDate(range.from)} - ${formatDate(range.to)}`,
-      capacity: `${row.risk_capacity}%`,
       assignedBa: row.ba_name,
       flag: 'OVERBOOKED',
       actionLabel: 'View Timeline',
       actionTo: `/timeline?baId=${row.ba_id}`
     }));
-  const benchActions: ManagerActionItem[] = utilizationRows
-    .filter((row) => row.capacity_label === 'BENCH')
-    .map((row) => ({
-      id: `bench-${row.ba_id}`,
-      kind: 'ba',
-      type: 'BENCH_BA',
-      priority: 'LOW',
-      project: 'No active allocation',
-      requester: 'Capacity monitor',
-      dateRange: `${formatDate(range.from)} - ${formatDate(range.to)}`,
-      capacity: '0%',
-      assignedBa: row.ba_name,
-      flag: 'BENCH',
-      actionLabel: 'View BA',
-      actionTo: `/crm/ba/${row.ba_id}`
-    }));
 
-  return [...bookingActions, ...overbookedActions, ...benchActions].sort(
-    (left, right) => getManagerActionScore(right) - getManagerActionScore(left)
-  );
+  return [...bookingActions, ...overbookedActions]
+    .filter(
+      (item) =>
+        item.flag === 'OVERBOOKED' ||
+        item.flag === 'CAPACITY_RISK' ||
+        item.flag === 'URGENT' ||
+        item.flag === 'HIGH' ||
+        item.flag === 'UNASSIGNED' ||
+        (item.kind === 'booking' && item.booking.status === 'PENDING')
+    )
+    .sort(
+      (left, right) =>
+        getManagerActionScore(right) - getManagerActionScore(left) ||
+        getManagerActionCreatedAt(left) - getManagerActionCreatedAt(right)
+    );
 }
 
 function getManagerActionScore(item: ManagerActionItem) {
   let score = 0;
-  if (item.flag === 'URGENT') score += 100;
-  if (item.flag === 'UNASSIGNED') score += 80;
-  if (item.flag === 'OVERBOOKED' || item.flag === 'CAPACITY_RISK') score += 70;
-  if (item.flag === 'BENCH') score += 30;
+  if (item.flag === 'OVERBOOKED') score += 600;
+  if (item.flag === 'CAPACITY_RISK') score += 500;
+  if (item.flag === 'URGENT') score += 400;
+  if (item.flag === 'HIGH') score += 300;
+  if (item.flag === 'UNASSIGNED') score += 250;
   if (item.kind === 'booking') {
-    score += item.priority === 'HIGH' ? 20 : item.priority === 'MEDIUM' ? 10 : 0;
+    score += 100;
+    score += item.priority === 'URGENT' ? 40 : item.priority === 'HIGH' ? 30 : 0;
   }
   return score;
+}
+
+function getManagerActionCreatedAt(item: ManagerActionItem) {
+  return item.kind === 'booking' ? new Date(item.booking.created_at).getTime() : 0;
+}
+
+function formatManagerFlag(flag: ManagerActionItem['flag']) {
+  if (flag === 'CAPACITY_RISK') return 'Capacity Risk';
+  if (flag === 'OVERBOOKED') return 'Overbooked';
+  if (flag === 'UNASSIGNED') return 'Unassigned';
+  if (flag === 'URGENT') return 'Urgent';
+  if (flag === 'HIGH') return 'High';
+  return 'Pending';
 }
 
 function summarizeProjectNames(
@@ -793,7 +888,11 @@ function summarizeProjectNames(
     .join(', ');
 }
 
-function resolveDashboardRange(mode: TimeframeMode, customFrom: string, customTo: string) {
+function resolveDashboardRange(
+  mode: TimeframeMode,
+  customFrom: string,
+  customTo: string
+) {
   const now = new Date();
 
   if (mode === 'week') {
@@ -823,7 +922,14 @@ function resolveDashboardRange(mode: TimeframeMode, customFrom: string, customTo
   };
 }
 
-function rangesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
-  return parseISO(firstStart) <= parseISO(secondEnd) && parseISO(firstEnd) >= parseISO(secondStart);
+function rangesOverlap(
+  firstStart: string,
+  firstEnd: string,
+  secondStart: string,
+  secondEnd: string
+) {
+  return (
+    parseISO(firstStart) <= parseISO(secondEnd) &&
+    parseISO(firstEnd) >= parseISO(secondStart)
+  );
 }
-
