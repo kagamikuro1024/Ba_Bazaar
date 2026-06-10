@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode
+} from 'react';
 import {
   BarChart3,
   CalendarDays,
@@ -19,7 +27,7 @@ import {
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/AuthProvider';
-import { apiFetch, type NotificationItem, type UserRole } from '@/lib/api';
+import { apiFetch, type NotificationItem, type User, type UserRole } from '@/lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
@@ -350,245 +358,292 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-        <div className="mx-auto grid max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-4 py-4 sm:px-6 xl:max-w-[1500px] 2xl:max-w-[1880px]">
-          <div>
+    <div
+      className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
+      style={
+        { '--sidebar-width': sidebarCollapsed ? '72px' : '260px' } as CSSProperties
+      }
+    >
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white lg:hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <Link to="/dashboard" className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
               BA Bazaar
             </p>
-            <h1 className="text-xl font-bold text-slate-950">Booking + CRM</h1>
-          </div>
-          <div className="flex justify-center">
+            <p className="truncate text-lg font-bold text-slate-950">Booking + CRM</p>
+          </Link>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="hidden w-full max-w-[520px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white lg:flex"
-              aria-label="Open global search"
-            >
-              <Search className="h-4 w-4 text-slate-400" />
-              <span className="flex-1">Search requests, BA, projects...</span>
-              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
-                Ctrl K
-              </span>
-            </button>
-          </div>
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white lg:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
               aria-label="Open global search"
             >
               <Search className="h-4 w-4" />
             </button>
-            <div ref={notificationRef} className="relative hidden sm:block">
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label="Notifications"
-                aria-expanded={notificationOpen}
-                onClick={() => setNotificationOpen((current) => !current)}
-              >
-                <Bell className="h-4 w-4" />
-              </Button>
+            <Link
+              to="/notifications"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
+              aria-label="Notifications"
+            >
+              <Bell className="h-4 w-4" />
               {unreadCount > 0 ? (
                 <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
                   {unreadCount}
                 </span>
               ) : null}
-              {notificationOpen ? (
-                <Card className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] shadow-lg">
-                  <CardContent className="p-0">
-                    <div className="flex items-center justify-between border-b px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">
-                          Notifications
-                        </p>
-                        <p className="text-xs text-slate-500">{unreadCount} unread</p>
-                      </div>
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link to="/notifications">View all</Link>
-                      </Button>
-                    </div>
-                    <div
-                      className="max-h-96 overflow-y-auto overscroll-contain"
-                      onWheel={(event) => event.stopPropagation()}
-                    >
-                      {recentNotifications.length === 0 ? (
-                        <div className="p-4 text-sm text-slate-600">
-                          No notifications yet.
-                        </div>
-                      ) : (
-                        recentNotifications.map((item) => (
-                          <Link
-                            key={item.id}
-                            to={resolveNotificationPath(item)}
-                            className="block border-b px-4 py-3 last:border-b-0 hover:bg-slate-50"
-                            onClick={() => {
-                              if (!item.read_at) {
-                                markRead.mutate(item.id);
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-950">
-                                  {item.title}
-                                </p>
-                                <p className="mt-1 whitespace-pre-line text-sm text-slate-600">
-                                  {item.message}
-                                </p>
-                              </div>
-                              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                            </div>
-                          </Link>
-                        ))
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
-            <div className="hidden text-right text-xs text-slate-500 sm:block">
-              <p className="font-semibold text-slate-700">
-                {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
-              </p>
-              <p>{displayRole}</p>
-            </div>
-            <div ref={userMenuRef} className="relative">
-              <button
-                type="button"
-                aria-label="User menu"
-                aria-expanded={userMenuOpen}
-                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 transition hover:border-slate-300"
-                onClick={() => setUserMenuOpen((current) => !current)}
-              >
-                {user?.avatar_url ? (
-                  <img
-                    src={user.avatar_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-sm font-semibold text-slate-700">
-                    {(user?.full_name ?? 'U')
-                      .split(' ')
-                      .map((part) => part[0])
-                      .slice(0, 2)
-                      .join('')}
-                  </span>
-                )}
-              </button>
-              {userMenuOpen ? (
-                <Card className="absolute right-0 top-12 z-50 w-56 shadow-lg">
-                  <CardContent className="p-2">
-                    <div className="border-b border-slate-100 px-2 py-2">
-                      <p className="truncate text-sm font-semibold text-slate-950">
-                        {me.data?.user.full_name ??
-                          user?.full_name ??
-                          'Authenticated user'}
-                      </p>
-                      <p className="text-xs text-slate-500">{displayRole}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="mt-1 w-full justify-start"
-                      onClick={async () => {
-                        setUserMenuOpen(false);
-                        await logout();
-                        await queryClient.invalidateQueries();
-                      }}
-                    >
-                      Logout
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
+            </Link>
           </div>
         </div>
       </header>
 
-      <div
-        className={[
-          'mx-auto grid max-w-[1440px] gap-5 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:max-w-[1500px] 2xl:max-w-[1880px]',
-          sidebarCollapsed
-            ? 'lg:grid-cols-[72px_minmax(0,1fr)]'
-            : 'lg:grid-cols-[240px_minmax(0,1fr)]'
-        ].join(' ')}
-      >
-        <Card className="sticky top-[5.75rem] hidden max-h-[calc(100vh-7rem)] overflow-y-auto p-2 lg:block">
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed((current) => !current)}
+      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 py-4">
+          <div
             className={[
-              'mb-2 flex w-full items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950',
+              'flex items-start gap-2 px-2',
               sidebarCollapsed ? 'justify-center' : 'justify-between'
             ].join(' ')}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {sidebarCollapsed ? (
-              <ChevronsRight className="h-4 w-4" aria-hidden="true" />
+              <Link
+                to="/dashboard"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-sm font-bold text-blue-700"
+                title="BA Bazaar"
+              >
+                BA
+              </Link>
             ) : (
-              <>
-                <span>Collapse</span>
+              <Link to="/dashboard" className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  BA Bazaar
+                </p>
+                <p className="truncate text-xl font-bold text-slate-950">
+                  Booking + CRM
+                </p>
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((current) => !current)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? (
+                <ChevronsRight className="h-4 w-4" aria-hidden="true" />
+              ) : (
                 <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className={[
+              'flex items-center rounded-xl border border-slate-200 bg-slate-50 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white',
+              sidebarCollapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2'
+            ].join(' ')}
+            aria-label="Open global search"
+            title={sidebarCollapsed ? 'Search' : undefined}
+          >
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+            {sidebarCollapsed ? null : (
+              <>
+                <span className="min-w-0 flex-1 truncate">Search requests, BA...</span>
+                <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                  Ctrl K
+                </span>
               </>
             )}
           </button>
-          <nav className="grid gap-1" aria-label="Main navigation">
-            {visibleNavigation.map((item) => {
-              const Icon = item.icon;
 
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end
-                  title={sidebarCollapsed ? item.label : undefined}
-                  onClick={(event) => {
-                    if (inboxDirty.dirty && item.to !== location.pathname) {
-                      event.preventDefault();
-                      setPendingNavPath(item.to);
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {sidebarCollapsed ? null : (
+              <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Menu
+              </p>
+            )}
+            <nav className="grid gap-1" aria-label="Main navigation">
+              {visibleNavigation.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end
+                    title={sidebarCollapsed ? item.label : undefined}
+                    onClick={(event) => {
+                      if (inboxDirty.dirty && item.to !== location.pathname) {
+                        event.preventDefault();
+                        setPendingNavPath(item.to);
+                      }
+                    }}
+                    className={({ isActive }) =>
+                      [
+                        'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                        sidebarCollapsed ? 'justify-center gap-0' : 'gap-3',
+                        isActive
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                      ].join(' ')
                     }
-                  }}
-                  className={({ isActive }) =>
-                    [
-                      'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                      sidebarCollapsed ? 'justify-center gap-0' : 'gap-3',
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
-                    ].join(' ')
-                  }
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {sidebarCollapsed ? null : <span>{item.label}</span>}
+                  </NavLink>
+                );
+              })}
+            </nav>
+            {canCreateBooking ? (
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setBookingModalOpen(true)}
+                  className={[
+                    'flex w-full items-center rounded-md px-3 py-2 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50',
+                    sidebarCollapsed ? 'justify-center gap-0' : 'gap-3'
+                  ].join(' ')}
+                  title={sidebarCollapsed ? 'Create Booking' : undefined}
                 >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {sidebarCollapsed ? null : <span>{item.label}</span>}
-                </NavLink>
-              );
-            })}
-          </nav>
-          {canCreateBooking ? (
-            <div className="mt-2 border-t pt-2">
-              <button
-                type="button"
-                onClick={() => setBookingModalOpen(true)}
-                className={[
-                  'flex w-full items-center rounded-md px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50',
-                  sidebarCollapsed ? 'justify-center gap-0' : 'gap-3'
-                ].join(' ')}
-                title={sidebarCollapsed ? 'Create Booking' : undefined}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                {sidebarCollapsed ? null : <span>Create Booking</span>}
-              </button>
-            </div>
-          ) : null}
-        </Card>
+                  <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {sidebarCollapsed ? null : <span>Create Booking</span>}
+                </button>
+              </div>
+            ) : null}
+          </div>
 
-        <main className="grid min-w-0 gap-5">
+          <div className="relative border-t border-slate-200 pt-3">
+            {sidebarCollapsed ? (
+              <div className="grid gap-2">
+                <div ref={notificationRef} className="relative">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Notifications"
+                    aria-expanded={notificationOpen}
+                    onClick={() => setNotificationOpen((current) => !current)}
+                  >
+                    <Bell className="h-4 w-4" />
+                  </Button>
+                  {unreadCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  ) : null}
+                  {notificationOpen ? (
+                    <Card className="absolute bottom-0 left-full z-50 ml-3 w-96 shadow-lg">
+                      <CardContent className="p-0">
+                        <NotificationPanel
+                          unreadCount={unreadCount}
+                          recentNotifications={recentNotifications}
+                          resolveNotificationPath={resolveNotificationPath}
+                          markRead={(id) => markRead.mutate(id)}
+                        />
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
+                <div ref={userMenuRef} className="relative">
+                  <UserAvatarButton
+                    user={user}
+                    userMenuOpen={userMenuOpen}
+                    onClick={() => setUserMenuOpen((current) => !current)}
+                  />
+                  {userMenuOpen ? (
+                    <Card className="absolute bottom-0 left-full z-50 ml-3 w-56 shadow-lg">
+                      <CardContent className="p-2">
+                        <UserMenuContent
+                          fullName={me.data?.user.full_name ?? user?.full_name}
+                          displayRole={displayRole}
+                          onLogout={async () => {
+                            setUserMenuOpen(false);
+                            await logout();
+                            await queryClient.invalidateQueries();
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <UserAvatarButton
+                  user={user}
+                  userMenuOpen={userMenuOpen}
+                  onClick={() => setUserMenuOpen((current) => !current)}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-700">
+                    {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">{displayRole}</p>
+                </div>
+                <div ref={notificationRef} className="relative">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Notifications"
+                    aria-expanded={notificationOpen}
+                    onClick={() => setNotificationOpen((current) => !current)}
+                  >
+                    <Bell className="h-4 w-4" />
+                  </Button>
+                  {unreadCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
+                      {unreadCount}
+                    </span>
+                  ) : null}
+                  {notificationOpen ? (
+                    <Card className="absolute bottom-12 left-0 z-50 w-96 shadow-lg">
+                      <CardContent className="p-0">
+                        <NotificationPanel
+                          unreadCount={unreadCount}
+                          recentNotifications={recentNotifications}
+                          resolveNotificationPath={resolveNotificationPath}
+                          markRead={(id) => markRead.mutate(id)}
+                        />
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
+                <div ref={userMenuRef} className="relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="User menu"
+                    aria-expanded={userMenuOpen}
+                    onClick={() => setUserMenuOpen((current) => !current)}
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-90" />
+                  </Button>
+                  {userMenuOpen ? (
+                    <Card className="absolute bottom-12 right-0 z-50 w-56 shadow-lg">
+                      <CardContent className="p-2">
+                        <UserMenuContent
+                          fullName={me.data?.user.full_name ?? user?.full_name}
+                          displayRole={displayRole}
+                          onLogout={async () => {
+                            setUserMenuOpen(false);
+                            await logout();
+                            await queryClient.invalidateQueries();
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      <div className="min-w-0 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:px-8">
+        <main className="mx-auto grid min-w-0 max-w-[1440px] gap-5 2xl:max-w-[1600px]">
           {/*
             Page-level header is owned by each page via <PageHeader />
             from @/components. LayoutShell still injects a fallback
@@ -833,5 +888,118 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       ) : null}
     </div>
+  );
+}
+
+function NotificationPanel({
+  unreadCount,
+  recentNotifications,
+  resolveNotificationPath,
+  markRead
+}: {
+  unreadCount: number;
+  recentNotifications: NotificationItem[];
+  resolveNotificationPath: (item: NotificationItem) => string;
+  markRead: (id: string) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">Notifications</p>
+          <p className="text-xs text-slate-500">{unreadCount} unread</p>
+        </div>
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/notifications">View all</Link>
+        </Button>
+      </div>
+      <div
+        className="max-h-96 overflow-y-auto overscroll-contain"
+        onWheel={(event) => event.stopPropagation()}
+      >
+        {recentNotifications.length === 0 ? (
+          <div className="p-4 text-sm text-slate-600">No notifications yet.</div>
+        ) : (
+          recentNotifications.map((item) => (
+            <Link
+              key={item.id}
+              to={resolveNotificationPath(item)}
+              className="block border-b px-4 py-3 last:border-b-0 hover:bg-slate-50"
+              onClick={() => {
+                if (!item.read_at) {
+                  markRead(item.id);
+                }
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-slate-600">
+                    {item.message}
+                  </p>
+                </div>
+                <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+function UserAvatarButton({
+  user,
+  userMenuOpen,
+  onClick
+}: {
+  user?: User | null;
+  userMenuOpen: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="User menu"
+      aria-expanded={userMenuOpen}
+      className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 transition hover:border-slate-300"
+      onClick={onClick}
+    >
+      {user?.avatar_url ? (
+        <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="text-sm font-semibold text-slate-700">
+          {(user?.full_name ?? 'U')
+            .split(' ')
+            .map((part) => part[0])
+            .slice(0, 2)
+            .join('')}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function UserMenuContent({
+  fullName,
+  displayRole,
+  onLogout
+}: {
+  fullName?: string;
+  displayRole: string;
+  onLogout: () => void | Promise<void>;
+}) {
+  return (
+    <>
+      <div className="border-b border-slate-100 px-2 py-2">
+        <p className="truncate text-sm font-semibold text-slate-950">
+          {fullName ?? 'Authenticated user'}
+        </p>
+        <p className="text-xs text-slate-500">{displayRole}</p>
+      </div>
+      <Button variant="ghost" className="mt-1 w-full justify-start" onClick={onLogout}>
+        Logout
+      </Button>
+    </>
   );
 }
