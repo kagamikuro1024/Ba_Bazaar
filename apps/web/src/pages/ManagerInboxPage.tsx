@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { formatDate, priorityTone } from '@/lib/format';
+import { PageHeader, QuickTabs, type QuickTab } from '@/components';
 import { Avatar, BAIdentity } from '@/components/common';
 import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { type RecommendationQuery } from '@/lib/recommendations';
@@ -317,6 +318,27 @@ export function ManagerInboxPage() {
       ).length
     };
   }, [bookings.data, summary.data]);
+
+  const quickTabs = useMemo<Array<QuickTab<InboxTab>>>(
+    () => [
+      { value: 'ALL', label: 'All', count: counts.ALL },
+      { value: 'URGENT', label: 'Urgent', count: counts.URGENT, tone: 'danger' },
+      {
+        value: 'UNASSIGNED',
+        label: 'Unassigned',
+        count: counts.UNASSIGNED,
+        tone: 'warning'
+      },
+      { value: 'PENDING', label: 'Pending', count: counts.PENDING, tone: 'warning' },
+      {
+        value: 'OVERBOOK_RISK',
+        label: 'Overbook risk',
+        count: counts.OVERBOOK_RISK,
+        tone: 'danger'
+      }
+    ],
+    [counts]
+  );
 
   const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
@@ -1059,6 +1081,11 @@ export function ManagerInboxPage() {
           ) : null}
         </div>
       ) : null}
+      <PageHeader
+        eyebrow="Manager workspace"
+        title="Action Center"
+        description="Review, assign, approve, and resolve BA booking requests."
+      />
       {filters.needsVerification || filters.overbookRisk ? (
         <div
           className={[
@@ -1149,29 +1176,12 @@ export function ManagerInboxPage() {
                 className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm"
               />
             </label>
-            <div className="flex flex-wrap items-center gap-2 2xl:justify-start">
-              {[
-                ['ALL', `All (${counts.ALL})`],
-                ['URGENT', `Urgent (${counts.URGENT})`],
-                ['UNASSIGNED', `Unassigned (${counts.UNASSIGNED})`],
-                ['PENDING', `Pending (${counts.PENDING})`],
-                ['OVERBOOK_RISK', `Overbook Risk (${counts.OVERBOOK_RISK})`]
-              ].map(([tab, label]) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => selectTab(tab as InboxTab)}
-                  className={[
-                    'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-                    activeTab === tab
-                      ? 'border-blue-200 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
-                  ].join(' ')}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <QuickTabs<InboxTab>
+              tabs={quickTabs}
+              value={activeTab}
+              onChange={selectTab}
+              className="2xl:justify-start"
+            />
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[repeat(3,minmax(0,180px))_repeat(2,minmax(0,156px))_auto] 2xl:items-center">

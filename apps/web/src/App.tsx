@@ -49,7 +49,7 @@ export function App() {
           path="/manager/action-center"
           element={
             <ProtectedPage>
-              <LayoutShell>
+              <LayoutShell suppressPageHeader>
                 <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
                   <ManagerInboxPage />
                 </RequireRole>
