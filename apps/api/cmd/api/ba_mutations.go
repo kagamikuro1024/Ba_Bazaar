@@ -100,13 +100,29 @@ func (app *App) handleBACreate(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleBAUpdate(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	id := chi.URLParam(r, "id")
 	existing, err := app.loadBAProfile(r.Context(), id)
-	if err != nil { writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"})
+		return
+	}
+	if existing.Status == "RESIGNED" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Resigned BA profiles cannot be modified"})
+		return
+	}
 	var body map[string]any
-	if err := decodeJSON(r, &body); err != nil { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"}); return }
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
+		return
+	}
 	if email := strings.TrimSpace(asString(body["email"])); email != "" && !strings.EqualFold(email, existing.Email) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "BA email is immutable"})
 		return
@@ -140,7 +156,10 @@ func (app *App) handleBAUpdate(w http.ResponseWriter, r *http.Request) {
 		index++
 	}
 	_, err = app.DB.Pool.Exec(r.Context(), `update ba_profiles set `+strings.Join(changes, ", ")+` where id = $1`, args...)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	updated, _ := app.loadBAProfile(r.Context(), id)
 	app.createAuditLog(r.Context(), user.ID, "UPDATE_BA_PROFILE", "BAProfile", id, "SUCCESS", existing, updated)
 	writeJSON(w, http.StatusOK, updated)
@@ -148,18 +167,39 @@ func (app *App) handleBAUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleBAChangeStatus(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	id := chi.URLParam(r, "id")
 	existing, err := app.loadBAProfile(r.Context(), id)
-	if err != nil { writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"})
+		return
+	}
+	if existing.Status == "RESIGNED" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Resigned BA profiles cannot change status"})
+		return
+	}
 	var body map[string]any
-	if err := decodeJSON(r, &body); err != nil { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"}); return }
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
+		return
+	}
 	status := strings.TrimSpace(asString(body["status"]))
-	if status == "" { status = "ACTIVE" }
+	if status == "" {
+		status = "ACTIVE"
+	}
 	reason := strings.TrimSpace(asString(firstDefined(body, "status_reason", "reason")))
 	_, err = app.DB.Pool.Exec(r.Context(), `update ba_profiles set status = $2, status_reason = $3, status_changed_at = now(), version = version + 1, updated_at = now() where id = $1`, id, status, nullIfBlank(reason))
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	updated, _ := app.loadBAProfile(r.Context(), id)
 	app.createAuditLog(r.Context(), user.ID, "CHANGE_BA_STATUS", "BAProfile", id, "SUCCESS", existing, updated)
 	writeJSON(w, http.StatusOK, updated)
@@ -167,22 +207,46 @@ func (app *App) handleBAChangeStatus(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleBAAddTag(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	baID := chi.URLParam(r, "id")
-	if _, err := app.loadBAProfile(r.Context(), baID); err != nil { writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"}); return }
+	if _, err := app.loadBAProfile(r.Context(), baID); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "BA profile not found"})
+		return
+	}
 	var payload map[string]any
-	if err := decodeJSON(r, &payload); err != nil { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"}); return }
+	if err := decodeJSON(r, &payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
+		return
+	}
 	tagID := strings.TrimSpace(asString(payload["tag_id"]))
-	if !uuidPattern.MatchString(tagID) { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "tag_id must be a valid UUID of an existing active tag"}); return }
+	if !uuidPattern.MatchString(tagID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "tag_id must be a valid UUID of an existing active tag"})
+		return
+	}
 	var exists int
 	_ = app.DB.Pool.QueryRow(r.Context(), `select count(*) from skill_tags where id = $1 and status = 'ACTIVE'`, tagID).Scan(&exists)
-	if exists == 0 { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Active tag_id does not exist"}); return }
+	if exists == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Active tag_id does not exist"})
+		return
+	}
 	_, err = app.DB.Pool.Exec(r.Context(), `insert into ba_skill_tags (id, ba_id, tag_id, assigned_by, assigned_at) values ($1,$2,$3,$4,now()) on conflict (ba_id, tag_id) do nothing`, newUUID(), baID, tagID, user.ID)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	app.createAuditLog(r.Context(), user.ID, "ADD_BA_TAG", "BAProfile", baID, "SUCCESS", nil, map[string]any{"tag_id": tagID})
 	rows, err := app.DB.Pool.Query(r.Context(), `select bst.id, st.id, st.name, st."group", st.status, st.created_at, st.updated_at from ba_skill_tags bst join skill_tags st on st.id = bst.tag_id where bst.ba_id = $1 and bst.tag_id = $2`, baID, tagID)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	defer rows.Close()
 	if rows.Next() {
 		var mappingID string
@@ -197,23 +261,41 @@ func (app *App) handleBAAddTag(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleBARemoveTag(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	baID := chi.URLParam(r, "id")
 	tagID := chi.URLParam(r, "tagId")
 	_, err = app.DB.Pool.Exec(r.Context(), `delete from ba_skill_tags where ba_id = $1 and tag_id = $2`, baID, tagID)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	app.createAuditLog(r.Context(), user.ID, "REMOVE_BA_TAG", "BAProfile", baID, "SUCCESS", map[string]any{"tag_id": tagID}, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (app *App) handleBAAudit(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	id := chi.URLParam(r, "id")
 	rows, err := app.DB.Pool.Query(r.Context(), `select a.id, a.action, a.target_type, a.target_id, a.old_value, a.new_value, a.result, a.created_at, u.id, u.full_name, u.email, u.role, u.avatar_url from audit_logs a join users u on u.id = a.actor_id where a.target_type = 'BAProfile' and a.target_id = $1 order by a.created_at desc`, id)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	defer rows.Close()
 	items := make([]map[string]any, 0)
 	for rows.Next() {
@@ -222,8 +304,12 @@ func (app *App) handleBAAudit(w http.ResponseWriter, r *http.Request) {
 		var createdAt time.Time
 		var actor User
 		var avatar sql.NullString
-		if err := rows.Scan(&id, &action, &targetType, &targetID, &oldJSON, &newJSON, &result, &createdAt, &actor.ID, &actor.FullName, &actor.Email, &actor.Role, &avatar); err != nil { continue }
-		if avatar.Valid { actor.AvatarURL = &avatar.String }
+		if err := rows.Scan(&id, &action, &targetType, &targetID, &oldJSON, &newJSON, &result, &createdAt, &actor.ID, &actor.FullName, &actor.Email, &actor.Role, &avatar); err != nil {
+			continue
+		}
+		if avatar.Valid {
+			actor.AvatarURL = &avatar.String
+		}
 		items = append(items, map[string]any{"id": id, "action": action, "target_type": targetType, "target_id": targetID, "old_value": parseJSONText(oldJSON), "new_value": parseJSONText(newJSON), "result": result, "created_at": createdAt, "actor": actor.View()})
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -231,16 +317,31 @@ func (app *App) handleBAAudit(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleBAAppendNote(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
-	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
-	if !isManagerRole(user.Role) { writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"}); return }
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	if !isManagerRole(user.Role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "BA Manager role required"})
+		return
+	}
 	baID := chi.URLParam(r, "id")
 	var body map[string]any
-	if err := decodeJSON(r, &body); err != nil { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"}); return }
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
+		return
+	}
 	content := strings.TrimSpace(asString(body["content"]))
-	if content == "" || len(content) > 5000 { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "content must be 1..5000 characters"}); return }
+	if content == "" || len(content) > 5000 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "content must be 1..5000 characters"})
+		return
+	}
 	noteID := newUUID()
 	_, err = app.DB.Pool.Exec(r.Context(), `insert into private_notes (id, ba_id, content, created_by, created_at, visibility) values ($1,$2,$3,$4,now(),'MANAGER_ONLY')`, noteID, baID, content, user.ID)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
 	app.createAuditLog(r.Context(), user.ID, "APPEND_PRIVATE_NOTE", "BAProfile", baID, "SUCCESS", nil, map[string]any{"note_id": noteID})
 	writeJSON(w, http.StatusOK, map[string]any{"id": noteID, "content": content, "created_at": time.Now().UTC(), "creator": user.View()})
 }
