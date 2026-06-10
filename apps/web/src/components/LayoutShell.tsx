@@ -361,7 +361,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     <div
       className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
       style={
-        { '--sidebar-width': sidebarCollapsed ? '72px' : '260px' } as CSSProperties
+        { '--sidebar-width': sidebarCollapsed ? '72px' : '288px' } as CSSProperties
       }
     >
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white lg:hidden">
@@ -644,8 +644,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </aside>
 
-      <div className="min-w-0 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:px-8">
-        <main className="mx-auto grid min-w-0 max-w-[1440px] gap-5 2xl:max-w-[1600px]">
+      <div className="min-w-0 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:px-6 2xl:px-8">
+        <main className="grid min-w-0 w-full gap-5">
           {/*
             Page-level header is owned by each page via <PageHeader />
             from @/components. LayoutShell still injects a fallback
