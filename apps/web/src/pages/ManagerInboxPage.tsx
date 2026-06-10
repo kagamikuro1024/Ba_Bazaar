@@ -1208,9 +1208,9 @@ export function ManagerInboxPage() {
     {
       id: 'priority',
       header: 'Priority',
-      className: 'w-32',
+      className: 'w-28 xl:w-32',
       cell: (booking: Booking) => (
-        <Badge tone={priorityTone(booking.priority)} className={actionCenterBadgeClassName}>
+        <Badge tone={priorityTone(booking.priority)} className={actionCenterPriorityBadgeClassName}>
           {booking.priority}
         </Badge>
       )
@@ -1218,13 +1218,13 @@ export function ManagerInboxPage() {
     {
       id: 'type',
       header: 'Type',
-      className: 'w-36',
+      className: 'w-32 xl:w-36',
       cell: (booking: Booking) => <RequestTypeBadge booking={booking} />
     },
     {
       id: 'project',
       header: 'Project',
-      className: 'min-w-[18rem]',
+      className: 'min-w-[14rem] xl:min-w-[16rem] 2xl:min-w-[18rem]',
       cell: (booking: Booking) => {
         const capacity = summary.data?.items.find(
           (item) => item.ba_id === booking.ba_id
@@ -1237,6 +1237,9 @@ export function ManagerInboxPage() {
               {booking.project.name}
             </p>
             <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
+            <p className="mt-1 truncate text-xs text-slate-500 xl:hidden">
+              Requester: {booking.requester.full_name}
+            </p>
             <span className="mt-2 flex flex-wrap gap-1">
               {riskFlags.map((flag) => (
                 <Badge
@@ -1260,7 +1263,8 @@ export function ManagerInboxPage() {
     {
       id: 'requester',
       header: 'Requester',
-      className: 'min-w-[11rem]',
+      headerClassName: 'hidden xl:table-cell',
+      className: 'hidden xl:table-cell xl:min-w-[10rem]',
       cell: (booking: Booking) => (
         <span className="block truncate text-slate-600">
           {booking.requester.full_name}
@@ -1270,7 +1274,7 @@ export function ManagerInboxPage() {
     {
       id: 'ba',
       header: 'Requested / Assigned BA',
-      className: 'min-w-[13rem]',
+      className: 'min-w-[10rem] xl:min-w-[12rem]',
       cell: (booking: Booking) => (
         <span className="block truncate text-slate-600">
           {booking.ba?.full_name ?? 'Unassigned'}
@@ -1280,7 +1284,7 @@ export function ManagerInboxPage() {
     {
       id: 'dateRange',
       header: 'Date Range',
-      className: 'min-w-[11rem]',
+      className: 'w-[9.5rem] xl:w-[11rem]',
       cell: (booking: Booking) => (
         <span className="text-slate-600">
           {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
@@ -1290,14 +1294,14 @@ export function ManagerInboxPage() {
     {
       id: 'status',
       header: 'Status',
-      className: 'w-36',
+      className: 'w-32 xl:w-36',
       cell: (booking: Booking) => <RequestStateBadge booking={booking} />
     },
     {
       id: 'action',
       header: 'Action',
       headerClassName: 'text-right',
-      className: 'w-36 text-right',
+      className: 'w-28 xl:w-36 text-right',
       cell: (booking: Booking) => {
         const actionLabel = getRequestActionLabel(booking, canManageInbox);
 
@@ -1306,7 +1310,7 @@ export function ManagerInboxPage() {
             type="button"
             size="sm"
             variant={actionLabel === 'View' ? 'secondary' : 'default'}
-            className="min-w-24"
+            className="min-w-20 xl:min-w-24"
             onClick={(event) => {
               event.stopPropagation();
               openDetail(booking.id);
@@ -2561,13 +2565,19 @@ function RequestSummaryItem({
 }
 
 const actionCenterBadgeClassName =
-  'inline-flex w-full min-w-[128px] justify-center text-center';
+  'inline-flex w-full min-w-[104px] justify-center text-center xl:min-w-[128px]';
+
+const actionCenterPriorityBadgeClassName =
+  'inline-flex w-full min-w-[84px] justify-center text-center xl:min-w-[96px]';
+
+const actionCenterTypeBadgeClassName =
+  'inline-flex w-full min-w-[92px] justify-center text-center xl:min-w-[108px]';
 
 function RequestTypeBadge({ booking }: { booking: Booking }) {
   return (
     <Badge
       tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}
-      className={actionCenterBadgeClassName}
+      className={actionCenterTypeBadgeClassName}
     >
       {getRequestType(booking) === 'SPECIFIC_BA' ? 'Specific BA' : 'Open Request'}
     </Badge>
