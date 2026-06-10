@@ -826,7 +826,7 @@ function ManagerAlertLink({
 
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
-    <div className="grid flex-1 gap-3 px-4 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
+    <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
       <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
       <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
       <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
