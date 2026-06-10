@@ -8,7 +8,6 @@ import {
   ClipboardList,
   Gauge,
   Sparkles,
-  UserRound,
   UsersRound
 } from 'lucide-react';
 import {
@@ -39,10 +38,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { FilterCard, PageHeader, StatCard } from '@/components';
+import { PageHeader, StatCard } from '@/components';
 import { cn } from '@/lib/utils';
 
 type TimeframeMode = 'week' | 'month' | 'quarter' | 'custom';
+type AttentionFilter = 'ALL' | ManagerAttentionFlag;
+type AttentionSort = 'PRIORITY' | 'OLDEST' | 'NEWEST';
 
 type CapacitySummary = {
   items: Array<{
@@ -330,14 +331,14 @@ export function DashboardPage() {
         description={dashboardCopy.description}
         actions={
           isManagerDashboard ? (
-            <>
-              <Button variant="secondary" asChild>
-                <Link to="/reports">View reports</Link>
-              </Button>
-              <Button asChild>
-                <Link to="/manager/action-center">Open Action Center</Link>
-              </Button>
-            </>
+            <ManagerDashboardHeaderActions
+              timeframeMode={timeframeMode}
+              customFrom={customFrom}
+              customTo={customTo}
+              onTimeframeModeChange={setTimeframeMode}
+              onCustomFromChange={setCustomFrom}
+              onCustomToChange={setCustomTo}
+            />
           ) : null
         }
       />
@@ -362,12 +363,6 @@ export function DashboardPage() {
         <ManagerDashboard
           actions={dashboardData.actionItems}
           summary={managerSummary.data}
-          timeframeMode={timeframeMode}
-          customFrom={customFrom}
-          customTo={customTo}
-          onTimeframeModeChange={setTimeframeMode}
-          onCustomFromChange={setCustomFrom}
-          onCustomToChange={setCustomTo}
         />
       ) : (
         <>
@@ -414,9 +409,7 @@ export function DashboardPage() {
   );
 }
 
-function ManagerDashboard({
-  actions,
-  summary,
+function ManagerDashboardHeaderActions({
   timeframeMode,
   customFrom,
   customTo,
@@ -424,8 +417,6 @@ function ManagerDashboard({
   onCustomFromChange,
   onCustomToChange
 }: {
-  actions: ManagerActionItem[];
-  summary?: ManagerDashboardSummary;
   timeframeMode: TimeframeMode;
   customFrom: string;
   customTo: string;
@@ -433,90 +424,144 @@ function ManagerDashboard({
   onCustomFromChange: (value: string) => void;
   onCustomToChange: (value: string) => void;
 }) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+        {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onTimeframeModeChange(mode)}
+            className={cn(
+              'rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition-colors sm:text-sm',
+              timeframeMode === mode
+                ? 'bg-white text-slate-950 shadow-sm'
+                : 'text-slate-600 hover:text-slate-950'
+            )}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+      {timeframeMode === 'custom' ? (
+        <>
+          <input
+            type="date"
+            value={customFrom}
+            onChange={(event) => onCustomFromChange(event.target.value)}
+            className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+          />
+          <input
+            type="date"
+            value={customTo}
+            onChange={(event) => onCustomToChange(event.target.value)}
+            className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+          />
+        </>
+      ) : null}
+      <Button variant="secondary" asChild>
+        <Link to="/reports">View reports</Link>
+      </Button>
+    </div>
+  );
+}
+
+function ManagerDashboard({
+  actions,
+  summary
+}: {
+  actions: ManagerActionItem[];
+  summary?: ManagerDashboardSummary;
+}) {
   const team = summary?.team;
-  const actionCounts = summary?.actions;
-  const needsAttention = actions.slice(0, 5);
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>('ALL');
+  const [attentionSort, setAttentionSort] = useState<AttentionSort>('PRIORITY');
+  const attentionCounts = useMemo(
+    () => ({
+      all: actions.length,
+      needsAssignment: actions.filter((item) => item.flag === 'NEEDS_ASSIGNMENT')
+        .length,
+      capacityRisk: actions.filter((item) => item.flag === 'CAPACITY_RISK').length,
+      overbooked: actions.filter((item) => item.flag === 'OVERBOOKED').length,
+      pendingReview: actions.filter((item) => item.flag === 'PENDING_REVIEW').length
+    }),
+    [actions]
+  );
+  const filteredAttention = useMemo(() => {
+    const filtered =
+      attentionFilter === 'ALL'
+        ? actions
+        : actions.filter((item) => item.flag === attentionFilter);
+
+    return [...filtered].sort((left, right) => {
+      if (attentionSort === 'OLDEST') {
+        return getManagerActionCreatedAt(left) - getManagerActionCreatedAt(right);
+      }
+
+      if (attentionSort === 'NEWEST') {
+        return getManagerActionCreatedAt(right) - getManagerActionCreatedAt(left);
+      }
+
+      return (
+        getManagerActionScore(right) - getManagerActionScore(left) ||
+        getManagerActionCreatedAt(left) - getManagerActionCreatedAt(right)
+      );
+    });
+  }, [actions, attentionFilter, attentionSort]);
+  const needsAttention = filteredAttention.slice(0, 5);
+  const timeframeLabel = summary
+    ? `${formatDate(summary.timeframe.from)} - ${formatDate(summary.timeframe.to)}`
+    : 'Current timeframe';
+  const attentionTabs: Array<{ value: AttentionFilter; label: string; count: number }> = [
+    { value: 'ALL', label: 'All', count: attentionCounts.all },
+    {
+      value: 'NEEDS_ASSIGNMENT',
+      label: 'Needs assignment',
+      count: attentionCounts.needsAssignment
+    },
+    { value: 'CAPACITY_RISK', label: 'Capacity risk', count: attentionCounts.capacityRisk },
+    { value: 'PENDING_REVIEW', label: 'Pending review', count: attentionCounts.pendingReview },
+    { value: 'OVERBOOKED', label: 'Overbooked', count: attentionCounts.overbooked }
+  ];
 
   return (
     <>
-      <FilterCard>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-950">
-              Action-first command center
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {summary
-                ? `${formatDate(summary.timeframe.from)} - ${formatDate(summary.timeframe.to)}`
-                : 'Select a timeframe to load manager actions'}
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[auto_auto_auto] lg:flex lg:items-center">
-            <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
-              {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onTimeframeModeChange(mode)}
-                  className={cn(
-                    'rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition-colors sm:text-sm',
-                    timeframeMode === mode
-                      ? 'bg-white text-slate-950 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-950'
-                  )}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-            {timeframeMode === 'custom' ? (
-              <>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(event) => onCustomFromChange(event.target.value)}
-                  className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-                />
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(event) => onCustomToChange(event.target.value)}
-                  className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-                />
-              </>
-            ) : null}
-          </div>
-        </div>
-      </FilterCard>
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard
-          label="Pending Requests"
-          value={String(actionCounts?.pending_requests ?? 0)}
-          hint="Need review"
+          label="Needs Attention"
+          value={String(attentionCounts.all)}
+          hint="All action items"
           icon={ClipboardList}
-          tone="warning"
+          tone="info"
+          active={attentionFilter === 'ALL'}
+          onClick={() => setAttentionFilter('ALL')}
         />
         <StatCard
-          label="Unassigned"
-          value={String(actionCounts?.unassigned_requests ?? 0)}
+          label="Needs Assignment"
+          value={String(attentionCounts.needsAssignment)}
           hint="Needs BA"
           icon={UsersRound}
           tone="warning"
+          active={attentionFilter === 'NEEDS_ASSIGNMENT'}
+          onClick={() => setAttentionFilter('NEEDS_ASSIGNMENT')}
+        />
+        <StatCard
+          label="Capacity Risk"
+          value={String(attentionCounts.capacityRisk)}
+          hint="Capacity risk"
+          icon={AlertCircle}
+          tone="warning"
+          active={attentionFilter === 'CAPACITY_RISK'}
+          onClick={() => setAttentionFilter('CAPACITY_RISK')}
         />
         <StatCard
           label="Overbooked BA"
-          value={String(actionCounts?.overbooked_ba ?? 0)}
-          hint="Capacity risk"
+          value={String(attentionCounts.overbooked)}
+          hint="Timeline risk"
           icon={AlertCircle}
           tone="danger"
-        />
-        <StatCard
-          label="Bench BA"
-          value={String(actionCounts?.bench_ba ?? 0)}
-          hint={`${team?.bench_rate_percent ?? 0}% bench rate`}
-          icon={UserRound}
-          tone="neutral"
+          active={attentionFilter === 'OVERBOOKED'}
+          onClick={() => setAttentionFilter('OVERBOOKED')}
         />
         <StatCard
           label="Team Utilization"
@@ -534,59 +579,91 @@ function ManagerDashboard({
         />
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <div>
-              <h2 className="text-base font-semibold text-slate-950">
-                Needs Attention
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Top 5 manager actions sorted by capacity risk, assignment need, priority,
-                and age.
-              </p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <Card>
+          <CardContent className="p-0">
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-950">
+                  Needs Attention
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Top 5 manager actions for {timeframeLabel}.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500">Sort by</span>
+                <select
+                  value={attentionSort}
+                  onChange={(event) =>
+                    setAttentionSort(event.target.value as AttentionSort)
+                  }
+                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="PRIORITY">Priority</option>
+                  <option value="OLDEST">Oldest first</option>
+                  <option value="NEWEST">Newest first</option>
+                </select>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="info">{actions.length} total</Badge>
-              <Button variant="secondary" size="sm" asChild>
-                <Link to="/manager/action-center">Open Action Center</Link>
-              </Button>
+            <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3">
+              {attentionTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setAttentionFilter(tab.value)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors',
+                    attentionFilter === tab.value
+                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
+                  )}
+                >
+                  {tab.label}
+                  <span className="rounded-full bg-white/80 px-1.5 text-xs">
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
             </div>
-          </div>
-          <div className="hidden grid-cols-[105px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_150px_120px_125px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
-            <span>Priority</span>
-            <span>Project</span>
-            <span>Requester</span>
-            <span>Requested / Assigned BA</span>
-            <span>Date Range</span>
-            <span>Flag</span>
-            <span>Action</span>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {needsAttention.map((item) => (
-              <ManagerActionRow key={item.id} item={item} />
-            ))}
-            {actions.length === 0 ? (
-              <div className="p-5 text-sm text-slate-500">
-                No manager actions in this timeframe.
+            <div className="hidden grid-cols-[96px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_138px_116px_172px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
+              <span>Priority</span>
+              <span>Project</span>
+              <span>Requester</span>
+              <span>BA</span>
+              <span>Date Range</span>
+              <span>Reason</span>
+              <span className="text-right">Action</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {needsAttention.map((item) => (
+                <ManagerActionRow key={item.id} item={item} />
+              ))}
+              {filteredAttention.length === 0 ? (
+                <div className="p-5 text-sm text-slate-500">
+                  No manager actions match this filter.
+                </div>
+              ) : null}
+            </div>
+            {filteredAttention.length > needsAttention.length ? (
+              <div className="border-t border-slate-100 px-4 py-3 text-sm">
+                <Link
+                  to="/manager/action-center"
+                  className="inline-flex items-center font-semibold text-blue-700"
+                >
+                  Review {filteredAttention.length - needsAttention.length} more in
+                  Action Center
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
               </div>
             ) : null}
-          </div>
-          {actions.length > needsAttention.length ? (
-            <div className="border-t border-slate-100 px-4 py-3 text-sm">
-              <Link
-                to="/manager/action-center"
-                className="inline-flex items-center font-semibold text-blue-700"
-              >
-                Review {actions.length - needsAttention.length} more in Action Center
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <ManagerAlertRail counts={attentionCounts} summary={summary} />
+      </div>
+
+      <div className="grid gap-4">
         <Card>
           <CardContent className="grid gap-4 p-5">
             <div className="flex items-center justify-between gap-3">
@@ -628,62 +705,128 @@ function ManagerDashboard({
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="grid gap-4 p-5">
-            <h2 className="text-base font-semibold text-slate-950">
-              Capacity Distribution
-            </h2>
-            <div className="grid gap-2 text-sm">
-              {summary
-                ? Object.entries(summary.capacity_distribution).map(([label, count]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"
-                    >
-                      <span className="capitalize text-slate-600">
-                        {label.replace('_', ' ')}
-                      </span>
-                      <span className="font-semibold text-slate-950">{count}</span>
-                    </div>
-                  ))
-                : null}
-            </div>
-            <div className="grid gap-2">
-              <h3 className="text-sm font-semibold text-slate-800">
-                Utilization watchlist
-              </h3>
-              {(summary?.ba_utilization ?? [])
-                .filter(
-                  (row) =>
-                    row.capacity_label === 'OVERBOOKED' || row.capacity_label === 'BENCH'
-                )
-                .slice(0, 5)
-                .map((row) => (
-                  <Link
-                    key={row.ba_id}
-                    to={`/crm/ba/${row.ba_id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
-                  >
-                    <span className="min-w-0 truncate font-medium text-slate-800">
-                      {row.ba_name}
-                    </span>
-                    <Badge tone={capacityBadgeTone(row.capacity_label)}>
-                      {capacityLabelText(row.capacity_label)}
-                    </Badge>
-                  </Link>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </>
   );
 }
 
+function ManagerAlertRail({
+  counts,
+  summary
+}: {
+  counts: {
+    all: number;
+    needsAssignment: number;
+    capacityRisk: number;
+    overbooked: number;
+    pendingReview: number;
+  };
+  summary?: ManagerDashboardSummary;
+}) {
+  const watchlist = (summary?.ba_utilization ?? [])
+    .filter((row) => row.capacity_label === 'OVERBOOKED' || row.capacity_label === 'BENCH')
+    .slice(0, 4);
+
+  return (
+    <Card>
+      <CardContent className="grid gap-4 p-5">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">Alerts</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Read-only shortcuts into the work queues.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <ManagerAlertLink
+            tone="danger"
+            title={`${counts.overbooked} overbooked BA`}
+            description="Open the timeline to inspect workload conflicts."
+            to="/timeline"
+          />
+          <ManagerAlertLink
+            tone="warning"
+            title={`${counts.capacityRisk} capacity risk request`}
+            description="Review requests that may exceed available capacity."
+            to="/manager/action-center?overbookRisk=true"
+          />
+          <ManagerAlertLink
+            tone="warning"
+            title={`${counts.needsAssignment} request needs assignment`}
+            description="Assign a BA before approval."
+            to="/manager/action-center?type=OPEN_REQUEST"
+          />
+          <ManagerAlertLink
+            tone="info"
+            title={`${counts.pendingReview} pending review`}
+            description="Review pending booking context."
+            to="/manager/action-center?status=PENDING"
+          />
+        </div>
+        <div className="grid gap-2 border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-semibold text-slate-800">
+            Utilization watchlist
+          </h3>
+          {watchlist.map((row) => (
+            <Link
+              key={row.ba_id}
+              to={`/crm/ba/${row.ba_id}`}
+              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
+            >
+              <span className="min-w-0 truncate font-medium text-slate-800">
+                {row.ba_name}
+              </span>
+              <Badge tone={capacityBadgeTone(row.capacity_label)}>
+                {capacityLabelText(row.capacity_label)}
+              </Badge>
+            </Link>
+          ))}
+          {watchlist.length === 0 ? (
+            <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+              No utilization alerts in this timeframe.
+            </p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ManagerAlertLink({
+  tone,
+  title,
+  description,
+  to
+}: {
+  tone: 'danger' | 'warning' | 'info';
+  title: string;
+  description: string;
+  to: string;
+}) {
+  const dotClass = {
+    danger: 'bg-rose-500',
+    warning: 'bg-amber-500',
+    info: 'bg-blue-500'
+  }[tone];
+
+  return (
+    <Link
+      to={to}
+      className="flex gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
+    >
+      <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', dotClass)} />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-slate-950">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">
+          {description}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
-    <div className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[105px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_150px_120px_125px] xl:items-center">
+    <div className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[96px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_138px_116px_172px] xl:items-center">
       <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
       <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
       <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
@@ -700,12 +843,19 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
       >
         {formatManagerFlag(item.flag)}
       </Badge>
-      <Link
-        to={item.actionTo}
-        className="inline-flex items-center font-semibold text-blue-700"
-      >
-        {item.actionLabel} <ArrowRight className="ml-1 h-4 w-4" />
-      </Link>
+      <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+        <Button size="sm" asChild>
+          <Link to={item.actionTo}>
+            {item.actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+        {item.kind === 'booking' ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link to={`/manager/action-center?requestId=${item.booking.id}`}>Open</Link>
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
