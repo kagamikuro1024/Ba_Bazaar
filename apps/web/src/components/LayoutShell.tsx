@@ -397,7 +397,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </header>
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
+      <aside className="sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
         <div
           className={[
             'flex min-h-0 flex-1 flex-col gap-3 py-4',

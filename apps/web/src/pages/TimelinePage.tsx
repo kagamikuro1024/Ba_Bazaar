@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useRef,
@@ -125,8 +125,12 @@ function usePrefersCoarsePointer() {
 
 const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
-const mobileDayMinWidth = 70;
-const mobileCompactScrollThreshold = mobileDayMinWidth * 3;
+const mobileWeekDayMinWidth = 88;
+const mobileMonthColumnMinWidth = 96;
+const mobileQuarterColumnMinWidth = 152;
+const mobileBaCardWidth = 144;
+const mobileBaCardCompactWidth = 84;
+const mobileCompactScrollThreshold = mobileWeekDayMinWidth * 2;
 const bookingLaneHeight = 36;
 const desktopBarBaseTop = 16;
 const mobileBarBaseTop = 58;
@@ -342,6 +346,10 @@ function normalizeAnchorDate(viewMode: TimelineViewMode, value: Date) {
   return startOfWeek(value, { weekStartsOn: 1 });
 }
 
+function getCurrentAnchorDate(viewMode: TimelineViewMode) {
+  return normalizeAnchorDate(viewMode, new Date());
+}
+
 function formatBaSortMode(sortMode: BASortMode) {
   if (sortMode === 'capacity_desc') {
     return 'Capacity high to low';
@@ -352,6 +360,11 @@ function formatBaSortMode(sortMode: BASortMode) {
   }
 
   return 'A to Z';
+}
+
+function getMobileBACompactName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return parts.at(-1) ?? fullName;
 }
 
 function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
@@ -400,16 +413,16 @@ function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
 function computeQuarterSummaryRowHeight(
   columns: TimelineColumn[],
   bookings: Booking[],
-  hasOverbookRisk: boolean,
+  _hasOverbookRisk: boolean,
   isMobile: boolean
 ) {
   const visibleTagLimit = isMobile ? 2 : 3;
-  const headerHeight = isMobile ? 48 : 56;
-  const tagHeight = isMobile ? 34 : 42;
-  const footerHeight = hasOverbookRisk ? (isMobile ? 28 : 34) : 14;
-  const emptyStateHeight = isMobile ? 34 : 72;
-  const hiddenRowHeight = isMobile ? 22 : 28;
-  const containerPadding = isMobile ? 24 : 32;
+  const headerHeight = isMobile ? 52 : 56;
+  const tagHeight = isMobile ? 40 : 42;
+  const footerHeight = 14;
+  const emptyStateHeight = isMobile ? 44 : 72;
+  const hiddenRowHeight = isMobile ? 24 : 28;
+  const containerPadding = isMobile ? 20 : 32;
 
   const contentHeight = columns.reduce((maxHeight, column) => {
     const tagCount = getQuarterProjectTags(bookings, column).length;
@@ -441,7 +454,7 @@ function buildWeekPickerSections(year: number) {
       weeks.push({
         start: cursor,
         end: weekEnd,
-        label: `Tuáº§n ${format(cursor, 'II')}`
+        label: `Tuần ${format(cursor, 'II')}`
       });
       cursor = addDays(weekEnd, 1);
     }
@@ -569,6 +582,8 @@ export function TimelinePage() {
   const allowDragSelection =
     canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
   const currentDate = useMemo(() => new Date(), []);
+  const effectiveCompactMobileInfo =
+    isMobile && (viewMode === 'month' || viewMode === 'quarter' || compactMobileInfo);
 
   useEffect(() => {
     if (!isMobile) {
@@ -687,7 +702,7 @@ export function TimelinePage() {
       return basToSort.sort(
         (left, right) =>
           (capacityByBaId.get(right.id)?.risk_capacity ?? 0) -
-            (capacityByBaId.get(left.id)?.risk_capacity ?? 0) ||
+          (capacityByBaId.get(left.id)?.risk_capacity ?? 0) ||
           left.full_name.localeCompare(right.full_name)
       );
     }
@@ -696,7 +711,7 @@ export function TimelinePage() {
       return basToSort.sort(
         (left, right) =>
           (capacityByBaId.get(left.id)?.risk_capacity ?? 0) -
-            (capacityByBaId.get(right.id)?.risk_capacity ?? 0) ||
+          (capacityByBaId.get(right.id)?.risk_capacity ?? 0) ||
           left.full_name.localeCompare(right.full_name)
       );
     }
@@ -897,9 +912,29 @@ export function TimelinePage() {
           </select>
         </div>
       </div>
+      {isMobile ? (
+        <div className="flex justify-start">
+          <button
+            type="button"
+            onClick={cycleBaSortMode}
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase text-slate-600 shadow-sm"
+            title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            <span>Sort BA</span>
+            <span className="text-[9px] normal-case text-slate-400">
+              {baSortMode === 'capacity_desc'
+                ? 'High-Low'
+                : baSortMode === 'capacity_asc'
+                  ? 'Low-High'
+                  : 'A-Z'}
+            </span>
+          </button>
+        </div>
+      ) : null}
       <Card className="overflow-hidden">
         <CardHeader className="gap-0 p-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 sm:p-6">
             <div
               ref={periodPickerRef}
               className="relative flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start"
@@ -907,10 +942,10 @@ export function TimelinePage() {
               <Button variant="secondary" size="icon" onClick={() => move(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="flex flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
                 <Button
                   variant="secondary"
-                  className="min-w-0 flex-1 justify-between px-3"
+                  className="min-w-0 flex-1 justify-between px-2.5 text-xs sm:px-3 sm:text-sm"
                   onClick={() => setPeriodPickerOpen((current) => !current)}
                 >
                   <span className="truncate">{periodLabel}</span>
@@ -918,7 +953,7 @@ export function TimelinePage() {
                 </Button>
                 <Button
                   variant="secondary"
-                  className="shrink-0 px-3"
+                  className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
                   onClick={() => setAnchorDate(normalizeAnchorDate(viewMode, new Date()))}
                 >
                   Today
@@ -946,10 +981,10 @@ export function TimelinePage() {
                     type="button"
                     onClick={() => {
                       setViewMode(mode);
-                      setAnchorDate((current) => normalizeAnchorDate(mode, current));
+                      setAnchorDate(getCurrentAnchorDate(mode));
                     }}
                     className={cn(
-                      'w-full rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                      'w-full rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors sm:px-3 sm:text-sm',
                       viewMode === mode
                         ? 'bg-white text-slate-950 shadow-sm'
                         : 'text-slate-600 hover:text-slate-950'
@@ -1015,7 +1050,7 @@ export function TimelinePage() {
             ref={timelineScrollRef}
             data-timeline-scroll="true"
             className={cn(
-              'overflow-x-auto',
+              'overflow-x-auto overscroll-x-contain pb-2',
               !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
               activeSelection && 'select-none touch-none'
             )}
@@ -1030,7 +1065,13 @@ export function TimelinePage() {
               className={cn('grid', !isMobile && 'min-w-[980px]')}
               style={{
                 gridTemplateColumns: isMobile
-                  ? `repeat(${columns.length}, minmax(${viewMode === 'quarter' ? 112 : mobileDayMinWidth}px, 1fr))`
+                  ? `repeat(${columns.length}, minmax(${
+                      viewMode === 'quarter'
+                        ? mobileQuarterColumnMinWidth
+                        : viewMode === 'month'
+                          ? mobileMonthColumnMinWidth
+                          : mobileWeekDayMinWidth
+                    }px, 1fr))`
                   : `${baInfoColumnWidth}px repeat(${columns.length}, minmax(${viewMode === 'week' ? 92 : 132}px, 1fr))`
               }}
             >
@@ -1065,7 +1106,7 @@ export function TimelinePage() {
                       className={cn(
                         'grid h-14 place-items-center border-b border-r bg-white p-3 text-center text-xs font-semibold text-slate-600',
                         isCurrentTimelineColumn(column, currentDate) &&
-                          'bg-blue-50/80 text-blue-700'
+                        'bg-blue-50/80 text-blue-700'
                       )}
                     >
                       <div>
@@ -1081,9 +1122,9 @@ export function TimelinePage() {
                   <div
                     key={column.id}
                     className={cn(
-                      'grid h-12 place-items-center border-b border-r bg-white p-2 text-center text-xs font-semibold text-slate-600',
+                      'grid h-14 place-items-center border-b border-r bg-white px-2 py-2 text-center text-[11px] font-semibold text-slate-600',
                       isCurrentTimelineColumn(column, currentDate) &&
-                        'bg-blue-50/80 text-blue-700'
+                      'bg-blue-50/80 text-blue-700'
                     )}
                   >
                     <div>
@@ -1170,7 +1211,7 @@ export function TimelinePage() {
             </div>
           </div>
           {isMobile ? (
-            <div className="pointer-events-none absolute left-0 top-12 z-20">
+            <div className="pointer-events-none absolute left-2 top-14 z-20">
               {(() => {
                 let topOffset = 0;
                 return rowData.map(({ ba, mobileRowMinHeight }) => {
@@ -1183,31 +1224,21 @@ export function TimelinePage() {
                   return (
                     <div
                       key={ba.id}
-                      className="absolute left-0 flex h-12 max-w-[calc(100vw-2rem)] items-center gap-2 px-2"
-                      style={{ top: rowTop, width: baInfoColumnWidth }}
+                      className="absolute left-0"
+                      style={{
+                        top: rowTop + 6,
+                        width: effectiveCompactMobileInfo
+                          ? mobileBaCardCompactWidth
+                          : mobileBaCardWidth
+                      }}
                     >
                       <MobileBAIdentity
                         ba={ba}
-                        compact={compactMobileInfo}
+                        compact={effectiveCompactMobileInfo}
+                        riskCapacity={capacity?.risk_capacity ?? 0}
+                        hasOverbookRisk={(capacity?.risk_capacity ?? 0) > 100}
                         onWheel={handleMobileIdentityWheel}
                       />
-                      <span
-                        className={cn(
-                          'inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-md border px-1.5 py-0.5 text-xs font-bold transition-all duration-200 ease-out',
-                          (capacity?.risk_capacity ?? 0) > 100 &&
-                            'border-rose-800 bg-rose-700 text-white shadow-sm shadow-rose-200',
-                          (capacity?.risk_capacity ?? 0) <= 100 &&
-                            `border-slate-200 ${capacityColor(capacity?.risk_capacity ?? 0)}`,
-                          compactMobileInfo
-                            ? 'max-w-0 -translate-x-2 opacity-0'
-                            : 'max-w-28 translate-x-0 opacity-100'
-                        )}
-                      >
-                        {(capacity?.risk_capacity ?? 0) > 100 ? (
-                          <AlertTriangle className="h-3 w-3" />
-                        ) : null}
-                        {capacity?.risk_capacity ?? 0}%
-                      </span>
                     </div>
                   );
                 });
@@ -1415,7 +1446,7 @@ function TimelineRow({
               dayCellBackground(isAlternateRow),
               hasOverbookRisk && 'bg-rose-50/60',
               isCurrentTimelineColumn(column, currentDate) &&
-                'bg-blue-50/75 text-slate-500',
+              'bg-blue-50/75 text-slate-500',
               canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default',
               isSelected && 'bg-blue-100 ring-2 ring-inset ring-blue-400'
             )}
@@ -1476,8 +1507,14 @@ function TimelineRow({
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   ) : null}
                   <span className="truncate">
-                    {booking.project.name} · {booking.capacity_percent}%
-                    {hasOverbookRisk ? ' · Overbooked' : ''}
+                    {viewMode === 'month' ? (
+                      `${booking.project.name} - ${booking.capacity_percent}%`
+                    ) : (
+                      <>
+                        {booking.project.name} - {booking.capacity_percent}%
+                        {hasOverbookRisk ? ' - Overbooked' : ''}
+                      </>
+                    )}
                   </span>
                 </span>
               </button>
@@ -1542,11 +1579,11 @@ function MobileTimelineRow({
         <button
           key={`${ba.id}-${column.id}`}
           className={cn(
-            'group select-none border-b border-r border-slate-200 p-1 pt-12 text-left text-xs text-slate-400',
+            'group select-none border-b border-r border-slate-200 p-1.5 pt-12 text-left text-[11px] text-slate-400',
             dayCellBackground(isAlternateRow),
             hasOverbookRisk && 'bg-rose-50/60',
             isCurrentTimelineColumn(column, currentDate) &&
-              'bg-blue-50/75 text-slate-500',
+            'bg-blue-50/75 text-slate-500',
             canCreateBooking ? 'hover:bg-blue-50' : 'cursor-default'
           )}
           style={{ minHeight: rowMinHeight }}
@@ -1573,7 +1610,7 @@ function MobileTimelineRow({
               <button
                 key={booking.id}
                 className={cn(
-                  'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                  'pointer-events-auto absolute h-9 truncate rounded-md px-2 text-left text-[11px] font-semibold shadow-sm transition hover:-translate-y-0.5',
                   bookingBarClass(booking.status, hasOverbookRisk)
                 )}
                 style={{
@@ -1584,12 +1621,12 @@ function MobileTimelineRow({
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
-                <span className="inline-flex min-w-0 items-center gap-1">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
                   {hasOverbookRisk ? (
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   ) : null}
                   <span className="truncate">
-                    {booking.project.name} · {booking.capacity_percent}%
+                    {booking.project.name} - {booking.capacity_percent}%
                   </span>
                 </span>
               </button>
@@ -1610,7 +1647,7 @@ function QuarterTimelineRow({
   canCreateBooking,
   hasOverbookRisk,
   currentDate,
-  riskCapacity,
+  riskCapacity: _riskCapacity,
   onEmptyClick,
   onBookingClick
 }: {
@@ -1648,13 +1685,8 @@ function QuarterTimelineRow({
             key={`${ba.id}-${column.id}`}
             className={cn(
               'grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-3 text-left transition',
-              hasOverbookRisk
-                ? 'bg-rose-50/70'
-                : isAlternateRow
-                  ? 'bg-sky-50/55'
-                  : 'bg-white',
+              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
               currentMonth && 'bg-blue-50/75',
-              hasOverbookRisk && 'border-rose-300',
               canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
             )}
             style={{ height: rowMinHeight }}
@@ -1689,9 +1721,7 @@ function QuarterTimelineRow({
                       type="button"
                       className={cn(
                         'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                        tag.hasOverbookRisk || hasOverbookRisk
-                          ? 'border-rose-300 bg-rose-100 text-rose-900'
-                          : 'border-slate-200 bg-white text-slate-700'
+                        'border-slate-200 bg-white text-slate-700'
                       )}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -1723,22 +1753,13 @@ function QuarterTimelineRow({
               <div
                 className={cn(
                   'flex flex-1 items-center justify-center rounded-xl border border-dashed px-3 text-center text-xs font-medium',
-                  hasOverbookRisk
-                    ? 'border-rose-300 bg-rose-50 text-rose-700'
-                    : 'border-slate-200 bg-slate-50 text-slate-400'
+                  'border-slate-200 bg-slate-50 text-slate-400'
                 )}
               >
                 {canCreateBooking ? 'No project summary in this month' : 'No project'}
               </div>
             )}
-            <div className="flex h-6 items-end">
-              {hasOverbookRisk ? (
-                <div className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-100 px-2 py-1 text-[11px] font-bold text-rose-900">
-                  <AlertTriangle className="h-3 w-3" />
-                  {riskCapacity}%
-                </div>
-              ) : null}
-            </div>
+            <div className="h-6" />
           </div>
         );
       })}
@@ -1753,9 +1774,9 @@ function MobileQuarterTimelineRow({
   rowMinHeight,
   isAlternateRow,
   canCreateBooking,
-  hasOverbookRisk,
+  hasOverbookRisk: _hasOverbookRisk,
   currentDate,
-  riskCapacity,
+  riskCapacity: _riskCapacity,
   onEmptyClick,
   onBookingClick
 }: {
@@ -1783,14 +1804,9 @@ function MobileQuarterTimelineRow({
           <div
             key={`${ba.id}-${column.id}`}
             className={cn(
-              'grid grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-2 text-left',
-              hasOverbookRisk
-                ? 'bg-rose-50/70'
-                : isAlternateRow
-                  ? 'bg-sky-50/55'
-                  : 'bg-white',
+              'grid grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-2.5 text-left',
+              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
               currentMonth && 'bg-blue-50/75',
-              hasOverbookRisk && 'border-rose-300',
               canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
             )}
             style={{ height: rowMinHeight }}
@@ -1802,18 +1818,18 @@ function MobileQuarterTimelineRow({
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   {column.label}
                 </p>
-                <p className="text-[11px] text-slate-400">{column.subLabel}</p>
+                <p className="text-[10px] text-slate-400">{column.subLabel}</p>
               </div>
               {currentMonth ? (
                 <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                  Now
+                  Current
                 </span>
               ) : null}
             </div>
-            <div className="grid gap-1.5 overflow-hidden">
+            <div className="grid content-start gap-2 overflow-hidden">
               {visibleTags.map((tag) => {
                 const relatedBooking = bookings.find(
                   (booking) => booking.project_id === tag.id
@@ -1823,9 +1839,9 @@ function MobileQuarterTimelineRow({
                     key={`${ba.id}-${column.id}-${tag.id}`}
                     type="button"
                     className={cn(
-                      'flex items-center gap-1 rounded-md border px-2 py-1.5 text-[11px] font-semibold',
-                      tag.hasOverbookRisk || hasOverbookRisk
-                        ? 'border-rose-300 bg-rose-100 text-rose-900'
+                      'flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold shadow-sm',
+                      tag.hasOverbookRisk
+                        ? 'border-rose-300 bg-rose-50 text-rose-900'
                         : 'border-slate-200 bg-white text-slate-700'
                     )}
                     onClick={(event) => {
@@ -1836,32 +1852,39 @@ function MobileQuarterTimelineRow({
                     }}
                   >
                     <span
-                      className="h-2 w-2 shrink-0 rounded-sm"
+                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
                       style={{ backgroundColor: tag.color }}
                     />
-                    <span className="truncate">{tag.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-left text-[10px] font-semibold leading-tight">
+                        {tag.name}
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold',
+                        tag.hasOverbookRisk
+                          ? 'bg-white/80 text-rose-700'
+                          : 'bg-slate-100 text-slate-600'
+                      )}
+                    >
+                      {tag.totalCapacity}%
+                    </span>
                   </button>
                 );
               })}
               {hiddenCount > 0 ? (
-                <div className="rounded-md border border-dashed border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-500">
-                  +{hiddenCount}
+                <div className="rounded-xl border border-dashed border-slate-200 px-2.5 py-2 text-center text-[10px] font-semibold text-slate-500">
+                  +{hiddenCount} more project{hiddenCount > 1 ? 's' : ''}
                 </div>
               ) : null}
               {projectTags.length === 0 ? (
-                <div className="rounded-md border border-dashed border-slate-200 px-2 py-1.5 text-[11px] text-slate-400">
-                  No project
+                <div className="flex min-h-11 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-2.5 py-2 text-center text-[10px] font-medium text-slate-400">
+                  Empty
                 </div>
               ) : null}
             </div>
-            <div className="flex h-5 items-end">
-              {hasOverbookRisk ? (
-                <div className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
-                  <AlertTriangle className="h-3 w-3" />
-                  {riskCapacity}%
-                </div>
-              ) : null}
-            </div>
+            <div className="h-5" />
           </div>
         );
       })}
@@ -1872,10 +1895,14 @@ function MobileQuarterTimelineRow({
 function MobileBAIdentity({
   ba,
   compact,
+  riskCapacity,
+  hasOverbookRisk,
   onWheel
 }: {
   ba: BAProfile;
   compact: boolean;
+  riskCapacity: number;
+  hasOverbookRisk: boolean;
   onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
 }) {
   const initials = ba.full_name
@@ -1883,12 +1910,18 @@ function MobileBAIdentity({
     .map((part) => part[0])
     .slice(0, 2)
     .join('');
+  const compactName = getMobileBACompactName(ba.full_name);
 
   return (
     <button
       type="button"
       data-allow-scroll-drag="true"
-      className="pointer-events-auto flex min-w-0 items-center gap-2 text-xs"
+      className={cn(
+        'pointer-events-auto flex w-full min-w-0 overflow-hidden border border-slate-200 bg-white/95 text-xs shadow-sm backdrop-blur-sm transition-all',
+        compact
+          ? 'items-center justify-start rounded-full px-2 py-1'
+          : 'items-start gap-2 rounded-2xl px-2.5 py-2'
+      )}
       onClick={(event) => event.stopPropagation()}
       onWheel={onWheel}
     >
@@ -1906,17 +1939,39 @@ function MobileBAIdentity({
           </span>
         )}
       </span>
-      <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
-      <span
-        className={cn(
-          'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
-          compact
-            ? 'max-w-0 translate-x-2 opacity-0'
-            : 'max-w-20 translate-x-0 opacity-100'
-        )}
-      >
-        - {ba.level}
-      </span>
+      {compact ? (
+        <span
+          className={cn(
+            'inline-flex min-w-0 items-center gap-1 text-[10px] font-bold leading-none',
+            hasOverbookRisk
+              ? 'text-rose-700'
+              : capacityColor(riskCapacity)
+          )}
+        >
+          <span className="truncate">{compactName}</span>
+          <span className="shrink-0">{riskCapacity}%</span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1">
+          <span className="block whitespace-normal text-[11px] font-semibold leading-tight text-slate-950">
+            {ba.full_name}
+          </span>
+          <span className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[10px] uppercase leading-tight text-slate-500">
+            <span className="truncate">{ba.level}</span>
+            <span
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 font-bold normal-case',
+                hasOverbookRisk
+                  ? 'border-rose-800 bg-rose-700 text-white shadow-sm shadow-rose-200'
+                  : `border-slate-200 bg-white ${capacityColor(riskCapacity)}`
+              )}
+            >
+              {hasOverbookRisk ? <AlertTriangle className="h-3 w-3" /> : null}
+              {riskCapacity}%
+            </span>
+          </span>
+        </span>
+      )}
     </button>
   );
 }
@@ -2422,7 +2477,7 @@ function BookingDetailModal({
             <div className="grid gap-2 text-sm">
               <p>BA: {booking.ba?.full_name ?? 'Unassigned'}</p>
               <p>
-                Selected booking: {booking.project.name} · {booking.capacity_percent}% ·{' '}
+                Selected booking: {booking.project.name} Â· {booking.capacity_percent}% Â·{' '}
                 {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
               </p>
               <div className="grid gap-1">
@@ -2596,3 +2651,4 @@ function BookingDetailModal({
     </Modal>
   );
 }
+
