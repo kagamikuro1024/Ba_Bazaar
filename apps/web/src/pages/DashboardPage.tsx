@@ -51,6 +51,12 @@ type CapacitySummary = {
   }>;
 };
 
+type ManagerAttentionFlag =
+  | 'NEEDS_ASSIGNMENT'
+  | 'CAPACITY_RISK'
+  | 'PENDING_REVIEW'
+  | 'OVERBOOKED';
+
 type ManagerActionItem =
   | {
       id: string;
@@ -60,7 +66,7 @@ type ManagerActionItem =
       requester: string;
       dateRange: string;
       assignedBa: string;
-      flag: 'URGENT' | 'HIGH' | 'UNASSIGNED' | 'CAPACITY_RISK' | 'PENDING';
+      flag: ManagerAttentionFlag;
       actionLabel: string;
       actionTo: string;
       booking: Booking;
@@ -73,7 +79,7 @@ type ManagerActionItem =
       requester: string;
       dateRange: string;
       assignedBa: string;
-      flag: 'OVERBOOKED';
+      flag: Extract<ManagerAttentionFlag, 'OVERBOOKED'>;
       actionLabel: string;
       actionTo: string;
     };
@@ -429,6 +435,7 @@ function ManagerDashboard({
 }) {
   const team = summary?.team;
   const actionCounts = summary?.actions;
+  const needsAttention = actions.slice(0, 5);
 
   return (
     <>
@@ -532,16 +539,19 @@ function ManagerDashboard({
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">
-                Priority Action List
+                Needs Attention
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Pending, urgent, high priority, unassigned, overbooked and capacity risk
-                cases.
+                Top 5 manager actions sorted by capacity risk, assignment need, priority,
+                and age.
               </p>
             </div>
-            <Button variant="secondary" size="sm" asChild>
-              <Link to="/manager/action-center">Open Action Center</Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="info">{actions.length} total</Badge>
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/manager/action-center">Open Action Center</Link>
+              </Button>
+            </div>
           </div>
           <div className="hidden grid-cols-[105px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_150px_120px_125px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
             <span>Priority</span>
@@ -553,7 +563,7 @@ function ManagerDashboard({
             <span>Action</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {actions.slice(0, 5).map((item) => (
+            {needsAttention.map((item) => (
               <ManagerActionRow key={item.id} item={item} />
             ))}
             {actions.length === 0 ? (
@@ -562,6 +572,17 @@ function ManagerDashboard({
               </div>
             ) : null}
           </div>
+          {actions.length > needsAttention.length ? (
+            <div className="border-t border-slate-100 px-4 py-3 text-sm">
+              <Link
+                to="/manager/action-center"
+                className="inline-flex items-center font-semibold text-blue-700"
+              >
+                Review {actions.length - needsAttention.length} more in Action Center
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -670,11 +691,11 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
       <span className="hidden text-slate-600 xl:block">{item.dateRange}</span>
       <Badge
         tone={
-          item.flag === 'OVERBOOKED' || item.flag === 'URGENT'
+          item.flag === 'OVERBOOKED'
             ? 'danger'
-            : item.flag === 'HIGH' || item.flag === 'CAPACITY_RISK'
+            : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
               ? 'warning'
-              : 'neutral'
+              : 'info'
         }
       >
         {formatManagerFlag(item.flag)}
@@ -750,8 +771,6 @@ function buildManagerActionItems(
   );
   const bookingActions: ManagerActionItem[] = pendingBookings.map((booking) => {
     const state = getManagerRequestState(booking);
-    const isUrgent = booking.priority === 'URGENT';
-    const isHigh = booking.priority === 'HIGH';
     const isUnassigned = !booking.ba_id;
     const utilization = booking.ba_id ? utilizationByBa.get(booking.ba_id) : undefined;
     const hasCapacityRisk = Boolean(
@@ -761,13 +780,9 @@ function buildManagerActionItems(
     );
     const flag = hasCapacityRisk
       ? 'CAPACITY_RISK'
-      : isUrgent
-        ? 'URGENT'
-        : isHigh
-          ? 'HIGH'
-          : isUnassigned
-            ? 'UNASSIGNED'
-            : 'PENDING';
+      : isUnassigned || state === 'NEEDS_ASSIGNMENT'
+        ? 'NEEDS_ASSIGNMENT'
+        : 'PENDING_REVIEW';
 
     return {
       id: `booking-${booking.id}`,
@@ -778,7 +793,12 @@ function buildManagerActionItems(
       dateRange: `${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`,
       assignedBa: booking.ba?.full_name ?? 'Unassigned',
       flag,
-      actionLabel: state === 'NEEDS_ASSIGNMENT' ? 'Assign BA' : 'Review',
+      actionLabel:
+        flag === 'NEEDS_ASSIGNMENT'
+          ? 'Assign BA'
+          : flag === 'CAPACITY_RISK'
+            ? 'Review capacity'
+            : 'Review request',
       actionTo: `/manager/action-center?requestId=${booking.id}`,
       booking
     };
@@ -805,9 +825,7 @@ function buildManagerActionItems(
       (item) =>
         item.flag === 'OVERBOOKED' ||
         item.flag === 'CAPACITY_RISK' ||
-        item.flag === 'URGENT' ||
-        item.flag === 'HIGH' ||
-        item.flag === 'UNASSIGNED' ||
+        item.flag === 'NEEDS_ASSIGNMENT' ||
         (item.kind === 'booking' && item.booking.status === 'PENDING')
     )
     .sort(
@@ -821,9 +839,8 @@ function getManagerActionScore(item: ManagerActionItem) {
   let score = 0;
   if (item.flag === 'OVERBOOKED') score += 600;
   if (item.flag === 'CAPACITY_RISK') score += 500;
-  if (item.flag === 'URGENT') score += 400;
-  if (item.flag === 'HIGH') score += 300;
-  if (item.flag === 'UNASSIGNED') score += 250;
+  if (item.flag === 'NEEDS_ASSIGNMENT') score += 300;
+  if (item.flag === 'PENDING_REVIEW') score += 150;
   if (item.kind === 'booking') {
     score += 100;
     score += item.priority === 'URGENT' ? 40 : item.priority === 'HIGH' ? 30 : 0;
@@ -838,10 +855,8 @@ function getManagerActionCreatedAt(item: ManagerActionItem) {
 function formatManagerFlag(flag: ManagerActionItem['flag']) {
   if (flag === 'CAPACITY_RISK') return 'Capacity Risk';
   if (flag === 'OVERBOOKED') return 'Overbooked';
-  if (flag === 'UNASSIGNED') return 'Unassigned';
-  if (flag === 'URGENT') return 'Urgent';
-  if (flag === 'HIGH') return 'High';
-  return 'Pending';
+  if (flag === 'NEEDS_ASSIGNMENT') return 'Needs Assignment';
+  return 'Pending Review';
 }
 
 function summarizeProjectNames(
