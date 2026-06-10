@@ -398,11 +398,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       </header>
 
       <aside className="sticky top-0 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 py-4">
+        <div
+          className={[
+            'flex min-h-0 flex-1 flex-col gap-3 py-4',
+            sidebarCollapsed ? 'px-2' : 'px-3'
+          ].join(' ')}
+        >
           <div
             className={[
-              'flex items-start gap-2 px-2',
-              sidebarCollapsed ? 'justify-center' : 'justify-between'
+              'flex',
+              sidebarCollapsed
+                ? 'flex-col items-center gap-2 px-0'
+                : 'items-start justify-between gap-2 px-2'
             ].join(' ')}
           >
             {sidebarCollapsed ? (
@@ -426,7 +433,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             <button
               type="button"
               onClick={() => setSidebarCollapsed((current) => !current)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+              className={[
+                'inline-flex items-center justify-center text-slate-500 transition hover:bg-slate-100 hover:text-slate-950',
+                sidebarCollapsed ? 'h-8 w-8 rounded-full' : 'h-9 w-9 rounded-md'
+              ].join(' ')}
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
@@ -438,16 +448,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className={[
-              'flex items-center rounded-xl border border-slate-200 bg-slate-50 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white',
-              sidebarCollapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2'
-            ].join(' ')}
-            aria-label="Open global search"
-            title={sidebarCollapsed ? 'Search' : undefined}
-          >
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className={[
+                'flex items-center rounded-xl border border-slate-200 bg-slate-50 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white',
+                sidebarCollapsed
+                  ? 'h-10 w-10 self-center justify-center rounded-2xl px-0 py-0'
+                  : 'gap-3 px-3 py-2'
+              ].join(' ')}
+              aria-label="Open global search"
+              title={sidebarCollapsed ? 'Search' : undefined}
+            >
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             {sidebarCollapsed ? null : (
               <>
@@ -467,7 +479,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 Menu
               </p>
             )}
-            <nav className="grid gap-1" aria-label="Main navigation">
+            <nav
+              className={['grid gap-1', sidebarCollapsed ? 'justify-items-center' : ''].join(' ')}
+              aria-label="Main navigation"
+            >
               {visibleNavigation.map((item) => {
                 const Icon = item.icon;
 
@@ -485,8 +500,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     }}
                     className={({ isActive }) =>
                       [
-                        'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                        sidebarCollapsed ? 'justify-center gap-0' : 'gap-3',
+                        'flex items-center text-sm font-medium transition-colors',
+                        sidebarCollapsed
+                          ? 'h-10 w-10 justify-center rounded-xl px-0 py-0'
+                          : 'gap-3 rounded-md px-3 py-2',
                         isActive
                           ? 'bg-blue-50 text-blue-700'
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -505,8 +522,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   type="button"
                   onClick={() => setBookingModalOpen(true)}
                   className={[
-                    'flex w-full items-center rounded-md px-3 py-2 text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50',
-                    sidebarCollapsed ? 'justify-center gap-0' : 'gap-3'
+                    'flex items-center text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50',
+                    sidebarCollapsed
+                      ? 'mx-auto h-10 w-10 justify-center rounded-xl px-0 py-0'
+                      : 'w-full gap-3 rounded-md px-3 py-2'
                   ].join(' ')}
                   title={sidebarCollapsed ? 'Create Booking' : undefined}
                 >
@@ -519,7 +538,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
           <div className="relative border-t border-slate-200 pt-3">
             {sidebarCollapsed ? (
-              <div className="grid gap-2">
+              <div className="grid justify-items-center gap-2">
                 <div ref={notificationRef} className="relative">
                   <Button
                     variant="secondary"
