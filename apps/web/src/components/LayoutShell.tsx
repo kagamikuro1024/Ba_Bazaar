@@ -161,6 +161,16 @@ function getPageHeader(introKey: string, role?: UserRole): PageIntro | undefined
   return pageIntros[introKey];
 }
 
+function monthRangeForSummary() {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10)
+  };
+}
+
 export function LayoutShell({ children, suppressPageHeader = false }: LayoutShellProps) {
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
@@ -195,6 +205,19 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     queryFn: () => apiFetch<NotificationItem[]>('/api/notifications'),
     enabled: Boolean(user)
   });
+  const managerSummaryRange = useMemo(() => monthRangeForSummary(), []);
+  const managerSummary = useQuery({
+    queryKey: ['layout-manager-summary', managerSummaryRange.from, managerSummaryRange.to],
+    queryFn: () =>
+      apiFetch<{
+        actions?: {
+          pending_requests?: number;
+        };
+      }>(
+        `/api/dashboard/manager-summary?from=${managerSummaryRange.from}&to=${managerSummaryRange.to}`
+      ),
+    enabled: role === 'BA_MANAGER' || role === 'ADMIN'
+  });
   const markRead = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
@@ -212,29 +235,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     [role]
   );
   const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
+  const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
-  const mobileNavigation = useMemo(() => {
-    if (role === 'BA_MANAGER' || role === 'ADMIN') {
-      return visibleNavigation.filter((item) =>
-        ['/dashboard', '/manager/action-center', '/timeline'].includes(item.to)
-      );
-    }
-
-    if (role === 'PM_PO') {
-      return visibleNavigation.filter((item) =>
-        ['/my-requests', '/timeline', '/crm/ba'].includes(item.to)
-      );
-    }
-
-    if (role === 'BA') {
-      return visibleNavigation.filter((item) =>
-        ['/dashboard', '/my-schedule', '/timeline'].includes(item.to)
-      );
-    }
-
-    return visibleNavigation;
-  }, [role, visibleNavigation]);
+  const mobileNavigation = useMemo(() => visibleNavigation, [visibleNavigation]);
 
   useEffect(() => {
     setNotificationOpen(false);
@@ -359,7 +363,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
   return (
     <div
-      className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
+      className="isolate min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
       style={
         { '--sidebar-width': sidebarCollapsed ? '72px' : '288px' } as CSSProperties
       }
@@ -393,11 +397,33 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 </span>
               ) : null}
             </Link>
+            <div ref={userMenuRef} className="relative">
+              <UserAvatarButton
+                user={user}
+                userMenuOpen={userMenuOpen}
+                onClick={() => setUserMenuOpen((current) => !current)}
+              />
+              {userMenuOpen ? (
+                <Card className="absolute right-0 top-12 z-[70] w-56 shadow-lg">
+                  <CardContent className="p-2">
+                    <UserMenuContent
+                      fullName={me.data?.user.full_name ?? user?.full_name}
+                      displayRole={displayRole}
+                      onLogout={async () => {
+                        setUserMenuOpen(false);
+                        await logout();
+                        await queryClient.invalidateQueries();
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
+      <aside className="sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
         <div
           className={[
             'flex min-h-0 flex-1 flex-col gap-3 py-4',
@@ -511,7 +537,16 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     }
                   >
                     <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    {sidebarCollapsed ? null : <span>{item.label}</span>}
+                    {sidebarCollapsed ? null : (
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    )}
+                    {!sidebarCollapsed &&
+                    item.to === '/manager/action-center' &&
+                    actionCenterPendingCount > 0 ? (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold leading-none text-white">
+                        {actionCenterPendingCount > 99 ? '99+' : actionCenterPendingCount}
+                      </span>
+                    ) : null}
                   </NavLink>
                 );
               })}
@@ -555,7 +590,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     </span>
                   ) : null}
                   {notificationOpen ? (
-                    <Card className="absolute bottom-0 left-full z-50 ml-3 w-96 shadow-lg">
+                    <Card className="absolute bottom-0 left-full z-[70] ml-3 w-96 shadow-lg">
                       <CardContent className="p-0">
                         <NotificationPanel
                           unreadCount={unreadCount}
@@ -574,7 +609,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     onClick={() => setUserMenuOpen((current) => !current)}
                   />
                   {userMenuOpen ? (
-                    <Card className="absolute bottom-0 left-full z-50 ml-3 w-56 shadow-lg">
+                    <Card className="absolute bottom-0 left-full z-[70] ml-3 w-56 shadow-lg">
                       <CardContent className="p-2">
                         <UserMenuContent
                           fullName={me.data?.user.full_name ?? user?.full_name}
@@ -619,7 +654,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     </span>
                   ) : null}
                   {notificationOpen ? (
-                    <Card className="absolute bottom-12 left-0 z-50 w-96 shadow-lg">
+                    <Card className="absolute bottom-12 left-0 z-[70] w-96 shadow-lg">
                       <CardContent className="p-0">
                         <NotificationPanel
                           unreadCount={unreadCount}
@@ -642,7 +677,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     <ChevronRight className="h-4 w-4 rotate-90" />
                   </Button>
                   {userMenuOpen ? (
-                    <Card className="absolute bottom-12 right-0 z-50 w-56 shadow-lg">
+                    <Card className="absolute bottom-12 right-0 z-[70] w-56 shadow-lg">
                       <CardContent className="p-2">
                         <UserMenuContent
                           fullName={me.data?.user.full_name ?? user?.full_name}

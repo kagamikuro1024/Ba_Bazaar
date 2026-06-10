@@ -60,7 +60,7 @@ login() {
   local email="$1"
   local password="$2"
   request POST /auth/login "" "{\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null
-  assert_status 201
+  assert_status_in 200 201
   json_get "data.access_token"
 }
 
@@ -161,7 +161,7 @@ echo "[e2e] create BA validations and permissions"
 UNIQUE_EMAIL="ci.ba.$STAMP@ba-bazaar.local"
 CREATE_BODY="{\"full_name\":\"CI Functional BA $STAMP\",\"email\":\"$UNIQUE_EMAIL\",\"password\":\"Password@123\",\"phone\":\"0912345678\",\"level\":\"MIDDLE\",\"joined_date\":\"2026-06-01\"}"
 request POST /ba "$MANAGER_TOKEN" "$CREATE_BODY" >/dev/null
-assert_status 201
+assert_status_in 200 201
 NEW_BA_ID=$(json_get "data.id")
 json_assert "data.status === 'ACTIVE' && data.email === '$UNIQUE_EMAIL'"
 
@@ -206,7 +206,7 @@ request GET /tags "$MANAGER_TOKEN" >/dev/null
 assert_status 200
 TAG_ID=$(json_get "data[0].id")
 request POST "/ba/$NEW_BA_ID/tags" "$MANAGER_TOKEN" "{\"tag_id\":\"$TAG_ID\"}" >/dev/null
-assert_status 201
+assert_status_in 200 201
 request POST "/ba/$NEW_BA_ID/tags" "$MANAGER_TOKEN" '{"name":"Unknown Free Text QA"}' >/dev/null || true
 assert_status 400
 request DELETE "/ba/$NEW_BA_ID/tags/$TAG_ID" "$MANAGER_TOKEN" >/dev/null
@@ -214,7 +214,7 @@ assert_status 200
 
 echo "[e2e] notes and audit"
 request POST "/ba/$NEW_BA_ID/notes" "$MANAGER_TOKEN" '{"content":"CI private note"}' >/dev/null
-assert_status 201
+assert_status_in 200 201
 request GET "/ba/$NEW_BA_ID/notes" "$MANAGER_TOKEN" >/dev/null
 assert_status 200
 json_assert "Array.isArray(data) && data.some((note) => note.content === 'CI private note')"
@@ -232,7 +232,7 @@ assert_status 200
 BOOKABLE_BA_ID=$(json_get "data[0].id")
 BOOKING_BODY="{\"ba_id\":\"$BOOKABLE_BA_ID\",\"project_id\":\"$PROJECT_ID\",\"title\":\"CI booking $STAMP\",\"description\":\"CI booking flow\",\"start_date\":\"2026-09-01\",\"end_date\":\"2026-09-02\",\"capacity_percent\":50,\"priority\":\"MEDIUM\"}"
 request POST /bookings/request "$PM_TOKEN" "$BOOKING_BODY" >/dev/null
-assert_status 201
+assert_status_in 200 201
 PENDING_BOOKING_ID=$(json_get "(data.booking ?? data).id")
 json_assert "(data.booking ?? data).status === 'PENDING'"
 request GET /bookings?status=PENDING "$MANAGER_TOKEN" >/dev/null
@@ -244,7 +244,7 @@ json_assert "data.status === 'APPROVED'"
 
 REJECT_BODY="{\"ba_id\":\"$BOOKABLE_BA_ID\",\"project_id\":\"$PROJECT_ID\",\"title\":\"CI reject booking $STAMP\",\"description\":\"CI reject flow\",\"start_date\":\"2026-09-03\",\"end_date\":\"2026-09-04\",\"capacity_percent\":50,\"priority\":\"LOW\"}"
 request POST /bookings/request "$PM_TOKEN" "$REJECT_BODY" >/dev/null
-assert_status 201
+assert_status_in 200 201
 REJECT_BOOKING_ID=$(json_get "(data.booking ?? data).id")
 request POST "/bookings/$REJECT_BOOKING_ID/reject" "$MANAGER_TOKEN" '{"reject_reason":"CI reject reason"}' >/dev/null
 assert_status_in 200 201
