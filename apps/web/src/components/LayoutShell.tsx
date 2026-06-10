@@ -746,8 +746,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 end
                 className={({ isActive }) =>
                   [
-                    'min-w-0 transition-[flex] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                    isActive ? 'flex-[1.9]' : 'flex-1'
+                    'min-w-0 flex-1 md:transition-[flex] md:duration-300 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    isActive ? 'md:flex-[1.9]' : 'md:flex-1'
                   ].join(' ')
                 }
                 onClick={(event) => {
@@ -760,7 +760,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 {({ isActive }) => (
                   <div
                     className={[
-                      'relative flex h-full min-w-0 items-center justify-center overflow-hidden rounded-2xl px-3 py-2 text-left transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                      'relative flex h-full min-w-0 items-center justify-center overflow-hidden rounded-2xl px-2 py-2 text-center transition-colors md:px-3 md:text-left',
                       isActive
                         ? 'bg-blue-50 text-blue-600'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
@@ -768,8 +768,9 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   >
                     <div
                       className={[
-                        'flex min-w-0 items-center overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                        isActive ? 'w-[124px]' : 'w-8'
+                        'flex min-w-0 items-center overflow-hidden md:transition-[width] md:duration-300 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
+                        isActive ? 'md:w-[156px]' : 'md:w-8',
+                        'w-8'
                       ].join(' ')}
                     >
                       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
@@ -782,8 +783,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       </div>
                       <span
                         className={[
-                          'overflow-hidden whitespace-nowrap text-sm font-semibold leading-none transition-[max-width,margin,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                          isActive ? 'ml-2 max-w-[88px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+                          'hidden truncate whitespace-nowrap text-sm font-semibold leading-none md:block md:transition-[max-width,margin,opacity] md:duration-300 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
+                          isActive ? 'md:ml-2 md:max-w-[120px] md:opacity-100' : 'md:ml-0 md:max-w-0 md:opacity-0'
                         ].join(' ')}
                       >
                         {item.label}
