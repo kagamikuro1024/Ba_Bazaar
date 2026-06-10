@@ -38,6 +38,7 @@ type DataTableProps<T> = {
   isLoading?: boolean;
   /** Optional toolbar rendered above the table (e.g. active filter chips). */
   toolbar?: ReactNode;
+  tableClassName?: string;
   className?: string;
 };
 
@@ -62,6 +63,7 @@ export function DataTable<T>({
   loadingState,
   isLoading = false,
   toolbar,
+  tableClassName,
   className
 }: DataTableProps<T>) {
   return (
@@ -81,13 +83,13 @@ export function DataTable<T>({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className={cn('w-full text-left text-sm', tableClassName)}>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/60 text-xs font-semibold uppercase tracking-wide text-slate-500">
               {columns.map((column) => (
                 <th
                   key={column.id}
-                  className={cn('px-4 py-3', column.headerClassName)}
+                  className={cn('px-4 py-3', column.className, column.headerClassName)}
                 >
                   {column.header}
                 </th>
