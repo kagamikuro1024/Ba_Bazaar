@@ -1208,7 +1208,7 @@ export function ManagerInboxPage() {
     {
       id: 'priority',
       header: 'Priority',
-      className: 'w-[6.75rem] xl:w-[7.5rem]',
+      className: 'w-[5.75rem] xl:w-[6.5rem]',
       cell: (booking: Booking) => (
         <Badge tone={priorityTone(booking.priority)} className={actionCenterPriorityBadgeClassName}>
           {booking.priority}
@@ -1218,13 +1218,13 @@ export function ManagerInboxPage() {
     {
       id: 'type',
       header: 'Type',
-      className: 'w-[7rem] xl:w-[8rem]',
+      className: 'w-[6.5rem] xl:w-[7.5rem]',
       cell: (booking: Booking) => <RequestTypeBadge booking={booking} />
     },
     {
       id: 'project',
       header: 'Project',
-      className: 'min-w-[12rem] xl:min-w-[14rem] 2xl:min-w-[16rem]',
+      className: 'w-[16rem] xl:w-[18rem] 2xl:w-[20rem]',
       cell: (booking: Booking) => {
         const capacity = summary.data?.items.find(
           (item) => item.ba_id === booking.ba_id
@@ -1264,7 +1264,7 @@ export function ManagerInboxPage() {
       id: 'requester',
       header: 'Requester',
       headerClassName: 'hidden xl:table-cell',
-      className: 'hidden xl:table-cell xl:w-[10rem]',
+      className: 'hidden xl:table-cell xl:w-[8.5rem] 2xl:w-[9.5rem]',
       cell: (booking: Booking) => (
         <span className="block truncate text-slate-600">
           {booking.requester.full_name}
@@ -1274,7 +1274,7 @@ export function ManagerInboxPage() {
     {
       id: 'ba',
       header: 'Requested / Assigned BA',
-      className: 'w-[9rem] xl:w-[12rem]',
+      className: 'w-[8.5rem] xl:w-[10rem] 2xl:w-[11rem]',
       cell: (booking: Booking) => (
         <span className="block truncate text-slate-600">
           {booking.ba?.full_name ?? 'Unassigned'}
@@ -1284,7 +1284,7 @@ export function ManagerInboxPage() {
     {
       id: 'dateRange',
       header: 'Date Range',
-      className: 'w-[8.75rem] xl:w-[10rem]',
+      className: 'w-[7.75rem] xl:w-[8.75rem]',
       cell: (booking: Booking) => (
         <span className="text-slate-600">
           {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
@@ -1294,14 +1294,14 @@ export function ManagerInboxPage() {
     {
       id: 'status',
       header: 'Status',
-      className: 'w-[8.5rem] xl:w-[10rem]',
+      className: 'w-[7.75rem] xl:w-[8.75rem]',
       cell: (booking: Booking) => <RequestStateBadge booking={booking} />
     },
     {
       id: 'action',
       header: 'Action',
       headerClassName: 'text-right',
-      className: 'w-[7.75rem] xl:w-[8.75rem] text-right',
+      className: 'w-[6.75rem] xl:w-[7.5rem] text-right',
       cell: (booking: Booking) => {
         const actionLabel = getRequestActionLabel(booking, canManageInbox);
 
@@ -1310,7 +1310,7 @@ export function ManagerInboxPage() {
             type="button"
             size="sm"
             variant={actionLabel === 'View' ? 'secondary' : 'default'}
-            className="min-w-20 xl:min-w-24"
+            className="min-w-[5.75rem] xl:min-w-[6.5rem]"
             onClick={(event) => {
               event.stopPropagation();
               openDetail(booking.id);
