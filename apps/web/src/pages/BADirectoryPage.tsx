@@ -84,9 +84,9 @@ export function BADirectoryPage() {
       ) : null}
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_160px_160px_220px]">
+        <CardContent className="grid gap-3 p-3 sm:p-4 md:grid-cols-[1fr_160px_160px_220px]">
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
               onChange={(event) => {
@@ -94,7 +94,7 @@ export function BADirectoryPage() {
                 setPage(1);
               }}
               placeholder="Search BA"
-              className="h-10 w-full rounded-md border pl-9 pr-3 text-sm"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
           </div>
           <select
@@ -103,7 +103,7 @@ export function BADirectoryPage() {
               setLevel(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border px-3 text-sm"
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All levels</option>
             {['JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD'].map((item) => (
@@ -118,7 +118,7 @@ export function BADirectoryPage() {
               setStatus(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border px-3 text-sm"
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All status</option>
             {visibleStatuses.map((item) => (
@@ -133,7 +133,7 @@ export function BADirectoryPage() {
               setTag(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border px-3 text-sm"
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All tags</option>
             {(tags.data ?? []).map((item) => (

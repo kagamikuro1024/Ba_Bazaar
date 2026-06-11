@@ -79,8 +79,9 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-4 sm:gap-5">
-      <div className="grid gap-3 md:flex md:items-center md:justify-between">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:ml-auto md:flex">
+      <div className="grid gap-2 sm:gap-3 md:flex md:items-center md:justify-between">
+        <div className="hidden md:block" />
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex">
           <input
             type="month"
             value={month}
@@ -88,7 +89,7 @@ export function ReportsPage() {
               setMonth(event.target.value);
               setPage(1);
             }}
-            className="h-10 min-w-0 rounded-md border px-3 text-sm"
+            className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
           <Button onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}>
             <Download className="h-4 w-4" /> CSV
@@ -101,41 +102,41 @@ export function ReportsPage() {
       {report.error || managerSummary.error ? (
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>
       ) : null}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Active BA</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{report.data?.active_ba_count ?? 0}</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Active BA</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950 sm:text-4xl">{report.data?.active_ba_count ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Man-days</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.total_man_days ?? 0}</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Man-days</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.total_man_days ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Avg. utilization</p>
-            <p className="mt-2 text-3xl font-bold text-blue-700 sm:text-4xl">{report.data?.average_utilization_percent ?? 0}%</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Avg. utilization</p>
+            <p className="mt-1 text-2xl font-bold text-blue-700 sm:text-4xl">{report.data?.average_utilization_percent ?? 0}%</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Bench rate</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_rate_percent ?? 0}%</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Bench rate</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_rate_percent ?? 0}%</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Bench BA</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_count ?? 0}</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Bench BA</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950 sm:text-4xl">{managerSummary.data?.team.bench_count ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 sm:p-5">
-            <p className="text-xs font-medium uppercase text-slate-500 sm:text-sm sm:normal-case">Overbooked</p>
-            <p className="mt-2 text-3xl font-bold text-rose-700 sm:text-4xl">{managerSummary.data?.team.overbooked_count ?? 0}</p>
+          <CardContent className="p-3 sm:p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Overbooked</p>
+            <p className="mt-1 text-2xl font-bold text-rose-700 sm:text-4xl">{managerSummary.data?.team.overbooked_count ?? 0}</p>
           </CardContent>
         </Card>
       </div>
@@ -200,7 +201,7 @@ export function ReportsPage() {
                     value={search}
                     onChange={(event) => handleSearchChange(event.target.value)}
                     placeholder="Search BA, status, utilization..."
-                    className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-10 text-sm"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:h-10 md:rounded-md"
                     autoComplete="off"
                   />
                   {search ? (
@@ -223,7 +224,7 @@ export function ReportsPage() {
               <select
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(event.target.value)}
-                className="h-10 self-start rounded-md border border-slate-200 bg-white px-3 text-sm"
+                className="h-11 w-full self-start rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto md:h-10 md:rounded-md"
                 aria-label="Rows per page"
               >
                 {pageSizeOptions.map((size) => (

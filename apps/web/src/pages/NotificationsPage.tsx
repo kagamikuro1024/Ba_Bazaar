@@ -75,14 +75,14 @@ export function NotificationsPage() {
       <div className="grid gap-3">
         {items.map((item) => (
           <Card key={item.id} className={item.read_at ? 'opacity-70' : ''}>
-            <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="font-semibold text-slate-950">{item.title}</p>
+            <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-950">{item.title}</p>
                 <p className="whitespace-pre-line text-sm text-slate-600">{item.message}</p>
                 <p className="mt-1 text-xs text-slate-500">{formatDate(item.created_at)}</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" asChild>
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                <Button variant="secondary" asChild className="h-10 px-3 text-sm">
                   <Link
                     to={resolveNotificationPath(item)}
                     onClick={() => {
@@ -95,7 +95,7 @@ export function NotificationsPage() {
                   </Link>
                 </Button>
                 {!item.read_at ? (
-                  <Button variant="ghost" onClick={() => markRead.mutate(item.id)}>
+                  <Button variant="ghost" onClick={() => markRead.mutate(item.id)} className="h-10 px-3 text-sm">
                     Mark read
                   </Button>
                 ) : null}
@@ -109,7 +109,7 @@ export function NotificationsPage() {
       </div>
       {totalItems > 0 ? (
         <Card>
-          <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <CardContent className="flex flex-col gap-3 p-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:p-4">
             <span>Showing {firstItem}-{lastItem} of {totalItems} notifications</span>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button

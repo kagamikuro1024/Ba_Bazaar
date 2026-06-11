@@ -1338,6 +1338,76 @@ export function ManagerInboxPage() {
     }
   ];
 
+  function renderManagerInboxCard(booking: Booking) {
+    const capacity = summary.data?.items.find(
+      (item) => item.ba_id === booking.ba_id
+    );
+    const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
+    const actionLabel = getRequestActionLabel(booking, canManageInbox);
+
+    return (
+      <div className="grid gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-950">
+              {booking.project.name}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{booking.title}</p>
+          </div>
+          <Badge tone={priorityTone(booking.priority)} className={actionCenterPriorityBadgeClassName}>
+            {booking.priority}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <RequestTypeBadge booking={booking} />
+          <RequestStateBadge booking={booking} />
+          {riskFlags.map((flag) => (
+            <Badge
+              key={flag}
+              tone={
+                flag === 'Normal'
+                  ? 'neutral'
+                  : flag === 'Overbook risk' || flag === 'Urgent'
+                    ? 'danger'
+                    : 'warning'
+              }
+            >
+              {flag}
+            </Badge>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+          <div className="rounded-lg bg-slate-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">BA</p>
+            <p className="truncate font-semibold text-slate-900">
+              {booking.ba?.full_name ?? 'Unassigned'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Dates</p>
+            <p className="truncate font-semibold text-slate-900">
+              {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={actionLabel === 'View' ? 'secondary' : 'default'}
+          className="h-10 w-full text-sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            openDetail(booking.id);
+          }}
+          aria-label={`${actionLabel} ${booking.title}`}
+        >
+          {actionLabel}
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-5">
       {successMessage || saveForLaterMessage ? (
@@ -1572,6 +1642,7 @@ export function ManagerInboxPage() {
             emptyState="No requests match the current filters."
             isLoading={bookings.isLoading || bas.isLoading || summary.isLoading}
             loadingState="Loading requests..."
+            mobileCard={renderManagerInboxCard}
           />
           <Pagination
             page={safePage}

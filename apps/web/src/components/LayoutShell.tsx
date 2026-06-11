@@ -142,7 +142,7 @@ function getPageHeader(introKey: string, role?: UserRole): PageIntro | undefined
     if (role === 'BA_MANAGER' || role === 'ADMIN') {
       return {
         title: 'Manager Dashboard',
-        body: 'Requests waiting for action'
+        body: 'Manager action items, capacity and team metrics.'
       };
     }
 
@@ -402,13 +402,13 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       }
     >
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur lg:hidden">
-        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2 px-3 py-2.5">
           <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-xs font-black text-white shadow-sm shadow-blue-600/30">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-[10px] font-black text-white shadow-sm shadow-blue-600/30">
               BA
             </span>
             <span className="min-w-0">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700">
+              <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-blue-700">
                 BA Bazaar
               </span>
               <span className="block truncate text-sm font-bold text-slate-950">
@@ -416,18 +416,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
               </span>
             </span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
               aria-label="Open global search"
             >
               <Search className="h-4 w-4" />
             </button>
             <Link
               to="/notifications"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />
@@ -780,11 +780,11 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </nav>
 
-      {canCreateBooking ? (
+      {canCreateBooking && !['/my-requests', '/manager/action-center'].includes(location.pathname) ? (
         <button
           type="button"
           onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
+          className="fixed bottom-24 right-4 z-40 hidden h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 sm:flex lg:hidden"
           aria-label="Create Booking Request"
         >
           <Plus className="h-6 w-6" strokeWidth={3} />
@@ -948,18 +948,27 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       ) : null}
 
-      {introOpen && intro ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4">
-          <Card className="w-full max-w-md shadow-2xl">
-            <CardContent className="grid gap-4 p-5">
-              <div>
-                <p className="text-xs font-bold uppercase text-blue-700">First visit</p>
-                <h2 className="mt-1 text-xl font-bold text-slate-950">{intro.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{intro.body}</p>
-              </div>
-              <Button onClick={dismissIntro}>Got it</Button>
-            </CardContent>
-          </Card>
+      {introOpen && intro && !suppressPageHeader ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-3 sm:p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700">
+                First visit
+              </p>
+              <h2 className="mt-0.5 text-base font-semibold text-slate-950 sm:text-lg">
+                {intro.title}
+              </h2>
+              <p className="mt-1 text-sm leading-5 text-slate-600">{intro.body}</p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissIntro}
+              className="-m-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-white hover:text-slate-700"
+              aria-label="Dismiss intro"
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
       {notificationOpen && notificationPanelPos

@@ -51,7 +51,7 @@ export function QuickTabs<T extends string>({
   };
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+    <div className={cn('-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-x-visible sm:pb-0', className)}>
       {tabs.map((tab) => {
         const active = isActive(tab.value);
         return (
@@ -61,7 +61,7 @@ export function QuickTabs<T extends string>({
             onClick={() => handleClick(tab.value)}
             aria-pressed={active}
             className={cn(
-              'inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition-colors',
+              'inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition-colors',
               active
                 ? 'border-blue-300 bg-blue-50 text-blue-700 ring-1 ring-blue-200'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'

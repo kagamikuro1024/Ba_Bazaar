@@ -897,7 +897,7 @@ export function TimelinePage() {
           <select
             value={baFilter}
             onChange={(event) => setBaFilter(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-48"
+            className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 lg:h-9 lg:w-48 lg:rounded-md lg:px-2"
           >
             <option value="">All BA</option>
             {timelineBas.map((ba) => (
@@ -909,7 +909,7 @@ export function TimelinePage() {
           <select
             value={projectFilter}
             onChange={(event) => setProjectFilter(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-52"
+            className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 lg:h-9 lg:w-52 lg:rounded-md lg:px-2"
           >
             <option value="">All Projects</option>
             {(projects.data ?? []).map((project) => (

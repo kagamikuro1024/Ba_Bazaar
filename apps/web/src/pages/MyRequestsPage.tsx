@@ -103,16 +103,16 @@ export function MyRequestsPage() {
             {successMessage}
           </div>
         ) : (
-          <span />
+          <span className="hidden md:block" />
         )}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
           <select
             value={status}
             onChange={(event) => {
               setStatus(event.target.value);
               setPage(1);
             }}
-            className="h-10 rounded-md border px-3 text-sm"
+            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All status</option>
             {[
@@ -128,7 +128,9 @@ export function MyRequestsPage() {
               </option>
             ))}
           </select>
-          <Button onClick={() => setCreateOpen(true)}>Create Request</Button>
+          <Button onClick={() => setCreateOpen(true)} className="md:w-auto">
+            Create Request
+          </Button>
         </div>
       </div>
 

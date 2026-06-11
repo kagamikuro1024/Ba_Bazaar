@@ -90,20 +90,23 @@ export function MySchedulePage() {
       ) : null}
 
       <Card>
-        <CardContent className="flex flex-wrap items-center gap-2 p-3">
+        <CardContent className="flex items-center gap-2 overflow-x-auto p-2.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-x-visible">
           {(Object.keys(tabLabels) as ScheduleTab[]).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setTab(tab)}
               className={[
-                'rounded-md px-3 py-2 text-sm font-semibold transition',
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition sm:text-sm',
                 activeTab === tab
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
               ].join(' ')}
             >
-              {tabLabels[tab]} ({grouped[tab].length})
+              <span>{tabLabels[tab]}</span>
+              <span className={activeTab === tab ? 'opacity-80' : 'text-slate-400'}>
+                {grouped[tab].length}
+              </span>
             </button>
           ))}
         </CardContent>

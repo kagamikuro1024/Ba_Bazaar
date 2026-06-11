@@ -214,7 +214,7 @@ export function BAProfilePage() {
               <select
                 value={ba.data.status}
                 onChange={(event) => changeStatus.mutate(event.target.value)}
-                className="h-9 rounded-md border px-2 text-sm"
+                className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto"
               >
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="ON_LEAVE">ON_LEAVE</option>
