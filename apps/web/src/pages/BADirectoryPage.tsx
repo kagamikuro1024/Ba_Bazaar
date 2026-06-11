@@ -54,16 +54,27 @@ export function BADirectoryPage() {
 
   const bas = useQuery({
     queryKey: ['ba-directory', role, search, level, safeStatus, tag, page, pageSize],
-    queryFn: () => apiFetch<PaginatedResponse<BAProfile>>(`/api/ba?${query.toString()}`),
+    queryFn: () =>
+      apiFetch<PaginatedResponse<BAProfile> | BAProfile[]>(
+        `/api/ba?${query.toString()}`
+      ),
     placeholderData: (previous) => previous
   });
   const tags = useQuery({
     queryKey: ['tags'],
     queryFn: () => apiFetch<SkillTag[]>('/api/tags')
   });
-  const baItems: BAProfile[] = bas.data?.items ?? [];
-  const totalPages = bas.data?.total_pages ?? 1;
-  const totalItems = bas.data?.total ?? 0;
+  // Backend may return a plain array (legacy API) or a paginated object.
+  const isLegacyArray = Array.isArray(bas.data);
+  const baItems: BAProfile[] = isLegacyArray
+    ? (bas.data as BAProfile[])
+    : ((bas.data as PaginatedResponse<BAProfile> | undefined)?.items ?? []);
+  const totalPages = isLegacyArray
+    ? 1
+    : ((bas.data as PaginatedResponse<BAProfile> | undefined)?.total_pages ?? 1);
+  const totalItems = isLegacyArray
+    ? baItems.length
+    : ((bas.data as PaginatedResponse<BAProfile> | undefined)?.total ?? 0);
   const firstItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = Math.min(page * pageSize, totalItems);
 
