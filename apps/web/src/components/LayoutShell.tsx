@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import {
   useCallback,
   useEffect,
@@ -37,7 +38,6 @@ import {
   globalSearchStorage,
   type PageItem
 } from './GlobalSearchModal';
-import { AIAssistant } from './AIAssistant';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -186,6 +186,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     globalSearchStorage.load()
   );
   const notificationRef = useRef<HTMLDivElement>(null);
+  const [notificationPanelPos, setNotificationPanelPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -240,6 +241,24 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
   const mobileNavigation = useMemo(() => visibleNavigation, [visibleNavigation]);
+
+  const toggleNotificationPanel = useCallback(() => {
+    setNotificationOpen((current) => {
+      if (!current) {
+        const rect = notificationRef.current?.getBoundingClientRect();
+        if (rect) {
+          setNotificationPanelPos(
+            sidebarCollapsed
+              ? { top: rect.bottom + 12, left: rect.right + 12 }
+              : { bottom: window.innerHeight - rect.top + 12, left: rect.left }
+          );
+        }
+      } else {
+        setNotificationPanelPos(null);
+      }
+      return !current;
+    });
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     setNotificationOpen(false);
@@ -581,7 +600,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     size="icon"
                     aria-label="Notifications"
                     aria-expanded={notificationOpen}
-                    onClick={() => setNotificationOpen((current) => !current)}
+                    onClick={toggleNotificationPanel}
                   >
                     <Bell className="h-4 w-4" />
                   </Button>
@@ -589,18 +608,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
                       {unreadCount}
                     </span>
-                  ) : null}
-                  {notificationOpen ? (
-                    <Card className="absolute bottom-0 left-full z-[70] ml-3 w-96 shadow-lg">
-                      <CardContent className="p-0">
-                        <NotificationPanel
-                          unreadCount={unreadCount}
-                          recentNotifications={recentNotifications}
-                          resolveNotificationPath={resolveNotificationPath}
-                          markRead={(id) => markRead.mutate(id)}
-                        />
-                      </CardContent>
-                    </Card>
                   ) : null}
                 </div>
                 <div ref={userMenuRef} className="relative">
@@ -645,7 +652,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     size="icon"
                     aria-label="Notifications"
                     aria-expanded={notificationOpen}
-                    onClick={() => setNotificationOpen((current) => !current)}
+                    onClick={toggleNotificationPanel}
                   >
                     <Bell className="h-4 w-4" />
                   </Button>
@@ -653,18 +660,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
                       {unreadCount}
                     </span>
-                  ) : null}
-                  {notificationOpen ? (
-                    <Card className="absolute bottom-12 left-0 z-[70] w-96 shadow-lg">
-                      <CardContent className="p-0">
-                        <NotificationPanel
-                          unreadCount={unreadCount}
-                          recentNotifications={recentNotifications}
-                          resolveNotificationPath={resolveNotificationPath}
-                          markRead={(id) => markRead.mutate(id)}
-                        />
-                      </CardContent>
-                    </Card>
                   ) : null}
                 </div>
                 <div ref={userMenuRef} className="relative">
@@ -944,7 +939,21 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           </Card>
         </div>
       ) : null}
-      <AIAssistant />
+      {notificationOpen && notificationPanelPos
+        ? createPortal(
+            <Card className="fixed z-[100] w-96 shadow-lg" style={notificationPanelPos}>
+              <CardContent className="p-0">
+                <NotificationPanel
+                  unreadCount={unreadCount}
+                  recentNotifications={recentNotifications}
+                  resolveNotificationPath={resolveNotificationPath}
+                  markRead={(id) => markRead.mutate(id)}
+                />
+              </CardContent>
+            </Card>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
