@@ -2,6 +2,13 @@ import { clearStoredSession, getStoredRole, getStoredSession, setStoredSession }
 
 export type UserRole = 'BA_MANAGER' | 'PM_PO' | 'BA' | 'ADMIN';
 export type BAStatus = 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED';
+export type PaginatedResponse<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
 export type BALevel = 'JUNIOR' | 'MIDDLE' | 'SENIOR' | 'LEAD';
 export type BookingStatus =
   | 'PENDING'
@@ -417,12 +424,19 @@ function normalizeApiData(value: unknown): unknown {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  // Capture the body up-front so we can replay it on a 401-retry.
+  // Without this, a JSON.stringify'd body becomes a consumed stream
+  // after the first fetch and the retry sends an empty body, which
+  // the server rejects as 400/422 — leaving the user stuck.
+  const replayBody = captureReplayBody(init?.body);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    body: replayBody.value,
     headers: buildHeaders(init)
   });
 
-  if (response.status === 401 && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && !path.startsWith('/api/auth/') && replayBody.text != null) {
     const nextAccessToken = await getFreshAccessToken();
     if (nextAccessToken) {
       const retryHeaders = buildHeaders(init);
@@ -430,6 +444,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
       const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
         ...init,
+        body: replayBody.text,
         headers: retryHeaders
       });
 
@@ -448,6 +463,25 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   const text = await response.text();
   return normalizeApiData(text ? JSON.parse(text) : null) as T;
+}
+
+// captureReplayBody snapshots a fetch body so it can be sent twice
+// (once on the original request, once on a 401 retry). For JSON
+// bodies we keep the original text; for FormData/Blob we pass through
+// only on the first call (the second will need a different strategy,
+// but our app only retries JSON requests in practice).
+function captureReplayBody(body: RequestInit['body']): {
+  value: RequestInit['body'];
+  text: string | null;
+} {
+  if (body == null) return { value: body, text: null };
+  if (typeof body === 'string') return { value: body, text: body };
+  if (body instanceof URLSearchParams) {
+    const text = body.toString();
+    return { value: text, text };
+  }
+  // FormData / Blob / ReadableStream: don't try to replay.
+  return { value: body, text: null };
 }
 
 export async function downloadCsv(path: string) {

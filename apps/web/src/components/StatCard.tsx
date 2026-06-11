@@ -52,7 +52,7 @@ export function StatCard({
   const inner = (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-lg border bg-white p-4 transition-colors',
+        'flex items-center gap-2.5 rounded-xl border bg-white p-3 transition-colors sm:gap-3 sm:p-4',
         active
           ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200'
           : 'border-slate-200',
@@ -63,19 +63,19 @@ export function StatCard({
       {Icon ? (
         <div
           className={cn(
-            'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg',
+            'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10',
             styles.icon
           )}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
       ) : null}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium uppercase tracking-wide text-slate-500">
+        <p className="line-clamp-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
           {label}
         </p>
-        <p className="mt-0.5 text-xl font-bold text-slate-950">{value}</p>
-        {hint ? <p className="mt-0.5 truncate text-xs text-slate-500">{hint}</p> : null}
+        <p className="mt-0.5 text-lg font-bold text-slate-950 sm:text-xl">{value}</p>
+        {hint ? <p className="mt-0.5 truncate text-[11px] text-slate-500 sm:text-xs">{hint}</p> : null}
       </div>
       {trailing ? <div className="flex-shrink-0">{trailing}</div> : null}
     </div>

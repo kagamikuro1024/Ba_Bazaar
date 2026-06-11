@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -27,12 +28,17 @@ func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
 		return
 	}
+	// DEBUG: print what we got
+	fmt.Printf("DEBUG login: email=%q password=%q\n", req.Email, req.Password)
 	user, err := app.findUserByEmail(r.Context(), strings.ToLower(strings.TrimSpace(req.Email)))
+	fmt.Printf("DEBUG findUserByEmail err=%v hasUser=%v\n", err, user != nil)
 	if err != nil || user.PasswordHash == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Invalid email or password."})
 		return
 	}
-	if bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(req.Password)) != nil {
+	cmpErr := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(req.Password))
+	fmt.Printf("DEBUG bcrypt err=%v\n", cmpErr)
+	if cmpErr != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Invalid email or password."})
 		return
 	}

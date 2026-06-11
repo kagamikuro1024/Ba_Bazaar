@@ -40,6 +40,12 @@ type DataTableProps<T> = {
   toolbar?: ReactNode;
   tableClassName?: string;
   className?: string;
+  /**
+   * Optional mobile card renderer. When provided, the data is rendered as
+   * stacked cards on small viewports (below `md`) instead of the wide table.
+   * The table is still used on `md+` to preserve the desktop density.
+   */
+  mobileCard?: (row: T) => ReactNode;
 };
 
 /**
@@ -64,7 +70,8 @@ export function DataTable<T>({
   isLoading = false,
   toolbar,
   tableClassName,
-  className
+  className,
+  mobileCard
 }: DataTableProps<T>) {
   return (
     <Card className={cn('overflow-hidden', className)}>
@@ -82,10 +89,38 @@ export function DataTable<T>({
           {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
         </div>
       )}
-      <div className="overflow-x-auto">
+      {mobileCard ? (
+        <div className="grid gap-3 p-3 md:hidden">
+          {rows.map((row) => (
+            <div
+              key={rowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn(
+                'rounded-xl border border-slate-200 bg-white p-3 shadow-sm',
+                onRowClick && 'cursor-pointer hover:border-slate-300',
+                rowClassName?.(row)
+              )}
+            >
+              {mobileCard(row)}
+            </div>
+          ))}
+          {!isLoading && rows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              {emptyState ?? 'No results.'}
+            </div>
+          ) : null}
+          {isLoading && rows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              {loadingState ?? 'Loading...'}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={cn(mobileCard ? 'hidden overflow-x-auto md:block' : 'overflow-x-auto')}>
         <table
           className={cn(
-            'w-full min-w-[760px] text-left text-sm lg:min-w-0',
+            'w-full text-left text-sm',
+            mobileCard ? 'min-w-[760px] lg:min-w-0' : 'min-w-[760px] lg:min-w-0',
             tableClassName
           )}
         >

@@ -37,25 +37,31 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header className={cn('grid gap-3', className)}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="grid gap-3 lg:flex lg:items-end lg:justify-between">
         <div className="min-w-0">
           {eyebrow ? (
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 sm:text-xs">
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+          <h1 className="mt-1 text-[1.65rem] font-bold leading-tight tracking-tight text-slate-950 sm:text-3xl">
             {title}
           </h1>
           {description ? (
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">{description}</p>
+            <p className="mt-1 hidden max-w-2xl text-sm leading-6 text-slate-600 sm:block">{description}</p>
           ) : null}
         </div>
         {actions ? (
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
+          <div className="flex max-w-full items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:justify-end lg:overflow-visible lg:pb-0">
+            {actions}
+          </div>
         ) : null}
       </div>
-      {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
+      {meta ? (
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
+          {meta}
+        </div>
+      ) : null}
     </header>
   );
 }

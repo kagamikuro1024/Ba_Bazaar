@@ -7,16 +7,42 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
-func isManagerRole(role string) bool { return role == "BA_MANAGER" }
-func isAdminSupportRole(role string) bool { return role == "ADMIN" }
+func isManagerRole(role string) bool          { return role == "BA_MANAGER" }
+func isAdminSupportRole(role string) bool     { return role == "ADMIN" }
 func canViewPrivateBAFields(role string) bool { return isManagerRole(role) || isAdminSupportRole(role) }
-func canReadPrivateNotes(role string) bool { return isManagerRole(role) || isAdminSupportRole(role) }
+func canReadPrivateNotes(role string) bool    { return isManagerRole(role) || isAdminSupportRole(role) }
+
+func parsePagination(r *http.Request) (page int, pageSize int, paginated bool) {
+	q := r.URL.Query()
+	rawPage := strings.TrimSpace(q.Get("page"))
+	rawPageSize := strings.TrimSpace(q.Get("page_size"))
+	if rawPage == "" && rawPageSize == "" {
+		return 1, 25, false
+	}
+	page = 1
+	pageSize = 25
+	if rawPage != "" {
+		if parsed, err := strconv.Atoi(rawPage); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if rawPageSize != "" {
+		if parsed, err := strconv.Atoi(rawPageSize); err == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	return page, pageSize, true
+}
 
 func (app *App) handleBAList(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
@@ -67,7 +93,19 @@ func (app *App) handleBAList(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "%"+search+"%", "%"+search+"%")
 		index += 2
 	}
+	totalQuery := "select count(*) from (" + query + ") filtered_ba"
+	var total int
+	if err := app.DB.Pool.QueryRow(r.Context(), totalQuery, args...).Scan(&total); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
+
+	page, pageSize, paginated := parsePagination(r)
 	query += " order by status asc, full_name asc"
+	if paginated {
+		query += fmt.Sprintf(" limit $%d offset $%d", index, index+1)
+		args = append(args, pageSize, (page-1)*pageSize)
+	}
 
 	rows, err := app.DB.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -102,17 +140,31 @@ func (app *App) handleBAList(w http.ResponseWriter, r *http.Request) {
 			label = "OVERBOOKED"
 		}
 		items = append(items, BAListItem{
-			BAProfile:           *ba,
-			Timeframe:           map[string]string{"from": toDateKey(startDate), "to": toDateKey(endDate)},
-			ApprovedCapacity:    capacity.MaxApprovedCapacity,
-			PendingCapacity:     capacity.MaxPendingCapacity,
-			RiskCapacity:        capacity.MaxRiskCapacity,
-			BookedManDays:       bookedDays,
-			AvailableManDays:    availableDays,
-			UtilizationPercent:  utilization,
-			CapacityLabel:       label,
-			CurrentProjects:     summarizeCurrentProjects(bookings),
+			BAProfile:          *ba,
+			Timeframe:          map[string]string{"from": toDateKey(startDate), "to": toDateKey(endDate)},
+			ApprovedCapacity:   capacity.MaxApprovedCapacity,
+			PendingCapacity:    capacity.MaxPendingCapacity,
+			RiskCapacity:       capacity.MaxRiskCapacity,
+			BookedManDays:      bookedDays,
+			AvailableManDays:   availableDays,
+			UtilizationPercent: utilization,
+			CapacityLabel:      label,
+			CurrentProjects:    summarizeCurrentProjects(bookings),
 		})
+	}
+	if paginated {
+		totalPages := 1
+		if total > 0 {
+			totalPages = (total + pageSize - 1) / pageSize
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"total":       total,
+			"page":        page,
+			"page_size":   pageSize,
+			"total_pages": totalPages,
+		})
+		return
 	}
 	writeJSON(w, http.StatusOK, items)
 }
@@ -191,13 +243,13 @@ func (app *App) handleBAUtilization(w http.ResponseWriter, r *http.Request) {
 	workingDays := len(workingDaysInRange(startDate, endDate))
 	bookedDays := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ba_id":                ba.ID,
-		"period":               month,
-		"start_date":           toDateKey(startDate),
-		"end_date":             toDateKey(endDate),
-		"working_days":         workingDays,
-		"booked_days":          bookedDays,
-		"utilization_percent":  calculateUtilizationPercent(bookedDays, workingDays),
+		"ba_id":               ba.ID,
+		"period":              month,
+		"start_date":          toDateKey(startDate),
+		"end_date":            toDateKey(endDate),
+		"working_days":        workingDays,
+		"booked_days":         bookedDays,
+		"utilization_percent": calculateUtilizationPercent(bookedDays, workingDays),
 	})
 }
 
@@ -311,15 +363,36 @@ func scanBooking(scanner interface{ Scan(dest ...any) error }) (*Booking, error)
 	if err != nil {
 		return nil, err
 	}
-	if baID.Valid { item.BAID = &baID.String }
-	if managerID.Valid { item.ManagerID = &managerID.String }
-	if notes.Valid { item.Notes = &notes.String }
-	if rejectReason.Valid { item.RejectReason = &rejectReason.String }
-	if cancelReason.Valid { item.CancelReason = &cancelReason.String }
-	if managerComment.Valid { item.ManagerComment = &managerComment.String }
-	if approvedAt.Valid { t := approvedAt.Time; item.ApprovedAt = &t }
-	if rejectedAt.Valid { t := rejectedAt.Time; item.RejectedAt = &t }
-	if cancelledAt.Valid { t := cancelledAt.Time; item.CancelledAt = &t }
+	if baID.Valid {
+		item.BAID = &baID.String
+	}
+	if managerID.Valid {
+		item.ManagerID = &managerID.String
+	}
+	if notes.Valid {
+		item.Notes = &notes.String
+	}
+	if rejectReason.Valid {
+		item.RejectReason = &rejectReason.String
+	}
+	if cancelReason.Valid {
+		item.CancelReason = &cancelReason.String
+	}
+	if managerComment.Valid {
+		item.ManagerComment = &managerComment.String
+	}
+	if approvedAt.Valid {
+		t := approvedAt.Time
+		item.ApprovedAt = &t
+	}
+	if rejectedAt.Valid {
+		t := rejectedAt.Time
+		item.RejectedAt = &t
+	}
+	if cancelledAt.Valid {
+		t := cancelledAt.Time
+		item.CancelledAt = &t
+	}
 	if len(pendingRaw) > 0 {
 		var decoded any
 		if json.Unmarshal(pendingRaw, &decoded) == nil {

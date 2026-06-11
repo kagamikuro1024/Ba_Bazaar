@@ -88,6 +88,59 @@ func (app *App) handleNotifications(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
 		return
 	}
+	page, pageSize, paginated := parsePagination(r)
+	if paginated {
+		var total int
+		if err := app.DB.Pool.QueryRow(r.Context(), `select count(*) from notifications where recipient_id = $1`, user.ID).Scan(&total); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+			return
+		}
+		rows, err := app.DB.Pool.Query(r.Context(), `
+			select id, recipient_id, type, title, message, related_entity_type, related_entity_id, read_at, created_at
+			from notifications
+			where recipient_id = $1
+			order by created_at desc
+			limit $2 offset $3`, user.ID, pageSize, (page-1)*pageSize)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+			return
+		}
+		defer rows.Close()
+		items := make([]Notification, 0)
+		for rows.Next() {
+			var item Notification
+			var relatedType sql.NullString
+			var relatedID sql.NullString
+			var readAt sql.NullTime
+			if err := rows.Scan(&item.ID, &item.RecipientID, &item.Type, &item.Title, &item.Message, &relatedType, &relatedID, &readAt, &item.CreatedAt); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+				return
+			}
+			if relatedType.Valid {
+				item.RelatedEntityType = &relatedType.String
+			}
+			if relatedID.Valid {
+				item.RelatedEntityID = &relatedID.String
+			}
+			if readAt.Valid {
+				t := readAt.Time
+				item.ReadAt = &t
+			}
+			items = append(items, item)
+		}
+		totalPages := 1
+		if total > 0 {
+			totalPages = (total + pageSize - 1) / pageSize
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"total":       total,
+			"page":        page,
+			"page_size":   pageSize,
+			"total_pages": totalPages,
+		})
+		return
+	}
 	rows, err := app.DB.Pool.Query(r.Context(), `
 		select id, recipient_id, type, title, message, related_entity_type, related_entity_id, read_at, created_at
 		from notifications

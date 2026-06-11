@@ -10,3 +10,6 @@ coverage/
 apps/web/dist/
 apps/api/dist/
 packages/shared/dist/
+apps/api/api
+apps/api/cmd/api/api
+__pycache__/

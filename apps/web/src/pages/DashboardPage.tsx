@@ -425,15 +425,15 @@ function ManagerDashboardHeaderActions({
   onCustomToChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+    <div className="flex w-full flex-wrap items-center justify-end gap-2">
+      <div className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
         {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
           <button
             key={mode}
             type="button"
             onClick={() => onTimeframeModeChange(mode)}
             className={cn(
-              'rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition-colors sm:text-sm',
+              'rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:text-sm',
               timeframeMode === mode
                 ? 'bg-white text-slate-950 shadow-sm'
                 : 'text-slate-600 hover:text-slate-950'
@@ -449,17 +449,17 @@ function ManagerDashboardHeaderActions({
             type="date"
             value={customFrom}
             onChange={(event) => onCustomFromChange(event.target.value)}
-            className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
           />
           <input
             type="date"
             value={customTo}
             onChange={(event) => onCustomToChange(event.target.value)}
-            className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
           />
         </>
       ) : null}
-      <Button variant="secondary" asChild>
+      <Button variant="secondary" asChild className="w-full sm:w-auto">
         <Link to="/reports">View reports</Link>
       </Button>
     </div>
@@ -528,7 +528,7 @@ function ManagerDashboard({
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
-          label="Needs Attention"
+          label="Attention"
           value={String(attentionCounts.all)}
           hint="All action items"
           icon={ClipboardList}
@@ -537,7 +537,7 @@ function ManagerDashboard({
           onClick={() => setAttentionFilter('ALL')}
         />
         <StatCard
-          label="Needs Assignment"
+          label="Unassigned"
           value={String(attentionCounts.needsAssignment)}
           hint="Needs BA"
           icon={UsersRound}
@@ -546,16 +546,16 @@ function ManagerDashboard({
           onClick={() => setAttentionFilter('NEEDS_ASSIGNMENT')}
         />
         <StatCard
-          label="Capacity Risk"
+          label="Capacity risk"
           value={String(attentionCounts.capacityRisk)}
-          hint="Capacity risk"
+          hint="Over 100% bookings"
           icon={AlertCircle}
           tone="warning"
           active={attentionFilter === 'CAPACITY_RISK'}
           onClick={() => setAttentionFilter('CAPACITY_RISK')}
         />
         <StatCard
-          label="Overbooked BA"
+          label="Overbooked"
           value={String(attentionCounts.overbooked)}
           hint="Timeline risk"
           icon={AlertCircle}
@@ -564,7 +564,7 @@ function ManagerDashboard({
           onClick={() => setAttentionFilter('OVERBOOKED')}
         />
         <StatCard
-          label="Team Utilization"
+          label="Utilization"
           value={`${team?.team_utilization_percent ?? 0}%`}
           hint={`${team?.total_ba ?? 0} active BA`}
           icon={Gauge}
