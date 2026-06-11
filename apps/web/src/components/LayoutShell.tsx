@@ -240,7 +240,20 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
-  const mobileNavigation = useMemo(() => visibleNavigation, [visibleNavigation]);
+  const mobileNavigation = useMemo(() => {
+    const priority = [
+      '/dashboard',
+      '/manager/action-center',
+      '/timeline',
+      '/crm/ba',
+      '/my-schedule',
+      '/my-requests',
+      '/reports'
+    ];
+    return [...visibleNavigation]
+      .sort((a, b) => priority.indexOf(a.to) - priority.indexOf(b.to))
+      .slice(0, 4);
+  }, [visibleNavigation]);
 
   const toggleNotificationPanel = useCallback(() => {
     setNotificationOpen((current) => {
@@ -249,7 +262,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         if (rect) {
           setNotificationPanelPos(
             sidebarCollapsed
-              ? { top: rect.bottom + 12, left: rect.right + 12 }
+              ? { bottom: window.innerHeight - rect.bottom, left: rect.right + 12 }
               : { bottom: window.innerHeight - rect.top + 12, left: rect.left }
           );
         }
@@ -388,13 +401,20 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         { '--sidebar-width': sidebarCollapsed ? '72px' : '288px' } as CSSProperties
       }
     >
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white lg:hidden">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <Link to="/dashboard" className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-              BA Bazaar
-            </p>
-            <p className="truncate text-lg font-bold text-slate-950">Booking + CRM</p>
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-xs font-black text-white shadow-sm shadow-blue-600/30">
+              BA
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700">
+                BA Bazaar
+              </span>
+              <span className="block truncate text-sm font-bold text-slate-950">
+                Booking + CRM
+              </span>
+            </span>
           </Link>
           <div className="flex items-center gap-2">
             <button
@@ -694,8 +714,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </aside>
 
-      <div className="min-w-0 px-4 pb-28 pt-5 sm:px-6 lg:pb-5 xl:px-6 2xl:px-8">
-        <main className="grid min-w-0 w-full gap-5">
+      <div className="min-w-0 px-3 pb-28 pt-4 sm:px-6 lg:pb-5 lg:pt-5 xl:px-6 2xl:px-8">
+        <main className="mx-auto grid min-w-0 w-full max-w-[1560px] gap-4 sm:gap-5">
           {/*
             Page-level header is owned by each page via <PageHeader />
             from @/components. LayoutShell still injects a fallback
@@ -713,10 +733,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-3 z-40 rounded-3xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/12 lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-slate-200/90 bg-white/95 p-1.5 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="flex items-stretch justify-around gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
@@ -735,13 +755,13 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 {({ isActive }) => (
                   <div
                     className={[
-                      'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition-colors',
+                      'relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5 py-2 text-center transition-colors',
                       isActive
-                        ? 'text-blue-600'
+                        ? 'bg-blue-50 text-blue-700'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
                     ].join(' ')}
                   >
-                    <div className="relative flex h-8 w-12 items-center justify-center">
+                    <div className="relative flex h-6 w-10 items-center justify-center">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                       {item.to === '/notifications' && unreadCount > 0 ? (
                         <span className="absolute right-1.5 top-0 inline-flex h-4 min-w-4 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
@@ -749,6 +769,9 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                         </span>
                       ) : null}
                     </div>
+                    <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
+                      {item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')}
+                    </span>
                   </div>
                 )}
               </NavLink>

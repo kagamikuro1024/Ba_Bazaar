@@ -2,6 +2,13 @@ import { clearStoredSession, getStoredRole, getStoredSession, setStoredSession }
 
 export type UserRole = 'BA_MANAGER' | 'PM_PO' | 'BA' | 'ADMIN';
 export type BAStatus = 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED';
+export type PaginatedResponse<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
 export type BALevel = 'JUNIOR' | 'MIDDLE' | 'SENIOR' | 'LEAD';
 export type BookingStatus =
   | 'PENDING'

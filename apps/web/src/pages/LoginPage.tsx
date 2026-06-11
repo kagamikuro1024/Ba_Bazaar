@@ -16,23 +16,25 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto grid max-w-md gap-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe,_transparent_32rem),linear-gradient(180deg,#f8fafc,#eef6ff)] px-3 py-5 sm:px-4 sm:py-10">
+      <div className="mx-auto grid max-w-md gap-4 sm:gap-6">
         <Link
           to="/"
           className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-blue-700"
         >
           <ArrowLeft className="h-4 w-4" />
-          Về trang giới thiệu
+          Back to overview
         </Link>
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">BA Bazaar</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-950">Sign in</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Use your internal account to access timeline, requests, and manager tools.
+        <div className="rounded-[2rem] border border-white/70 bg-white/70 p-4 shadow-xl shadow-blue-950/10 backdrop-blur">
+          <p className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-xs font-black text-white shadow-sm shadow-blue-600/30">
+            BA
+          </p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-950">Sign in</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Access timelines, booking requests, and manager tools.
           </p>
         </div>
-        <Card>
+        <Card className="rounded-[1.75rem] border-white/80 shadow-xl shadow-blue-950/10">
           <CardContent className="grid gap-4 p-5">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Email
@@ -40,7 +42,8 @@ export function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-10 rounded-md border border-slate-200 bg-white px-3"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-base outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                placeholder="manager@ba-bazaar.local"
                 autoComplete="email"
               />
             </label>
@@ -50,7 +53,8 @@ export function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="h-10 rounded-md border border-slate-200 bg-white px-3"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-base outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                placeholder="Enter password"
                 autoComplete="current-password"
               />
             </label>

@@ -8,6 +8,7 @@ import {
   type BAProfile,
   type BALevel,
   type BAStatus,
+  type PaginatedResponse,
   type SkillTag
 } from '@/lib/api';
 import {
@@ -33,6 +34,8 @@ export function BADirectoryPage() {
   const [level, setLevel] = useState('');
   const [status, setStatus] = useState('');
   const [tag, setTag] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
   const [showCreate, setShowCreate] = useState(false);
   const [requestBaId, setRequestBaId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -46,15 +49,23 @@ export function BADirectoryPage() {
   if (level) query.set('level', level);
   if (safeStatus) query.set('status', safeStatus);
   if (tag) query.set('tags', tag);
+  query.set('page', String(page));
+  query.set('page_size', String(pageSize));
 
   const bas = useQuery({
-    queryKey: ['ba-directory', role, search, level, safeStatus, tag],
-    queryFn: () => apiFetch<BAProfile[]>(`/api/ba?${query.toString()}`)
+    queryKey: ['ba-directory', role, search, level, safeStatus, tag, page, pageSize],
+    queryFn: () => apiFetch<PaginatedResponse<BAProfile>>(`/api/ba?${query.toString()}`),
+    placeholderData: (previous) => previous
   });
   const tags = useQuery({
     queryKey: ['tags'],
     queryFn: () => apiFetch<SkillTag[]>('/api/tags')
   });
+  const baItems: BAProfile[] = bas.data?.items ?? [];
+  const totalPages = bas.data?.total_pages ?? 1;
+  const totalItems = bas.data?.total ?? 0;
+  const firstItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastItem = Math.min(page * pageSize, totalItems);
 
   return (
     <div className="grid gap-5">
@@ -78,14 +89,20 @@ export function BADirectoryPage() {
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="Search BA"
               className="h-10 w-full rounded-md border pl-9 pr-3 text-sm"
             />
           </div>
           <select
             value={level}
-            onChange={(event) => setLevel(event.target.value)}
+            onChange={(event) => {
+              setLevel(event.target.value);
+              setPage(1);
+            }}
             className="h-10 rounded-md border px-3 text-sm"
           >
             <option value="">All levels</option>
@@ -97,7 +114,10 @@ export function BADirectoryPage() {
           </select>
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
             className="h-10 rounded-md border px-3 text-sm"
           >
             <option value="">All status</option>
@@ -109,7 +129,10 @@ export function BADirectoryPage() {
           </select>
           <select
             value={tag}
-            onChange={(event) => setTag(event.target.value)}
+            onChange={(event) => {
+              setTag(event.target.value);
+              setPage(1);
+            }}
             className="h-10 rounded-md border px-3 text-sm"
           >
             <option value="">All tags</option>
@@ -143,7 +166,7 @@ export function BADirectoryPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {(bas.data ?? []).map((ba) => (
+        {baItems.map((ba) => (
           <BAAvailabilityCard
             key={ba.id}
             ba={ba}
@@ -151,7 +174,7 @@ export function BADirectoryPage() {
             onRequestBa={() => setRequestBaId(ba.id)}
           />
         ))}
-        {bas.data?.length === 0 ? (
+        {baItems.length === 0 && !bas.isLoading ? (
           <Card>
             <CardContent className="p-5 text-sm text-slate-600">
               No BA profiles match the current filters.
@@ -159,6 +182,32 @@ export function BADirectoryPage() {
           </Card>
         ) : null}
       </div>
+
+      {totalItems > 0 ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing {firstItem}-{lastItem} of {totalItems} BA profiles
+            </span>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Button
+                variant="secondary"
+                disabled={page <= 1 || bas.isFetching}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={page >= totalPages || bas.isFetching}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <BookingModal
         open={Boolean(requestBaId)}
