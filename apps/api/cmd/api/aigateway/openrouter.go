@@ -192,10 +192,11 @@ type openRouterRequest struct {
 }
 
 type openRouterMessage struct {
-	Role       string `json:"role"`
-	Content    any    `json:"content"`
-	Name       string `json:"name,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Role       string         `json:"role"`
+	Content    any            `json:"content"`
+	Name       string         `json:"name,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 }
 
 type openRouterTool struct {
@@ -267,6 +268,7 @@ func buildOpenRouterMessages(req Request) []openRouterMessage {
 		} else {
 			om.Content = m.Content
 		}
+		om.ToolCalls = wireToolCalls(m.ToolCalls)
 		msgs = append(msgs, om)
 	}
 	return msgs

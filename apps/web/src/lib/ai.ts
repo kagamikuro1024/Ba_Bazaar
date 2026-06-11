@@ -77,7 +77,7 @@ export async function postAgentChat(
   });
 }
 
-export function streamAgentChat(
+export async function streamAgentChat(
   message: string,
   conversationId: string | undefined,
   handlers: {
@@ -87,14 +87,22 @@ export function streamAgentChat(
     onDone: (done: { conversation_id: string; final: string }) => void;
     onError: (error: Error) => void;
   }
-): EventSource {
-  const session = getStoredSession();
+): Promise<EventSource> {
   const params = new URLSearchParams({ message });
   if (conversationId) {
     params.set('conversation_id', conversationId);
   }
-  if (session?.accessToken) {
-    params.set('token', session.accessToken);
+  // Prefer a one-shot stream ticket so the JWT never appears in a URL
+  // (EventSource cannot set headers). Fall back to the legacy
+  // token-in-query auth if the ticket endpoint is unavailable.
+  try {
+    const t = await apiFetch<{ ticket: string }>('/api/ai/agent/stream-ticket', { method: 'POST' });
+    params.set('ticket', t.ticket);
+  } catch {
+    const session = getStoredSession();
+    if (session?.accessToken) {
+      params.set('token', session.accessToken);
+    }
   }
 
   const source = new EventSource(`${API_BASE_URL}/api/ai/agent/chat/stream?${params.toString()}`);
@@ -150,6 +158,24 @@ export async function postAgentUndo(pendingActionId: string): Promise<{ status: 
 
 export async function getAgentConversations(): Promise<AgentConversation[]> {
   return apiFetch<AgentConversation[]>('/api/ai/agent/conversations');
+}
+
+// AgentPendingItem is a still-live staged action, as returned by
+// GET /api/ai/agent/pending. Used to restore Confirm/Cancel cards
+// after a page refresh.
+export interface AgentPendingItem {
+  id: string;
+  conversation_id: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+  preview: Record<string, unknown>;
+  undo_window_seconds: number;
+  expires_at: string;
+}
+
+export async function getAgentPending(conversationId?: string): Promise<AgentPendingItem[]> {
+  const qs = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : '';
+  return apiFetch<AgentPendingItem[]>(`/api/ai/agent/pending${qs}`);
 }
 
 export async function getAgentMessages(conversationId: string): Promise<AgentMessage[]> {

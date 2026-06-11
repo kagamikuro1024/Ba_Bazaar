@@ -40,6 +40,43 @@ type Message struct {
 	Content string `json:"content"`
 	Name    string `json:"name,omitempty"`
 	ToolID  string `json:"tool_call_id,omitempty"`
+	// ToolCalls is set on assistant messages that requested tool
+	// invocations. OpenAI-protocol providers require these to be
+	// replayed verbatim: a `role:"tool"` message is only valid when a
+	// preceding assistant message carries the matching tool_calls entry.
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+}
+
+// wireToolCall is the OpenAI wire shape for an assistant tool call.
+// Shared by every OpenAI-compatible provider (openai, deepseek,
+// openrouter, lightning) when replaying history.
+type wireToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+// wireToolCalls converts gateway ToolCalls into the OpenAI wire shape.
+// Returns nil for empty input so omitempty drops the field entirely.
+func wireToolCalls(tcs []ToolCall) []wireToolCall {
+	if len(tcs) == 0 {
+		return nil
+	}
+	out := make([]wireToolCall, 0, len(tcs))
+	for _, tc := range tcs {
+		w := wireToolCall{ID: tc.ID, Type: "function"}
+		w.Function.Name = tc.Name
+		args, err := json.Marshal(tc.Arguments)
+		if err != nil || tc.Arguments == nil {
+			args = []byte("{}")
+		}
+		w.Function.Arguments = string(args)
+		out = append(out, w)
+	}
+	return out
 }
 
 // Tool describes one callable function exposed to the model.

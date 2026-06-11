@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"ba-bazaar-go/cmd/api/aiagent"
@@ -81,19 +82,14 @@ func (app *App) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 	// can call back into the existing booking handlers.
 	ctx := aiagent.InjectApp(r.Context(), app)
 	loop := app.getAgent()
-	steps, final, conv, err := loop.Run(ctx, user.ID, req.ConversationID, req.Message)
+	steps, final, conv, err := loop.Run(ctx, user.ID, user.Role, req.ConversationID, req.Message)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
 		return
 	}
 
 	// Collect any staged actions for the frontend to render.
-	pending := make([]aiagent.PendingAction, 0)
-	for _, s := range steps {
-		if s.PendingAction != nil {
-			pending = append(pending, *s.PendingAction)
-		}
-	}
+	pending := collectPendingActions(steps)
 
 	quickReplies := app.generateAgentQuickReplies(r.Context(), req.Message, final, steps, pending)
 
@@ -120,6 +116,11 @@ func (app *App) generateAgentQuickReplies(ctx context.Context, userMessage, fina
 	if app.AI == nil {
 		return fallbackQuickReplies(pending)
 	}
+	// Quick replies are decoration, not content. Cap the extra LLM
+	// round-trip so it can never visibly delay the answer; on timeout
+	// we degrade to the static fallbacks.
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
 	stepBytes, _ := json.Marshal(steps)
 	pendingBytes, _ := json.Marshal(pending)
 	resp, err := app.AI.Complete(ctx, aigateway.Request{
@@ -188,18 +189,18 @@ func fallbackQuickReplies(pending []aiagent.PendingAction) []string {
 // Assistant v2 — SSE stream endpoint
 // ---------------------------------------------------------------------------
 //
-// GET /api/ai/agent/chat/stream?message=...&conversation_id=...&token=...
+// GET /api/ai/agent/chat/stream?message=...&conversation_id=...&ticket=...
 //
 // Streams agent steps to the browser as they happen, so the user
 // sees progress (tool calls, tool results, the final answer) instead
 // of a single "Thinking…" pill that never updates.
 //
-// Auth: bearer token in the query string (`token=...`). The browser
-// EventSource API cannot set custom request headers, so this is the
-// only way to pass the JWT. Tokens are short-lived (15 min default)
-// and the connection is short-lived too, so the URL-leak risk is
-// small. If your threat model includes a referer-leaking proxy, add
-// a `Referer`-origin check here.
+// Auth: a one-shot ticket minted by POST /api/ai/agent/stream-ticket.
+// The browser EventSource API cannot set custom request headers, so
+// SOME credential has to ride in the URL; a single-use 60-second
+// ticket keeps the long-lived JWT out of proxies and access logs.
+// `token=...` (the raw JWT) still works as a fallback for older
+// clients via app.currentUser.
 //
 // EventSource event types emitted:
 //   "step"  — one AgentStep as JSON
@@ -208,7 +209,7 @@ func fallbackQuickReplies(pending []aiagent.PendingAction) []string {
 //   "ping"  — heartbeat every 15s to keep proxies alive
 
 func (app *App) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
-	user, err := app.currentUser(r)
+	user, err := app.userForStream(r)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -238,11 +239,19 @@ func (app *App) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	// http.ResponseWriter is NOT safe for concurrent writes, and both
+	// the agent loop (steps/tokens) and the heartbeat goroutine write
+	// to it. One mutex serialises every write+flush pair so SSE frames
+	// can never interleave.
+	var writeMu sync.Mutex
+
 	send := func(event string, payload any) bool {
 		data, err := json.Marshal(payload)
 		if err != nil {
 			return false
 		}
+		writeMu.Lock()
+		defer writeMu.Unlock()
 		// SSE wire format: "event: <name>\ndata: <json>\n\n"
 		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
 			return false
@@ -264,10 +273,15 @@ func (app *App) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 			case <-stopHeartbeat:
 				return
 			case <-ticker.C:
-				if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				writeMu.Lock()
+				_, err := fmt.Fprint(w, ": ping\n\n")
+				if err == nil {
+					flusher.Flush()
+				}
+				writeMu.Unlock()
+				if err != nil {
 					return
 				}
-				flusher.Flush()
 			}
 		}
 	}()
@@ -283,7 +297,7 @@ func (app *App) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 
 	// Run the loop with a callback that pushes each step.
 	streamedSteps := make([]aiagent.Step, 0, 8)
-	_, final, finalConvID, err := loop.RunStream(ctx, user.ID, convID, message, func(step aiagent.Step) {
+	_, final, finalConvID, err := loop.RunStream(ctx, user.ID, user.Role, convID, message, func(step aiagent.Step) {
 		streamedSteps = append(streamedSteps, step)
 		_ = send("step", step)
 	}, func(token string) {
@@ -301,6 +315,72 @@ func (app *App) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 		"conversation_id": finalConvID,
 		"final":           final,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Assistant v2 — SSE stream ticket
+// ---------------------------------------------------------------------------
+
+// handleAgentStreamTicket mints a one-shot, 60-second credential for
+// the SSE endpoint. The client authenticates this POST with its normal
+// bearer header, then opens the EventSource with ?ticket=... so the
+// JWT itself never appears in a URL.
+func (app *App) handleAgentStreamTicket(w http.ResponseWriter, r *http.Request) {
+	user, err := app.currentUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ticket":     app.mintStreamTicket(user.ID),
+		"expires_in": 60,
+	})
+}
+
+func (app *App) mintStreamTicket(userID string) string {
+	app.streamTicketMu.Lock()
+	defer app.streamTicketMu.Unlock()
+	if app.streamTickets == nil {
+		app.streamTickets = map[string]streamTicket{}
+	}
+	// Opportunistic sweep keeps the map from growing unbounded.
+	now := time.Now()
+	for k, v := range app.streamTickets {
+		if now.After(v.expiresAt) {
+			delete(app.streamTickets, k)
+		}
+	}
+	t := newUUID() + newUUID()
+	app.streamTickets[t] = streamTicket{userID: userID, expiresAt: now.Add(60 * time.Second)}
+	return t
+}
+
+// redeemStreamTicket consumes a ticket (single use) and returns the
+// user it was minted for.
+func (app *App) redeemStreamTicket(ticket string) (string, bool) {
+	app.streamTicketMu.Lock()
+	defer app.streamTicketMu.Unlock()
+	st, ok := app.streamTickets[ticket]
+	if ok {
+		delete(app.streamTickets, ticket)
+	}
+	if !ok || time.Now().After(st.expiresAt) {
+		return "", false
+	}
+	return st.userID, true
+}
+
+// userForStream authenticates the SSE request: prefer the one-shot
+// ticket, fall back to the legacy token-in-query / header paths.
+func (app *App) userForStream(r *http.Request) (*User, error) {
+	if t := strings.TrimSpace(r.URL.Query().Get("ticket")); t != "" {
+		userID, ok := app.redeemStreamTicket(t)
+		if !ok {
+			return nil, errors.New("invalid or expired stream ticket")
+		}
+		return app.findUserByID(r.Context(), userID)
+	}
+	return app.currentUser(r)
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +434,58 @@ func (app *App) handleAgentUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "UNDONE"})
+}
+
+// handleAgentPending lists the caller's still-live PENDING actions so
+// the frontend can restore Confirm/Cancel cards after a page refresh.
+// Optional filter: ?conversation_id=...
+func (app *App) handleAgentPending(w http.ResponseWriter, r *http.Request) {
+	user, err := app.currentUser(r)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."})
+		return
+	}
+	sql := `
+		select id, coalesce(conversation_id::text, ''), tool_name, tool_args, preview,
+		       undo_window_seconds, expires_at
+		from ai_pending_actions
+		where user_id = $1 and status = 'PENDING' and expires_at > now()`
+	args := []any{user.ID}
+	if convID := strings.TrimSpace(r.URL.Query().Get("conversation_id")); convID != "" {
+		sql += " and conversation_id = $2"
+		args = append(args, convID)
+	}
+	sql += " order by created_at asc limit 20"
+	rows, err := app.DB.Pool.Query(r.Context(), sql, args...)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
+	defer rows.Close()
+	out := make([]map[string]any, 0, 4)
+	for rows.Next() {
+		var id, convID, toolName string
+		var argsJSON, previewJSON []byte
+		var undoWindow int
+		var expiresAt time.Time
+		if err := rows.Scan(&id, &convID, &toolName, &argsJSON, &previewJSON, &undoWindow, &expiresAt); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+			return
+		}
+		var argsMap, previewMap map[string]any
+		_ = json.Unmarshal(argsJSON, &argsMap)
+		_ = json.Unmarshal(previewJSON, &previewMap)
+		out = append(out, map[string]any{
+			"id":                  id,
+			"conversation_id":     convID,
+			"tool_name":           toolName,
+			"args":                argsMap,
+			"preview":             previewMap,
+			"undo_window_seconds": undoWindow,
+			"expires_at":          expiresAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // ---------------------------------------------------------------------------
@@ -785,11 +917,37 @@ func (app *App) handleTriageRun(w http.ResponseWriter, r *http.Request) {
 // AppCtx implementation — called by the agent on Confirm
 // ---------------------------------------------------------------------------
 
+// canCreateProject mirrors canCreateBookingRequest: in this product,
+// projects are created in service of booking requests.
+func canCreateProject(role string) bool { return role == "PM_PO" || role == "BA_MANAGER" }
+
+// requireAgentRole loads the user fresh from the DB and applies a role
+// predicate. The agent staging path already checks roles, but this is
+// the authoritative gate: Confirm must never execute a write the
+// equivalent HTTP endpoint would have refused.
+func (app *App) requireAgentRole(ctx context.Context, userID string, allowed func(string) bool, what string) error {
+	user, err := app.findUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("requester not found: %w", err)
+	}
+	if !allowed(user.Role) {
+		return fmt.Errorf("your role (%s) is not permitted to %s", user.Role, what)
+	}
+	return nil
+}
+
 // CreateBookingFromAgent satisfies aiagent.AppCtx. It inserts a
 // PENDING booking just like the standard /bookings/request endpoint
 // would, but it does not require an HTTP request.
 func (app *App) CreateBookingFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
-	// Pull args.
+	// Same gate as POST /bookings/request.
+	if err := app.requireAgentRole(ctx, userID, canCreateBookingRequest, "create booking requests (PM/PO or BA Manager required)"); err != nil {
+		return "", err
+	}
+
+	// Pull args. The staged JSON is model-emitted and user-confirmed,
+	// but it is still untrusted input — validate everything the booking
+	// endpoint's contract implies before touching the table.
 	get := func(k string) (string, error) {
 		v, ok := args[k]
 		if !ok || v == nil {
@@ -832,6 +990,9 @@ func (app *App) CreateBookingFromAgent(ctx context.Context, userID string, args 
 	if err != nil {
 		return "", fmt.Errorf("end_date: %w", err)
 	}
+	if end.Before(start) {
+		return "", errors.New("end_date is before start_date")
+	}
 	capPct := 50
 	if v, ok := args["capacity_percent"]; ok {
 		switch n := v.(type) {
@@ -841,13 +1002,32 @@ func (app *App) CreateBookingFromAgent(ctx context.Context, userID string, args 
 			capPct = n
 		}
 	}
+	if capPct != 50 && capPct != 100 {
+		return "", errors.New("capacity_percent must be 50 or 100")
+	}
 	priority := "MEDIUM"
 	if p, ok := args["priority"].(string); ok && p != "" {
 		priority = p
 	}
+	switch priority {
+	case "LOW", "MEDIUM", "HIGH", "URGENT":
+	default:
+		return "", fmt.Errorf("priority %q is not one of LOW, MEDIUM, HIGH, URGENT", priority)
+	}
 	description := ""
 	if d, ok := args["description"].(string); ok {
 		description = d
+	}
+
+	// Hard rule from the assistant contract: never book a BA who is
+	// RESIGNED or ON_LEAVE. The status may have changed between draft
+	// and confirm, so this must be checked here, not just at preview.
+	var baStatus string
+	if err := app.DB.Pool.QueryRow(ctx, `select status from ba_profiles where id=$1`, baID).Scan(&baStatus); err != nil {
+		return "", fmt.Errorf("ba not found: %w", err)
+	}
+	if baStatus != "ACTIVE" {
+		return "", fmt.Errorf("BA is %s and cannot be booked", baStatus)
 	}
 
 	// Insert.
@@ -861,6 +1041,10 @@ func (app *App) CreateBookingFromAgent(ctx context.Context, userID string, args 
 
 // RejectBookingFromAgent satisfies aiagent.AppCtx.
 func (app *App) RejectBookingFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
+	// Same gate as POST /bookings/{id}/reject.
+	if err := app.requireAgentRole(ctx, userID, canApproveBooking, "reject bookings (BA Manager required)"); err != nil {
+		return "", err
+	}
 	bookingID, _ := args["booking_id"].(string)
 	if bookingID == "" {
 		return "", errors.New("booking_id required")
@@ -879,6 +1063,9 @@ func (app *App) RejectBookingFromAgent(ctx context.Context, userID string, args 
 // project on the same path as the implicit booking flow, returning
 // the new project's id.
 func (app *App) CreateProjectFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
+	if err := app.requireAgentRole(ctx, userID, canCreateProject, "create projects (PM/PO or BA Manager required)"); err != nil {
+		return "", err
+	}
 	name, _ := args["name"].(string)
 	name = strings.TrimSpace(name)
 	if name == "" {

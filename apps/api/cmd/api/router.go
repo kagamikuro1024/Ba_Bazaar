@@ -75,8 +75,10 @@ func (app *App) Routes() http.Handler {
 		// ----------------------------------------------------------------
 		r.Post("/ai/agent/chat", app.handleAgentChat)
 		r.Get("/ai/agent/chat/stream", app.handleAgentChatStream)
+		r.Post("/ai/agent/stream-ticket", app.handleAgentStreamTicket)
 		r.Post("/ai/agent/confirm", app.handleAgentConfirm)
 		r.Post("/ai/agent/undo", app.handleAgentUndo)
+		r.Get("/ai/agent/pending", app.handleAgentPending)
 		r.Get("/ai/agent/conversations", app.handleAgentConversations)
 		r.Get("/ai/agent/conversations/{id}/messages", app.handleAgentMessages)
 		r.Post("/ai/brief/parse", app.handleBriefParse)

@@ -36,10 +36,12 @@ import {
   streamAgentChat,
   getAgentMessages,
   getAgentConversations,
+  getAgentPending,
   postAgentConfirm,
   postAgentUndo,
   type AgentMessage as ApiMessage,
   type AgentPendingAction,
+  type AgentPendingItem,
   type AgentStep
 } from '@/lib/ai';
 
@@ -109,7 +111,9 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
     }
   }, [open]);
 
-  // Restore conversation id and transcript after page refresh.
+  // Restore conversation id, transcript, and any still-live pending
+  // action cards after a page refresh — a staged draft survives in the
+  // database, so it must survive in the UI too.
   useEffect(() => {
     const saved = window.localStorage.getItem('ba-bazaar-ai-conversation-id');
     getAgentConversations()
@@ -117,9 +121,18 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
       .catch(() => setHasSavedConversations(false));
     if (!saved) return;
     setConversationId(saved);
-    getAgentMessages(saved)
-      .then((history) => {
-        setMessages(history.map(apiMessageToLocal));
+    Promise.all([
+      getAgentMessages(saved),
+      getAgentPending(saved).catch(() => [] as AgentPendingItem[])
+    ])
+      .then(([history, pendingItems]) => {
+        const restored = history
+          // Tool-call-only assistant turns have empty content; nothing
+          // to render for those.
+          .filter((m) => !(m.role === 'assistant' && !m.content.trim()))
+          .map(apiMessageToLocal);
+        const cards = pendingItems.map(pendingItemToLocal);
+        setMessages([...restored, ...cards]);
       })
       .catch(() => {
         window.localStorage.removeItem('ba-bazaar-ai-conversation-id');
@@ -180,13 +193,17 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
           onDone: (done) => {
             setConversationId(done.conversation_id);
             window.localStorage.setItem('ba-bazaar-ai-conversation-id', done.conversation_id);
-            if (quickReplies.length === 0) {
-              setQuickReplies(fallbackQuickRepliesFromFinal(done.final));
-            }
+            // Functional update: the closure's `quickReplies` is stale
+            // (captured before the stream started), so deciding on it
+            // would overwrite the server-generated replies that arrived
+            // via onActions a moment ago.
+            setQuickReplies((prev) =>
+              prev.length > 0 ? prev : fallbackQuickRepliesFromFinal(done.final)
+            );
             resolve();
           },
           onError: reject
-        });
+        }).catch(reject);
       });
     } catch (err) {
       setMessages((m) => [
@@ -278,7 +295,11 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
         });
         return next;
       }
-      if (s.kind === 'final' && s.content && !m.some((x) => x.pending) && !next.some((x) => x.id === 'streaming-assistant')) {
+      // Note: only the live token stream suppresses the final step
+      // (it would duplicate the streamed text). An unconfirmed pending
+      // card — including one from an earlier turn — must NOT block new
+      // answers from rendering.
+      if (s.kind === 'final' && s.content && !next.some((x) => x.id === 'streaming-assistant')) {
         next.push({
           id: newId(),
           role: 'assistant',
@@ -293,11 +314,6 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
   // -------- confirm / undo --------
 
   const confirm = useCallback(async (pending: AgentPendingAction) => {
-    setMessages((m) =>
-      m.map((x) =>
-        x.pending?.id === pending.id ? { ...x, pending: { ...x.pending!, preview: x.pending!.preview } } : x
-      )
-    );
     try {
       const r = await postAgentConfirm(pending.id);
       setMessages((m) =>
@@ -314,15 +330,28 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Confirm failed';
+      // Terminal failures (expired / already finalised / gone) can
+      // never succeed, so drop the card. Anything else — a network
+      // blip, a 500 — keeps the card so the user can simply retry.
+      const terminal = /expired|cannot confirm|not found|not permitted/i.test(msg);
       setMessages((m) =>
         m.map((x) =>
-          x.pending?.id === pending.id ? { ...x, content: `${x.content}\n❌ ${msg}`, pending: undefined } : x
+          x.pending?.id === pending.id
+            ? {
+                ...x,
+                content: `${x.content}\n❌ ${msg}`,
+                pending: terminal ? undefined : x.pending,
+                expiresAt: terminal ? undefined : x.expiresAt
+              }
+            : x
         )
       );
     }
   }, []);
 
-  const undo = useCallback(async (pending: AgentPendingAction) => {
+  // "Cancel" discards the staged draft before it executes. (The HTTP
+  // route is still named /undo for compatibility.)
+  const cancel = useCallback(async (pending: AgentPendingAction) => {
     try {
       await postAgentUndo(pending.id);
     } catch {
@@ -332,7 +361,7 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
     setMessages((m) =>
       m.map((x) =>
         x.pending?.id === pending.id
-          ? { ...x, content: `${x.content} — undone`, pending: undefined, expiresAt: undefined }
+          ? { ...x, content: `${x.content} — cancelled`, pending: undefined, expiresAt: undefined }
           : x
       )
     );
@@ -412,7 +441,7 @@ export function AIAssistant({ enabled = true }: AIAssistantProps) {
                 key={m.id}
                 message={m}
                 onConfirm={confirm}
-                onUndo={undo}
+                onCancel={cancel}
               />
             ))}
 
@@ -480,6 +509,26 @@ function apiMessageToLocal(m: ApiMessage): LocalMessage {
     role: m.role === 'tool' ? 'tool' : m.role,
     content: m.role === 'tool' ? formatStoredToolMessage(m) : m.content,
     createdAt: new Date(m.created_at).getTime() || Date.now()
+  };
+}
+
+// pendingItemToLocal rebuilds a Confirm/Cancel card from the server's
+// pending-actions list (used after a page refresh).
+function pendingItemToLocal(p: AgentPendingItem): LocalMessage {
+  const summary = typeof p.preview?.summary === 'string' ? (p.preview.summary as string) : '';
+  return {
+    id: `pending-${p.id}`,
+    role: 'tool',
+    content: summary || humanToolName(p.tool_name),
+    pending: {
+      id: p.id,
+      tool_name: p.tool_name,
+      args: p.args,
+      preview: p.preview,
+      undo_window_seconds: p.undo_window_seconds
+    },
+    expiresAt: new Date(p.expires_at).getTime() || Date.now(),
+    createdAt: Date.now()
   };
 }
 
@@ -554,11 +603,11 @@ function QuickReplyBar({ replies, onPick }: { replies: string[]; onPick: (prompt
 function MessageBubble({
   message,
   onConfirm,
-  onUndo
+  onCancel
 }: {
   message: LocalMessage;
   onConfirm: (p: AgentPendingAction) => void;
-  onUndo: (p: AgentPendingAction) => void;
+  onCancel: (p: AgentPendingAction) => void;
 }) {
   if (message.role === 'user') {
     return (
@@ -595,7 +644,7 @@ function MessageBubble({
             pending={message.pending}
             expiresAt={message.expiresAt}
             onConfirm={() => onConfirm(message.pending!)}
-            onUndo={() => onUndo(message.pending!)}
+            onCancel={() => onCancel(message.pending!)}
           />
         )}
         {message.error && (
@@ -698,12 +747,12 @@ function PendingActionCard({
   pending,
   expiresAt,
   onConfirm,
-  onUndo
+  onCancel
 }: {
   pending: AgentPendingAction;
   expiresAt: number;
   onConfirm: () => void;
-  onUndo: () => void;
+  onCancel: () => void;
 }) {
   const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
   const expired = remaining <= 0;
@@ -715,7 +764,7 @@ function PendingActionCard({
             {humanToolName(pending.tool_name)}
           </div>
           <div className="text-[10px] text-amber-700">
-            {expired ? 'Window expired' : `${remaining}s to undo`}
+            {expired ? 'Draft expired' : `Draft expires in ${remaining}s`}
           </div>
         </div>
       </CardHeader>
@@ -727,9 +776,9 @@ function PendingActionCard({
               <Check className="mr-1 h-3 w-3" />
               Confirm
             </Button>
-            <Button size="sm" variant="secondary" onClick={onUndo} className="flex-1">
+            <Button size="sm" variant="secondary" onClick={onCancel} className="flex-1">
               <Undo2 className="mr-1 h-3 w-3" />
-              Undo
+              Cancel
             </Button>
           </div>
         )}

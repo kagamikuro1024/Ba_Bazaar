@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"ba-bazaar-go/cmd/api/aiagent"
 	"ba-bazaar-go/cmd/api/aigateway"
@@ -22,6 +23,19 @@ type App struct {
 	// request so the gateway's logger can be wired before it runs.
 	agentOnce sync.Once
 	agentLoop *aiagent.Loop
+
+	// streamTickets holds short-lived, single-use tickets that let the
+	// browser's EventSource authenticate the SSE stream without putting
+	// the long-lived JWT in the URL (where proxies and access logs see
+	// it). Guarded by streamTicketMu.
+	streamTicketMu sync.Mutex
+	streamTickets  map[string]streamTicket
+}
+
+// streamTicket is a one-shot credential for GET /ai/agent/chat/stream.
+type streamTicket struct {
+	userID    string
+	expiresAt time.Time
 }
 
 func main() {

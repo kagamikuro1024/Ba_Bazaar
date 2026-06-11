@@ -130,10 +130,11 @@ type lightningRequest struct {
 }
 
 type lightningMessage struct {
-	Role       string `json:"role"`
-	Content    any    `json:"content"`
-	Name       string `json:"name,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Role       string         `json:"role"`
+	Content    any            `json:"content"`
+	Name       string         `json:"name,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 }
 
 type lightningTool struct {
@@ -205,6 +206,7 @@ func buildLightningMessages(req Request) []lightningMessage {
 		} else {
 			lm.Content = m.Content
 		}
+		lm.ToolCalls = wireToolCalls(m.ToolCalls)
 		msgs = append(msgs, lm)
 	}
 	return msgs

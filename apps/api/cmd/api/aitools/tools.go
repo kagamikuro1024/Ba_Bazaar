@@ -66,6 +66,11 @@ type Tool struct {
 	Description string
 	// Tier is the autonomy classification.
 	Tier Tier
+	// AllowedRoles restricts who may stage/execute this tool. Empty
+	// means every authenticated role. This mirrors the role gates on
+	// the equivalent HTTP endpoints — the agent must never be a way
+	// around them.
+	AllowedRoles []string
 	// Parameters is the JSON Schema describing the function args.
 	Parameters map[string]any
 	// Run executes the tool. Arguments are passed as the decoded
@@ -142,6 +147,25 @@ func (r *Registry) IsMutating(name string) bool {
 	return t.Tier == TierDraft
 }
 
+// AllowedForRole reports whether the given role may use the named tool.
+// Unknown tools are not allowed; tools without an AllowedRoles list are
+// open to every authenticated role.
+func (r *Registry) AllowedForRole(name, role string) bool {
+	t, ok := r.byName[name]
+	if !ok {
+		return false
+	}
+	if len(t.AllowedRoles) == 0 {
+		return true
+	}
+	for _, allowed := range t.AllowedRoles {
+		if allowed == role {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 // Argument helpers — the LLM can send anything; we validate defensively.
 // ---------------------------------------------------------------------------
@@ -185,6 +209,16 @@ func argInt(args map[string]any, key string) (int, error) {
 		return int(n), nil
 	}
 	return 0, fmt.Errorf("%q must be a number", key)
+}
+
+// escapeLike escapes the LIKE pattern metacharacters in user-supplied
+// text so "50%" matches a literal percent sign instead of everything.
+// Postgres' default LIKE escape character is backslash.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 func argStringList(args map[string]any, key string) []string {
@@ -262,7 +296,7 @@ func searchBAs() Tool {
 			whereParts := make([]string, 0, len(terms))
 			args2 := make([]any, 0, len(terms)+1)
 			for _, term := range terms {
-				args2 = append(args2, "%"+strings.ToLower(term)+"%")
+				args2 = append(args2, "%"+escapeLike(strings.ToLower(term))+"%")
 				whereParts = append(whereParts, fmt.Sprintf(`(lower(b.full_name) like $%d
 				    or lower(coalesce(b.email,'')) like $%d
 				    or lower(st.name) like $%d
@@ -598,7 +632,7 @@ func searchProjects() Tool {
 			if limit > 25 {
 				limit = 25
 			}
-			needle := "%" + strings.ToLower(strings.TrimPrefix(q, "project ")) + "%"
+			needle := "%" + escapeLike(strings.ToLower(strings.TrimPrefix(q, "project "))) + "%"
 			rows, err := db.Query(ctx, `
 				select id, name, coalesce(description, ''), color
 				from projects
@@ -633,6 +667,8 @@ func draftBooking() Tool {
 			"assign someone to a project. NEVER call this without first having shown the user which " +
 			"BA and which dates via search_bars / get_capacity.",
 		Tier: TierDraft,
+		// Mirrors canCreateBookingRequest on the HTTP layer.
+		AllowedRoles: []string{"PM_PO", "BA_MANAGER"},
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -651,12 +687,41 @@ func draftBooking() Tool {
 			// We don't actually write here — the agent loop stages the
 			// call and the user confirms it via /ai/agent/confirm. This
 			// function only returns the preview the user will see.
-			baID, _ := argString(args, "ba_id")
-			projectID, _ := argString(args, "project_id")
+			// Validation still matters: a draft that can never be
+			// executed should be refused now, with a reason the model
+			// can relay, not after the user clicks Confirm.
+			baID, err := argString(args, "ba_id")
+			if err != nil {
+				return nil, err
+			}
+			projectID, err := argString(args, "project_id")
+			if err != nil {
+				return nil, err
+			}
 			title, _ := argString(args, "title")
-			start, _ := argString(args, "start_date")
-			end, _ := argString(args, "end_date")
+			start, err := argString(args, "start_date")
+			if err != nil {
+				return nil, err
+			}
+			end, err := argString(args, "end_date")
+			if err != nil {
+				return nil, err
+			}
+			startD, err := time.Parse("2006-01-02", start)
+			if err != nil {
+				return nil, fmt.Errorf("start_date: %w", err)
+			}
+			endD, err := time.Parse("2006-01-02", end)
+			if err != nil {
+				return nil, fmt.Errorf("end_date: %w", err)
+			}
+			if endD.Before(startD) {
+				return nil, errors.New("end_date is before start_date")
+			}
 			cap, _ := argInt(args, "capacity_percent")
+			if cap != 50 && cap != 100 {
+				return nil, errors.New("capacity_percent must be 50 or 100")
+			}
 			priority := argStringOpt(args, "priority")
 			if priority == "" {
 				priority = "MEDIUM"
@@ -665,9 +730,9 @@ func draftBooking() Tool {
 
 			// Fetch human-readable names for the preview. Best-effort:
 			// if the DB is unreachable we still return a usable draft.
-			baName, projectName := baID, projectID
+			baName, projectName, baStatus := baID, projectID, ""
 			if db != nil {
-				_ = db.QueryRow(ctx, `select full_name from ba_profiles where id=$1`, baID).Scan(&baName)
+				_ = db.QueryRow(ctx, `select full_name, status from ba_profiles where id=$1`, baID).Scan(&baName, &baStatus)
 				_ = db.QueryRow(ctx, `select name from projects where id=$1`, projectID).Scan(&projectName)
 				if baName == "" {
 					baName = baID
@@ -675,6 +740,10 @@ func draftBooking() Tool {
 				if projectName == "" {
 					projectName = projectID
 				}
+			}
+			// Hard rule: never draft a booking for a BA who can't take it.
+			if baStatus != "" && baStatus != "ACTIVE" {
+				return nil, fmt.Errorf("BA %s is %s and cannot be booked", baName, baStatus)
 			}
 
 			return map[string]any{
@@ -706,6 +775,9 @@ func draftCreateProject() Tool {
 			"before the project is persisted. Use this only when a booking request references a " +
 			"project that does not exist yet and the user has agreed to create it.",
 		Tier: TierDraft,
+		// Project creation supports the booking flow, so it carries the
+		// same gate as creating a booking request.
+		AllowedRoles: []string{"PM_PO", "BA_MANAGER"},
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -753,6 +825,8 @@ func draftRejectBooking() Tool {
 		Description: "Draft a rejection for a PENDING booking request. The reason must be quoted " +
 			"verbatim from the manager. The user must confirm before the rejection is recorded.",
 		Tier: TierDraft,
+		// Mirrors canApproveBooking on the HTTP layer.
+		AllowedRoles: []string{"BA_MANAGER"},
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

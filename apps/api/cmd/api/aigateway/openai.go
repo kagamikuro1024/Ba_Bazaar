@@ -51,10 +51,11 @@ func (o *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 	}
 
 	type oaiMessage struct {
-		Role       string          `json:"role"`
-		Content    string          `json:"content"`
-		Name       string          `json:"name,omitempty"`
-		ToolCallID string          `json:"tool_call_id,omitempty"`
+		Role       string         `json:"role"`
+		Content    string         `json:"content"`
+		Name       string         `json:"name,omitempty"`
+		ToolCallID string         `json:"tool_call_id,omitempty"`
+		ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 	}
 	type oaiTool struct {
 		Type     string         `json:"type"`
@@ -103,6 +104,7 @@ func (o *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 		if m.ToolID != "" {
 			om.ToolCallID = m.ToolID
 		}
+		om.ToolCalls = wireToolCalls(m.ToolCalls)
 		msgs = append(msgs, om)
 	}
 	tools := make([]oaiTool, 0, len(req.Tools))

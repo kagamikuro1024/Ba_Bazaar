@@ -2,6 +2,7 @@ package aiagent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -18,7 +19,9 @@ import (
 // interface). Production wires StoreFromDB below.
 type Store interface {
 	// AppendMessage persists one message in a conversation.
-	AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string) error
+	// toolCallsJSON carries the assistant's tool_calls (nil otherwise)
+	// so history replay can reconstruct the provider protocol exactly.
+	AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string, toolCallsJSON []byte) error
 	// LoadHistory returns the last `limit` messages for a conversation
 	// in chronological order.
 	LoadHistory(ctx context.Context, convID string, limit int) ([]storedMessage, error)
@@ -29,8 +32,16 @@ type Store interface {
 	// LoadPendingAction returns the tool_name, args, status, and
 	// expires_at for a pending action owned by userID.
 	LoadPendingAction(ctx context.Context, userID, pendingID string) (toolName string, argsJSON []byte, status string, expiresAt time.Time, err error)
+	// ClaimPendingAction atomically flips PENDING → CONFIRMING for a
+	// non-expired action owned by userID. claimed=false (with nil err)
+	// means the row was missing, expired, or already claimed/finalised
+	// — i.e. the caller lost the compare-and-swap.
+	ClaimPendingAction(ctx context.Context, userID, pendingID string, now time.Time) (toolName string, argsJSON []byte, claimed bool, err error)
 	// MarkExecuted flips status to EXECUTED and stores the result id.
 	MarkExecuted(ctx context.Context, pendingID, resultID string) error
+	// MarkFailed flips a claimed action to FAILED after the domain
+	// write errored, so the user can re-draft instead of re-confirming.
+	MarkFailed(ctx context.Context, pendingID string) error
 	// MarkExpired flips a pending action to EXPIRED.
 	MarkExpired(ctx context.Context, pendingID string) error
 	// MarkUndone flips a pending action to UNDONE.
@@ -48,26 +59,29 @@ type dbStore struct {
 // StoreFromDB returns a Store backed by the given pool.
 func StoreFromDB(pool *pgxpool.Pool) Store { return &dbStore{pool: pool} }
 
-func (s *dbStore) AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string) error {
-	var tcid, tname any
+func (s *dbStore) AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string, toolCallsJSON []byte) error {
+	var tcid, tname, tcalls any
 	if toolCallID != "" {
 		tcid = toolCallID
 	}
 	if toolName != "" {
 		tname = toolName
 	}
+	if len(toolCallsJSON) > 0 && string(toolCallsJSON) != "null" && string(toolCallsJSON) != "[]" {
+		tcalls = toolCallsJSON
+	}
 	_, err := s.pool.Exec(ctx, `
-		insert into ai_messages (conversation_id, role, content, tool_call_id, tool_name)
-		values ($1,$2,$3,$4,$5)
-	`, convID, role, content, tcid, tname)
+		insert into ai_messages (conversation_id, role, content, tool_call_id, tool_name, tool_calls)
+		values ($1,$2,$3,$4,$5,$6)
+	`, convID, role, content, tcid, tname, tcalls)
 	return err
 }
 
 func (s *dbStore) LoadHistory(ctx context.Context, convID string, limit int) ([]storedMessage, error) {
 	rows, err := s.pool.Query(ctx, `
-		select role, content, coalesce(tool_call_id,''), coalesce(tool_name,'')
+		select role, content, coalesce(tool_call_id,''), coalesce(tool_name,''), tool_calls
 		from (
-			select id, role, content, tool_call_id, tool_name
+			select id, role, content, tool_call_id, tool_name, tool_calls
 			from ai_messages
 			where conversation_id = $1
 			order by created_at desc
@@ -82,7 +96,7 @@ func (s *dbStore) LoadHistory(ctx context.Context, convID string, limit int) ([]
 	out := make([]storedMessage, 0, limit)
 	for rows.Next() {
 		var m storedMessage
-		if err := rows.Scan(&m.Role, &m.Content, &m.ToolCallID, &m.ToolName); err != nil {
+		if err := rows.Scan(&m.Role, &m.Content, &m.ToolCallID, &m.ToolName, &m.ToolCallsJSON); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -140,6 +154,33 @@ func (s *dbStore) LoadPendingAction(ctx context.Context, userID, pendingID strin
 		where id = $1 and user_id = $2
 	`, pendingID, userID).Scan(&toolName, &argsJSON, &status, &expiresAt)
 	return toolName, argsJSON, status, expiresAt, err
+}
+
+func (s *dbStore) ClaimPendingAction(ctx context.Context, userID, pendingID string, now time.Time) (string, []byte, bool, error) {
+	var toolName string
+	var argsJSON []byte
+	err := s.pool.QueryRow(ctx, `
+		update ai_pending_actions
+		set status='CONFIRMING', confirmed_at=now()
+		where id=$1 and user_id=$2 and status='PENDING' and expires_at > $3
+		returning tool_name, tool_args
+	`, pendingID, userID, now).Scan(&toolName, &argsJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, false, nil
+	}
+	if err != nil {
+		return "", nil, false, err
+	}
+	return toolName, argsJSON, true, nil
+}
+
+func (s *dbStore) MarkFailed(ctx context.Context, pendingID string) error {
+	_, err := s.pool.Exec(ctx, `
+		update ai_pending_actions
+		set status='FAILED', executed_at=now()
+		where id=$1
+	`, pendingID)
+	return err
 }
 
 func (s *dbStore) MarkExecuted(ctx context.Context, pendingID, resultID string) error {

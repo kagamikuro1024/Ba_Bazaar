@@ -104,12 +104,14 @@ type PendingAction struct {
 // frontend can render them) and the final assistant message.
 //
 // userID is the caller's id; it ends up in ai_decisions.user_id for
-// audit. conversationID is the ai_conversations row; if empty we
-// create one and the caller can persist the new id.
-func (l *Loop) Run(ctx context.Context, userID, conversationID, userText string) (steps []Step, finalContent string, newConversationID string, err error) {
+// audit. userRole is the caller's authenticated role — the loop uses
+// it to refuse staging drafts the user could never confirm.
+// conversationID is the ai_conversations row; if empty we create one
+// and the caller can persist the new id.
+func (l *Loop) Run(ctx context.Context, userID, userRole, conversationID, userText string) (steps []Step, finalContent string, newConversationID string, err error) {
 	// Tiny adapter so we can reuse RunStream with a no-op callback.
 	noop := func(Step) {}
-	steps, finalContent, newConversationID, err = l.RunStream(ctx, userID, conversationID, userText, noop)
+	steps, finalContent, newConversationID, err = l.RunStream(ctx, userID, userRole, conversationID, userText, noop)
 	return steps, finalContent, newConversationID, err
 }
 
@@ -123,7 +125,7 @@ func (l *Loop) Run(ctx context.Context, userID, conversationID, userText string)
 // the loop, so no locking is required. The caller is responsible
 // for any flushing (e.g. http.Flusher.Flush) it wants to do per
 // step.
-func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText string, onStep func(Step), onToken ...func(string)) ([]Step, string, string, error) {
+func (l *Loop) RunStream(ctx context.Context, userID, userRole, conversationID, userText string, onStep func(Step), onToken ...func(string)) ([]Step, string, string, error) {
 	if strings.TrimSpace(userText) == "" {
 		return nil, "", conversationID, errors.New("empty user text")
 	}
@@ -146,7 +148,7 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 	if err != nil {
 		return nil, "", conversationID, fmt.Errorf("conversation: %w", err)
 	}
-	if err := l.Store.AppendMessage(ctx, convID, "user", userText, "", ""); err != nil {
+	if err := l.Store.AppendMessage(ctx, convID, "user", userText, "", "", nil); err != nil {
 		return nil, "", convID, fmt.Errorf("save user message: %w", err)
 	}
 
@@ -154,13 +156,7 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 	if err != nil {
 		return nil, "", convID, fmt.Errorf("load history: %w", err)
 	}
-	msgs := make([]aigateway.Message, 0, len(history))
-	for _, m := range history {
-		msgs = append(msgs, aigateway.Message{
-			Role: aigateway.Role(m.Role), Content: m.Content,
-			Name: m.ToolName, ToolID: m.ToolCallID,
-		})
-	}
+	msgs := historyToMessages(history)
 
 	for iter := 0; iter < MaxIterations; iter++ {
 		// Bail if the client went away. Stream cancellation is the
@@ -185,18 +181,26 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 			return steps, "", convID, fmt.Errorf("gateway: %w", err)
 		}
 
-		_ = l.Store.AppendMessage(ctx, convID, "assistant", resp.Content, "", "")
-
 		if len(resp.ToolCalls) == 0 {
+			_ = l.Store.AppendMessage(ctx, convID, "assistant", resp.Content, "", "", nil)
 			emit(Step{Kind: "final", Content: resp.Content})
 			return steps, resp.Content, convID, nil
 		}
 		if duplicateLoopLikely(resp.ToolCalls, seenToolCalls) || repeatedSearchAfterCapacity(resp.ToolCalls, steps) || projectNotFoundLoopLikely(resp.ToolCalls, steps) {
+			// The guard refuses to run these calls, so the assistant
+			// message must NOT carry tool_calls: replaying tool_calls
+			// without matching tool results is a protocol error on
+			// OpenAI-compatible providers.
 			finalContent := summarizeToolContext(steps)
-			_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "")
+			_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "", nil)
 			emit(Step{Kind: "final", Content: finalContent})
 			return steps, finalContent, convID, nil
 		}
+
+		// Persist the assistant turn together with its tool_calls so a
+		// later history replay reconstructs the exact protocol shape.
+		toolCallsJSON, _ := json.Marshal(resp.ToolCalls)
+		_ = l.Store.AppendMessage(ctx, convID, "assistant", resp.Content, "", "", toolCallsJSON)
 
 		for _, tc := range resp.ToolCalls {
 			callKey := canonicalToolCallKey(tc)
@@ -204,7 +208,7 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 			if seenToolCalls[callKey] > 1 {
 				msg := "I already tried that exact lookup and got the same context. I’ll answer from the results I have instead of repeating it."
 				emit(Step{Kind: "tool_result", ToolName: tc.Name, ToolCallID: tc.ID, Result: map[string]any{"skipped_duplicate": true, "message": msg}})
-				_ = l.Store.AppendMessage(ctx, convID, "tool", `{"skipped_duplicate":true,"message":"duplicate tool call skipped"}`, tc.ID, tc.Name)
+				_ = l.Store.AppendMessage(ctx, convID, "tool", `{"skipped_duplicate":true,"message":"duplicate tool call skipped"}`, tc.ID, tc.Name, nil)
 				continue
 			}
 
@@ -215,22 +219,35 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 					Result: map[string]any{"error": "unknown tool; available: " + toolNamesFor(l.Tools)},
 				})
 				_ = l.Store.AppendMessage(ctx, convID, "tool",
-					`{"error":"unknown tool"}`, tc.ID, tc.Name)
+					`{"error":"unknown tool"}`, tc.ID, tc.Name, nil)
 				continue
 			}
 
 			emit(Step{Kind: "tool_call", ToolName: tc.Name, ToolCallID: tc.ID, Args: tc.Arguments})
+
+			// Authorisation gate: drafts the user could never confirm
+			// are refused before the preview even runs. The same check
+			// is repeated authoritatively at execute time.
+			if l.Tools.IsMutating(tc.Name) && !l.Tools.AllowedForRole(tc.Name, userRole) {
+				denial := map[string]any{
+					"error": fmt.Sprintf("the current user's role (%s) is not permitted to use %s; explain which role is required instead of retrying", userRole, tc.Name),
+				}
+				emit(Step{Kind: "tool_result", ToolName: tc.Name, ToolCallID: tc.ID, Result: denial})
+				denialJSON, _ := json.Marshal(denial)
+				_ = l.Store.AppendMessage(ctx, convID, "tool", string(denialJSON), tc.ID, tc.Name, nil)
+				continue
+			}
 
 			result, runErr := tool.Run(ctx, l.AsAIToolsDB(), tc.Arguments)
 			if runErr != nil {
 				emit(Step{Kind: "tool_result", ToolName: tc.Name, ToolCallID: tc.ID,
 					Result: map[string]any{"error": runErr.Error()}})
 				errJSON, _ := json.Marshal(map[string]any{"error": runErr.Error()})
-				_ = l.Store.AppendMessage(ctx, convID, "tool", string(errJSON), tc.ID, tc.Name)
+				_ = l.Store.AppendMessage(ctx, convID, "tool", string(errJSON), tc.ID, tc.Name, nil)
 				continue
 			}
 			resultJSON, _ := json.Marshal(result)
-			_ = l.Store.AppendMessage(ctx, convID, "tool", string(resultJSON), tc.ID, tc.Name)
+			_ = l.Store.AppendMessage(ctx, convID, "tool", string(resultJSON), tc.ID, tc.Name, nil)
 
 			if l.Tools.IsMutating(tc.Name) {
 				pending, pErr := l.stagePendingAction(ctx, userID, convID, tc, result)
@@ -239,7 +256,7 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 				}
 				emit(Step{Kind: "tool_result", ToolName: tc.Name, ToolCallID: tc.ID, Result: result, PendingAction: pending})
 				finalContent := "Drafted. Confirm below or ask me to change something."
-				_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "")
+				_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "", nil)
 				emit(Step{Kind: "final", Content: finalContent})
 				return steps, finalContent, convID, nil
 			}
@@ -250,19 +267,61 @@ func (l *Loop) RunStream(ctx context.Context, userID, conversationID, userText s
 		if err != nil {
 			return steps, "", convID, fmt.Errorf("reload history: %w", err)
 		}
-		msgs = msgs[:0]
-		for _, m := range history {
-			msgs = append(msgs, aigateway.Message{
-				Role: aigateway.Role(m.Role), Content: m.Content,
-				Name: m.ToolName, ToolID: m.ToolCallID,
-			})
-		}
+		msgs = historyToMessages(history)
 	}
 
 	finalContent := "I reached the maximum number of tool calls for one turn. Try a more specific question, or break this into smaller steps."
-	_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "")
+	_ = l.Store.AppendMessage(ctx, convID, "assistant", finalContent, "", "", nil)
 	emit(Step{Kind: "final", Content: finalContent})
 	return steps, finalContent, convID, nil
+}
+
+// historyToMessages converts stored rows into gateway messages while
+// repairing protocol damage a window cut (or a crashed turn) can cause:
+//   - a tool message whose assistant tool_calls row fell outside the
+//     history window is dropped (orphan tool messages are a 400 on
+//     OpenAI-compatible providers), and
+//   - an assistant tool_calls entry that never received a tool result
+//     is stripped from the replayed message.
+func historyToMessages(history []storedMessage) []aigateway.Message {
+	answered := map[string]bool{}
+	for _, m := range history {
+		if m.Role == "tool" && m.ToolCallID != "" {
+			answered[m.ToolCallID] = true
+		}
+	}
+	msgs := make([]aigateway.Message, 0, len(history))
+	declared := map[string]bool{}
+	for _, m := range history {
+		var calls []aigateway.ToolCall
+		if len(m.ToolCallsJSON) > 0 {
+			_ = json.Unmarshal(m.ToolCallsJSON, &calls)
+		}
+		switch m.Role {
+		case "tool":
+			if m.ToolCallID == "" || !declared[m.ToolCallID] {
+				continue
+			}
+		case "assistant":
+			kept := calls[:0]
+			for _, c := range calls {
+				if answered[c.ID] {
+					kept = append(kept, c)
+					declared[c.ID] = true
+				}
+			}
+			calls = kept
+			if len(calls) == 0 && strings.TrimSpace(m.Content) == "" {
+				// Nothing useful to replay — skip empty turns.
+				continue
+			}
+		}
+		msgs = append(msgs, aigateway.Message{
+			Role: aigateway.Role(m.Role), Content: m.Content,
+			Name: m.ToolName, ToolID: m.ToolCallID, ToolCalls: calls,
+		})
+	}
+	return msgs
 }
 
 // stagePendingAction writes a row to ai_pending_actions. The HTTP
@@ -289,28 +348,48 @@ func (l *Loop) stagePendingAction(ctx context.Context, userID, convID string, tc
 
 // Confirm executes a pending action. This is the only path through
 // which TierDraft tools can mutate real data.
+//
+// Concurrency: the claim is a compare-and-swap (PENDING → CONFIRMING)
+// so two simultaneous Confirm calls — double-click, retry, two tabs —
+// can never both execute the write.
 func (l *Loop) Confirm(ctx context.Context, userID, pendingID string) (string, error) {
-	toolName, toolArgsJSON, status, expiresAt, err := l.Store.LoadPendingAction(ctx, userID, pendingID)
+	app, ok := ctx.Value(ctxKeyApp{}).(AppCtx)
+	if !ok {
+		return "", errors.New("internal: confirm called without app context")
+	}
+
+	toolName, toolArgsJSON, claimed, err := l.Store.ClaimPendingAction(ctx, userID, pendingID, l.Now())
 	if err != nil {
-		return "", fmt.Errorf("pending action not found: %w", err)
+		return "", fmt.Errorf("claim pending action: %w", err)
 	}
-	if status != "PENDING" {
+	if !claimed {
+		// Lost the race, the window lapsed, or it was already
+		// finalised — load the row to report a precise reason.
+		_, _, status, expiresAt, lerr := l.Store.LoadPendingAction(ctx, userID, pendingID)
+		if lerr != nil {
+			return "", fmt.Errorf("pending action not found: %w", lerr)
+		}
+		if status == "PENDING" && l.Now().After(expiresAt) {
+			_ = l.Store.MarkExpired(ctx, pendingID)
+			return "", errors.New("confirmation window expired")
+		}
 		return "", fmt.Errorf("action is %s, cannot confirm", status)
-	}
-	if l.Now().After(expiresAt) {
-		_ = l.Store.MarkExpired(ctx, pendingID)
-		return "", errors.New("undo window expired")
 	}
 
 	var args map[string]any
 	if err := json.Unmarshal(toolArgsJSON, &args); err != nil {
+		_ = l.Store.MarkFailed(ctx, pendingID)
 		return "", fmt.Errorf("decode args: %w", err)
 	}
 
-	resultID, err := l.executeWrite(ctx, userID, toolName, args)
+	resultID, err := l.executeWrite(ctx, app, userID, toolName, args)
 	if err != nil {
+		_ = l.Store.MarkFailed(ctx, pendingID)
 		return "", fmt.Errorf("execute: %w", err)
 	}
+	// Best-effort: if this update fails the row stays CONFIRMING,
+	// which still cannot be confirmed a second time. Correctness of
+	// the domain write wins over status bookkeeping.
 	_ = l.Store.MarkExecuted(ctx, pendingID, resultID)
 	return resultID, nil
 }
@@ -330,16 +409,13 @@ func (l *Loop) Undo(ctx context.Context, userID, pendingID string) error {
 // executeWrite dispatches a confirmed TierDraft call to the real
 // domain logic. The existing booking request handler already does
 // the right thing for a "draft" booking; we just call it.
-func (l *Loop) executeWrite(ctx context.Context, userID, toolName string, args map[string]any) (string, error) {
+func (l *Loop) executeWrite(ctx context.Context, app AppCtx, userID, toolName string, args map[string]any) (string, error) {
 	switch toolName {
 	case "draft_booking":
-		app := ctx.Value(ctxKeyApp{}).(AppCtx)
 		return app.CreateBookingFromAgent(ctx, userID, args)
 	case "draft_reject_booking":
-		app := ctx.Value(ctxKeyApp{}).(AppCtx)
 		return app.RejectBookingFromAgent(ctx, userID, args)
 	case "draft_create_project":
-		app := ctx.Value(ctxKeyApp{}).(AppCtx)
 		return app.CreateProjectFromAgent(ctx, userID, args)
 	default:
 		return "", fmt.Errorf("tool %q is not a write tool", toolName)
@@ -353,6 +429,9 @@ type storedMessage struct {
 	Content    string
 	ToolName   string
 	ToolCallID string
+	// ToolCallsJSON is the marshalled []aigateway.ToolCall an assistant
+	// turn emitted, or nil for every other kind of message.
+	ToolCallsJSON []byte
 }
 
 func canonicalToolCallKey(tc aigateway.ToolCall) string {
@@ -443,10 +522,15 @@ func summarizeToolContext(steps []Step) string {
 		}
 	}
 	if projectMissing {
-		if baDetails {
-			return "Answer: Project Falcon was not found.\nWhy: I found the BA, but no matching project exists yet.\nNext: Would you like me to create a draft using a new project named Project Falcon?"
+		name := lastProjectQuery(steps)
+		label := "that project"
+		if name != "" {
+			label = fmt.Sprintf("%q", name)
 		}
-		return "Answer: Project Falcon was not found.\nWhy: Project search returned 0 results.\nNext: Would you like me to create a draft using a new project named Project Falcon?"
+		if baDetails {
+			return fmt.Sprintf("Answer: Project %s was not found.\nWhy: I found the BA, but no matching project exists yet.\nNext: Would you like me to create a draft using a new project named %s?", label, label)
+		}
+		return fmt.Sprintf("Answer: Project %s was not found.\nWhy: Project search returned 0 results.\nNext: Would you like me to create a draft using a new project named %s?", label, label)
 	}
 	if len(capacity) > 0 {
 		return "Answer: I found relevant BAs and checked capacity.\nWhy: " + strings.Join(capacity, "; ") + ".\nNext: Select a BA to draft the booking."
@@ -455,6 +539,22 @@ func summarizeToolContext(steps []Step) string {
 		return fmt.Sprintf("Answer: I found %d relevant result(s), but need a narrower choice.\nWhy: The search returned multiple possible matches.\nNext: Select one BA or provide the exact name.", matches)
 	}
 	return "Answer: I could not find enough matching data.\nWhy: The available lookups returned no usable match.\nNext: Try a narrower skill, BA name, or date range."
+}
+
+// lastProjectQuery returns the most recent project name the agent
+// searched for, so user-facing summaries can name the actual project
+// instead of a placeholder.
+func lastProjectQuery(steps []Step) string {
+	name := ""
+	for _, s := range steps {
+		if s.Kind != "tool_call" || s.ToolName != "search_projects" || s.Args == nil {
+			continue
+		}
+		if q, ok := s.Args["query"].(string); ok && strings.TrimSpace(q) != "" {
+			name = strings.TrimSpace(q)
+		}
+	}
+	return name
 }
 
 func shortStepID(v any) string {

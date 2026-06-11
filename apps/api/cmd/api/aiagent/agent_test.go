@@ -37,9 +37,10 @@ func newFakeStore() *fakeStore {
 	}
 }
 
-func (f *fakeStore) AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string) error {
+func (f *fakeStore) AppendMessage(ctx context.Context, convID, role, content string, toolCallID, toolName string, toolCallsJSON []byte) error {
 	f.messages = append(f.messages, storedMessage{
 		Role: role, Content: content, ToolCallID: toolCallID, ToolName: toolName,
+		ToolCallsJSON: toolCallsJSON,
 	})
 	return nil
 }
@@ -82,6 +83,22 @@ func (f *fakeStore) LoadPendingAction(ctx context.Context, userID, pendingID str
 		return "", nil, "", time.Time{}, errors.New("not found")
 	}
 	return p.toolName, p.args, p.status, p.expiresAt, nil
+}
+
+func (f *fakeStore) ClaimPendingAction(ctx context.Context, userID, pendingID string, now time.Time) (string, []byte, bool, error) {
+	p, ok := f.pendingActions[pendingID]
+	if !ok || p.userID != userID || p.status != "PENDING" || !now.Before(p.expiresAt) {
+		return "", nil, false, nil
+	}
+	p.status = "CONFIRMING"
+	return p.toolName, p.args, true, nil
+}
+
+func (f *fakeStore) MarkFailed(ctx context.Context, pendingID string) error {
+	if p, ok := f.pendingActions[pendingID]; ok {
+		p.status = "FAILED"
+	}
+	return nil
 }
 
 func (f *fakeStore) MarkExecuted(ctx context.Context, pendingID, resultID string) error {
@@ -149,7 +166,7 @@ func TestRun_FinalTextNoTools(t *testing.T) {
 	}}
 	store := newFakeStore()
 	l := newLoop(prov, store)
-	steps, final, conv, err := l.Run(context.Background(), "user-1", "", "hi there")
+	steps, final, conv, err := l.Run(context.Background(), "user-1", "BA_MANAGER", "", "hi there")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +189,7 @@ func TestRun_ToolCallThenFinal(t *testing.T) {
 		{Content: "I found BAs with payments experience."},
 	}}
 	l := newLoop(prov, newFakeStore())
-	steps, final, _, err := l.Run(context.Background(), "user-1", "", "who is good at payments?")
+	steps, final, _, err := l.Run(context.Background(), "user-1", "BA_MANAGER", "", "who is good at payments?")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +228,7 @@ func TestRun_MutatingToolStagesPendingAction(t *testing.T) {
 	}}
 	store := newFakeStore()
 	l := newLoop(prov, store)
-	steps, _, _, err := l.Run(context.Background(), "user-1", "", "draft a booking for An on Falcon")
+	steps, _, _, err := l.Run(context.Background(), "user-1", "PM_PO", "", "draft a booking for An on Falcon")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +273,7 @@ func TestRun_UnknownToolDoesNotPanic(t *testing.T) {
 		{Content: "Sorry, I cannot do that."},
 	}}
 	l := newLoop(prov, newFakeStore())
-	_, _, _, err := l.Run(context.Background(), "user-1", "", "delete everything")
+	_, _, _, err := l.Run(context.Background(), "user-1", "BA_MANAGER", "", "delete everything")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +281,7 @@ func TestRun_UnknownToolDoesNotPanic(t *testing.T) {
 
 func TestRun_EmptyUserText(t *testing.T) {
 	l := newLoop(&scriptedProvider{}, newFakeStore())
-	_, _, _, err := l.Run(context.Background(), "u", "", "  ")
+	_, _, _, err := l.Run(context.Background(), "u", "BA_MANAGER", "", "  ")
 	if err == nil {
 		t.Fatal("expected error for empty text")
 	}
@@ -281,7 +298,7 @@ func TestRun_MaxIterationCap(t *testing.T) {
 		})
 	}
 	l := newLoop(prov, newFakeStore())
-	steps, final, _, err := l.Run(context.Background(), "u", "", "loop forever")
+	steps, final, _, err := l.Run(context.Background(), "u", "BA_MANAGER", "", "loop forever")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,6 +413,106 @@ func TestConfirm_DraftBookingPromotedToReal(t *testing.T) {
 	}
 }
 
+// TestConfirm_DoubleConfirmExecutesOnce is the double-submit guard:
+// the second confirm must lose the compare-and-swap and never reach
+// the domain write.
+func TestConfirm_DoubleConfirmExecutesOnce(t *testing.T) {
+	store := newFakeStore()
+	store.pendingActions["p1"] = &fakePending{
+		userID:    "u",
+		toolName:  "draft_booking",
+		status:    "PENDING",
+		expiresAt: store.now.Add(5 * time.Minute),
+		args:      []byte(`{"ba_id":"b","project_id":"p","title":"t","start_date":"2026-07-01","end_date":"2026-07-15","capacity_percent":50}`),
+	}
+	l := newLoop(&scriptedProvider{}, store)
+	app := &countingApp{}
+	ctx := InjectApp(context.Background(), app)
+	if _, err := l.Confirm(ctx, "u", "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.Confirm(ctx, "u", "p1"); err == nil {
+		t.Fatal("second confirm must fail")
+	}
+	if app.created != 1 {
+		t.Fatalf("write executed %d times, want exactly 1", app.created)
+	}
+}
+
+// countingApp counts domain writes so tests can assert exactly-once.
+type countingApp struct{ created int }
+
+func (c *countingApp) CreateBookingFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
+	c.created++
+	return "booking-1", nil
+}
+func (c *countingApp) RejectBookingFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
+	return "", errors.New("not used")
+}
+func (c *countingApp) CreateProjectFromAgent(ctx context.Context, userID string, args map[string]any) (string, error) {
+	return "", errors.New("not used")
+}
+
+// TestConfirm_FailedWriteMarksFailed: a failing domain write must flip
+// the action to FAILED, not leave it confirmable.
+func TestConfirm_FailedWriteMarksFailed(t *testing.T) {
+	store := newFakeStore()
+	store.pendingActions["p1"] = &fakePending{
+		userID: "u", toolName: "draft_booking", status: "PENDING",
+		expiresAt: store.now.Add(5 * time.Minute),
+		args:      []byte(`{}`),
+	}
+	l := newLoop(&scriptedProvider{}, store)
+	ctx := InjectApp(context.Background(), &failingApp{})
+	if _, err := l.Confirm(ctx, "u", "p1"); err == nil {
+		t.Fatal("expected execute error")
+	}
+	if got := store.pendingActions["p1"].status; got != "FAILED" {
+		t.Fatalf("status: %s, want FAILED", got)
+	}
+}
+
+type failingApp struct{}
+
+func (failingApp) CreateBookingFromAgent(context.Context, string, map[string]any) (string, error) {
+	return "", errors.New("boom")
+}
+func (failingApp) RejectBookingFromAgent(context.Context, string, map[string]any) (string, error) {
+	return "", errors.New("boom")
+}
+func (failingApp) CreateProjectFromAgent(context.Context, string, map[string]any) (string, error) {
+	return "", errors.New("boom")
+}
+
+// TestRun_DraftDeniedForRole: a BA must not be able to stage a booking
+// draft — the agent refuses before the preview runs.
+func TestRun_DraftDeniedForRole(t *testing.T) {
+	prov := &scriptedProvider{responses: []aigateway.Response{
+		{Content: "", ToolCalls: []aigateway.ToolCall{
+			{ID: "c1", Name: "draft_booking", Arguments: map[string]any{
+				"ba_id": "ba-1", "project_id": "p-1", "title": "KYC work",
+				"start_date": "2026-07-01", "end_date": "2026-07-15",
+				"capacity_percent": 50,
+			}},
+		}},
+		{Content: "You need PM/PO or Manager rights for that."},
+	}}
+	store := newFakeStore()
+	l := newLoop(prov, store)
+	steps, _, _, err := l.Run(context.Background(), "user-1", "BA", "", "book me on Falcon")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.pendingActions) != 0 {
+		t.Fatalf("BA role staged a pending action: %+v", store.pendingActions)
+	}
+	for _, s := range steps {
+		if s.PendingAction != nil {
+			t.Fatal("no pending action should be emitted for a denied role")
+		}
+	}
+}
+
 func TestRegistry_TierClassification(t *testing.T) {
 	tools := aitools.New()
 	if !tools.IsMutating("draft_booking") {
@@ -432,7 +549,7 @@ func TestRunStream_PushesStepsInOrder(t *testing.T) {
 	}}
 	l := newLoop(prov, newFakeStore())
 	var streamed []string
-	steps, final, _, err := l.RunStream(context.Background(), "u", "", "test", func(s Step) {
+	steps, final, _, err := l.RunStream(context.Background(), "u", "BA_MANAGER", "", "test", func(s Step) {
 		streamed = append(streamed, s.Kind+":"+s.ToolName)
 	})
 	if err != nil {
@@ -472,7 +589,7 @@ func TestRunStream_StopsOnContextCancel(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
-	_, _, _, err := l.RunStream(ctx, "u", "", "test", func(Step) {})
+	_, _, _, err := l.RunStream(ctx, "u", "BA_MANAGER", "", "test", func(Step) {})
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}

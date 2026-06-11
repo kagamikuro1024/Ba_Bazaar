@@ -190,10 +190,11 @@ type deepSeekRequest struct {
 }
 
 type deepSeekMessage struct {
-	Role       string `json:"role"`
-	Content    any    `json:"content"`
-	Name       string `json:"name,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	Role       string         `json:"role"`
+	Content    any            `json:"content"`
+	Name       string         `json:"name,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 }
 
 type deepSeekTool struct {
@@ -265,6 +266,7 @@ func buildDeepSeekMessages(req Request) []deepSeekMessage {
 		} else {
 			om.Content = m.Content
 		}
+		om.ToolCalls = wireToolCalls(m.ToolCalls)
 		msgs = append(msgs, om)
 	}
 	return msgs
