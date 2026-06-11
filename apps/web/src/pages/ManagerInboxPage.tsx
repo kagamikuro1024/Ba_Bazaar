@@ -219,9 +219,22 @@ export function ManagerInboxPage() {
     return 'ALL';
   }, [filters.overbookRisk, filters.priority, filters.status, filters.type]);
 
+  const inboxRange = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth() - 6, 1)
+      .toISOString()
+      .slice(0, 10);
+    const to = new Date(now.getFullYear(), now.getMonth() + 12, 0)
+      .toISOString()
+      .slice(0, 10);
+    return { from, to };
+  }, []);
   const bookings = useQuery({
-    queryKey: ['manager-inbox-bookings'],
-    queryFn: () => apiFetch<Booking[]>('/api/bookings')
+    queryKey: ['manager-inbox-bookings', inboxRange.from, inboxRange.to],
+    queryFn: () =>
+      apiFetch<Booking[]>(
+        `/api/bookings?from=${inboxRange.from}&to=${inboxRange.to}&page_size=100`
+      )
   });
   const bas = useQuery({
     queryKey: ['manager-inbox-bookable-bas'],

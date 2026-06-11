@@ -647,8 +647,16 @@ export function TimelinePage() {
     queryFn: () => apiFetch<Project[]>('/api/projects')
   });
   const bookings = useQuery({
-    queryKey: ['bookings', role],
-    queryFn: () => apiFetch<Booking[]>('/api/bookings')
+    queryKey: [
+      'bookings',
+      role,
+      format(timelineStart, 'yyyy-MM-dd'),
+      format(timelineEnd, 'yyyy-MM-dd')
+    ],
+    queryFn: () =>
+      apiFetch<Booking[]>(
+        `/api/bookings?from=${format(timelineStart, 'yyyy-MM-dd')}&to=${format(timelineEnd, 'yyyy-MM-dd')}`
+      )
   });
   const summary = useQuery({
     queryKey: [

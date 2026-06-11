@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarRange, Clock, UserRound } from 'lucide-react';
-import { apiFetch, type Booking } from '@/lib/api';
+import { apiFetch, type Booking, type PaginatedResponse } from '@/lib/api';
 import { StatusBadge } from '@/components/common';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,18 +19,22 @@ const tabLabels: Record<ScheduleTab, string> = {
   all: 'All'
 };
 
+const SCHEDULE_PAGE_SIZE = 50;
+
 export function MySchedulePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const targetBookingId = searchParams.get('bookingId');
   const requestedTab = parseScheduleTab(searchParams.get('tab'));
   const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const [page] = useState(1);
   const schedule = useQuery({
-    queryKey: ['my-schedule'],
-    queryFn: () => apiFetch<Booking[]>('/api/bookings/my-schedule')
+    queryKey: ['my-schedule', page],
+    queryFn: () => apiFetch<PaginatedResponse<Booking>>(`/api/bookings/my-schedule?page=${page}&page_size=${SCHEDULE_PAGE_SIZE}`),
+    placeholderData: (previous) => previous
   });
 
   const grouped = useMemo(() => {
-    const bookings = schedule.data ?? [];
+    const bookings = schedule.data?.items ?? [];
     const current = bookings
       .filter(
         (booking) =>

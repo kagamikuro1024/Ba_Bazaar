@@ -7,7 +7,8 @@ import {
   getRequestType,
   type BAProfile,
   type Booking,
-  type BookingPriority
+  type BookingPriority,
+  type PaginatedResponse
 } from '@/lib/api';
 import { CAPACITY_OPTIONS } from '@/lib/capacity';
 import { StatusBadge } from '@/components/common';
@@ -36,15 +37,28 @@ export function MyRequestsPage() {
   const [searchParams] = useSearchParams();
   const targetBookingId = searchParams.get('bookingId') ?? searchParams.get('requestId');
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 9;
   const [editing, setEditing] = useState<Booking | null>(null);
   const [viewing, setViewing] = useState<Booking | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const requests = useQuery({
-    queryKey: ['my-requests', status],
-    queryFn: () =>
-      apiFetch<Booking[]>(`/api/bookings/my-requests${status ? `?status=${status}` : ''}`)
+    queryKey: ['my-requests', status, page],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      params.set('page', String(page));
+      params.set('page_size', String(pageSize));
+      return apiFetch<PaginatedResponse<Booking>>(`/api/bookings/my-requests?${params.toString()}`);
+    },
+    placeholderData: (previous) => previous
   });
+  const requestItems: Booking[] = requests.data?.items ?? [];
+  const totalRequests = requests.data?.total ?? 0;
+  const totalRequestPages = requests.data?.total_pages ?? 1;
+  const firstRequest = totalRequests === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastRequest = Math.min(page * pageSize, totalRequests);
   const bas = useQuery({
     queryKey: ['my-requests-bas'],
     queryFn: () => apiFetch<BAProfile[]>('/api/ba?bookable=true')
@@ -94,7 +108,10 @@ export function MyRequestsPage() {
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
             className="h-10 rounded-md border px-3 text-sm"
           >
             <option value="">All status</option>
@@ -125,7 +142,7 @@ export function MyRequestsPage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {(requests.data ?? []).map((booking) => (
+        {requestItems.map((booking) => (
           <RequestCard
             key={booking.id}
             booking={booking}
@@ -136,7 +153,7 @@ export function MyRequestsPage() {
             onEdit={() => setEditing(booking)}
           />
         ))}
-        {requests.data?.length === 0 ? (
+        {requestItems.length === 0 && !requests.isLoading ? (
           <Card>
             <CardContent className="p-5 text-sm text-slate-600">
               No requests match the selected status.
@@ -144,6 +161,32 @@ export function MyRequestsPage() {
           </Card>
         ) : null}
       </div>
+
+      {totalRequests > 0 ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing {firstRequest}-{lastRequest} of {totalRequests} requests
+            </span>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Button
+                variant="secondary"
+                disabled={page <= 1 || requests.isFetching}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={page >= totalRequestPages || requests.isFetching}
+                onClick={() => setPage((current) => Math.min(totalRequestPages, current + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <EditRequestModal
         booking={editing}
