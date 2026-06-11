@@ -100,6 +100,18 @@ type QuarterProjectTag = {
   totalCapacity: number;
   bookingCount: number;
   hasOverbookRisk: boolean;
+  /** Dominant booking status in this project column. Drives the card's status tone. */
+  dominantStatus: Booking['status'];
+};
+
+/** Priority order for which booking status should "win" when multiple overlap a project column. */
+const statusPriority: Record<Booking['status'], number> = {
+  REJECTED: 0,
+  CANCELLED: 1,
+  COMPLETED: 2,
+  PENDING: 3,
+  IN_PROGRESS: 4,
+  APPROVED: 5
 };
 
 function usePrefersCoarsePointer() {
@@ -161,6 +173,57 @@ function bookingBarClass(status: Booking['status'], hasOverbookRisk = false) {
       return 'border border-gray-300 bg-gray-100 text-gray-700 opacity-80';
     default:
       return 'bg-blue-600 text-white';
+  }
+}
+
+/**
+ * Returns a Tailwind class string for project card surfaces in the
+ * month/quarter timeline views. Mirrors `bookingBarClass` so a PENDING
+ * booking is amber everywhere — week, month, and quarter stay consistent.
+ */
+function projectCardClass(dominantStatus: Booking['status'], hasOverbookRisk: boolean) {
+  if (
+    hasOverbookRisk &&
+    (dominantStatus === 'APPROVED' ||
+      dominantStatus === 'IN_PROGRESS' ||
+      dominantStatus === 'PENDING')
+  ) {
+    return 'border-rose-300 bg-rose-50 text-rose-900';
+  }
+  switch (dominantStatus) {
+    case 'PENDING':
+      return 'border-amber-300 bg-amber-50 text-amber-900';
+    case 'COMPLETED':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-900';
+    case 'CANCELLED':
+      return 'border-rose-200 bg-rose-50 text-rose-700';
+    case 'REJECTED':
+      return 'border-slate-300 bg-slate-100 text-slate-600 opacity-80';
+    default:
+      return 'border-slate-200 bg-white text-slate-700';
+  }
+}
+
+function projectPillClass(dominantStatus: Booking['status'], hasOverbookRisk: boolean) {
+  if (
+    hasOverbookRisk &&
+    (dominantStatus === 'APPROVED' ||
+      dominantStatus === 'IN_PROGRESS' ||
+      dominantStatus === 'PENDING')
+  ) {
+    return 'bg-white/80 text-rose-700';
+  }
+  switch (dominantStatus) {
+    case 'PENDING':
+      return 'bg-amber-200 text-amber-900';
+    case 'COMPLETED':
+      return 'bg-emerald-200 text-emerald-900';
+    case 'CANCELLED':
+      return 'bg-rose-200 text-rose-700';
+    case 'REJECTED':
+      return 'bg-slate-200 text-slate-600';
+    default:
+      return 'bg-slate-100 text-slate-600';
   }
 }
 
@@ -388,16 +451,22 @@ function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
       color: booking.project.color,
       totalCapacity: 0,
       bookingCount: 0,
-      hasOverbookRisk: false
+      hasOverbookRisk: false,
+      dominantStatus: booking.status
     };
 
     current.totalCapacity += booking.capacity_percent;
     current.bookingCount += 1;
+    // Only "live" bookings (not rejected/cancelled) contribute to overbook risk.
     current.hasOverbookRisk =
       current.hasOverbookRisk ||
       (booking.status !== 'REJECTED' &&
         booking.status !== 'CANCELLED' &&
-        booking.capacity_percent >= 100);
+        booking.capacity_percent > 100);
+    // Pick the most "important" status to surface for the card so week/month/quarter agree.
+    if (statusPriority[booking.status] > statusPriority[current.dominantStatus]) {
+      current.dominantStatus = booking.status;
+    }
     projectMap.set(booking.project_id, current);
   }
 
@@ -407,6 +476,28 @@ function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
       right.totalCapacity - left.totalCapacity ||
       right.bookingCount - left.bookingCount ||
       left.name.localeCompare(right.name)
+  );
+}
+
+/**
+ * Returns true if the BA row itself should be tinted red because one or
+ * more of its APPROVED / IN_PROGRESS bookings exceed capacity. PENDING
+ * rows are NOT auto-tinted, since a manager can still choose a
+ * different BA before approval.
+ */
+function rowHasLiveOverbook(bookings: Booking[], columnStart: Date, columnEnd: Date) {
+  return bookings.some(
+    (booking) =>
+      rangesOverlap(
+        booking.start_date,
+        booking.end_date,
+        format(columnStart, 'yyyy-MM-dd'),
+        format(columnEnd, 'yyyy-MM-dd')
+      ) &&
+      booking.status !== 'REJECTED' &&
+      booking.status !== 'CANCELLED' &&
+      booking.status !== 'PENDING' &&
+      booking.capacity_percent > 100
   );
 }
 
@@ -1676,7 +1767,9 @@ function QuarterTimelineRow({
       <div
         className={cn(
           'border-b border-r',
-          hasOverbookRisk ? 'bg-rose-50/70' : isAlternateRow ? 'bg-sky-50' : 'bg-white'
+          hasOverbookRisk && 'bg-rose-50/70',
+          !hasOverbookRisk && isAlternateRow && 'bg-sky-50',
+          !hasOverbookRisk && !isAlternateRow && 'bg-white'
         )}
         style={{ height: rowMinHeight }}
         aria-hidden="true"
@@ -1687,14 +1780,15 @@ function QuarterTimelineRow({
         const visibleTags = projectTags.slice(0, 3);
         const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
         const currentMonth = isCurrentTimelineColumn(column, currentDate);
+        const liveOverbook = rowHasLiveOverbook(bookings, column.start, column.end);
 
         return (
           <div
             key={`${ba.id}-${column.id}`}
             className={cn(
               'grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-3 text-left transition',
-              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
-              currentMonth && 'bg-blue-50/75',
+              liveOverbook ? 'bg-rose-50/60' : isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
+              currentMonth && !liveOverbook && 'bg-blue-50/75',
               canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
             )}
             style={{ height: rowMinHeight }}
@@ -1729,7 +1823,7 @@ function QuarterTimelineRow({
                       type="button"
                       className={cn(
                         'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                        'border-slate-200 bg-white text-slate-700'
+                        projectCardClass(tag.dominantStatus, tag.hasOverbookRisk)
                       )}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -1745,7 +1839,12 @@ function QuarterTimelineRow({
                         />
                         <span className="truncate">{tag.name}</span>
                       </span>
-                      <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold',
+                          projectPillClass(tag.dominantStatus, tag.hasOverbookRisk)
+                        )}
+                      >
                         {tag.totalCapacity}%
                       </span>
                     </button>
@@ -1807,14 +1906,19 @@ function MobileQuarterTimelineRow({
         const visibleTags = projectTags.slice(0, 2);
         const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
         const currentMonth = isCurrentTimelineColumn(column, currentDate);
+        const liveOverbook = rowHasLiveOverbook(bookings, column.start, column.end);
 
         return (
           <div
             key={`${ba.id}-${column.id}`}
             className={cn(
               'grid grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-2.5 text-left',
-              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
-              currentMonth && 'bg-blue-50/75',
+              liveOverbook
+                ? 'bg-rose-50/60'
+                : isAlternateRow
+                  ? 'bg-sky-50/55'
+                  : 'bg-white',
+              currentMonth && !liveOverbook && 'bg-blue-50/75',
               canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
             )}
             style={{ height: rowMinHeight }}
@@ -1839,47 +1943,43 @@ function MobileQuarterTimelineRow({
             </div>
             <div className="grid content-start gap-2 overflow-hidden">
               {visibleTags.map((tag) => {
-                const relatedBooking = bookings.find(
-                  (booking) => booking.project_id === tag.id
-                );
-                return (
-                  <button
-                    key={`${ba.id}-${column.id}-${tag.id}`}
-                    type="button"
+              const relatedBooking = bookings.find(
+                (booking) => booking.project_id === tag.id
+              );
+              return (
+                <button
+                  key={`${ba.id}-${column.id}-${tag.id}`}
+                  type="button"
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold shadow-sm',
+                    projectCardClass(tag.dominantStatus, tag.hasOverbookRisk)
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (relatedBooking) {
+                      onBookingClick(relatedBooking);
+                    }
+                  }}
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={{ backgroundColor: tag.color }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-left text-[10px] font-semibold leading-tight">
+                      {tag.name}
+                    </span>
+                  </span>
+                  <span
                     className={cn(
-                      'flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold shadow-sm',
-                      tag.hasOverbookRisk
-                        ? 'border-rose-300 bg-rose-50 text-rose-900'
-                        : 'border-slate-200 bg-white text-slate-700'
+                      'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold',
+                      projectPillClass(tag.dominantStatus, tag.hasOverbookRisk)
                     )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (relatedBooking) {
-                        onBookingClick(relatedBooking);
-                      }
-                    }}
                   >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-left text-[10px] font-semibold leading-tight">
-                        {tag.name}
-                      </span>
-                    </span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold',
-                        tag.hasOverbookRisk
-                          ? 'bg-white/80 text-rose-700'
-                          : 'bg-slate-100 text-slate-600'
-                      )}
-                    >
-                      {tag.totalCapacity}%
-                    </span>
-                  </button>
-                );
+                    {tag.totalCapacity}%
+                  </span>
+                </button>
+              );
               })}
               {hiddenCount > 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 px-2.5 py-2 text-center text-[10px] font-semibold text-slate-500">
