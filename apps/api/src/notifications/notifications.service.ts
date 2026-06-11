@@ -23,7 +23,33 @@ export class NotificationsService {
     }
   } as const;
 
-  async list(currentUser: User) {
+  async list(currentUser: User, page?: string, pageSize?: string) {
+    const parsedPage = Number(page);
+    const parsedPageSize = Number(pageSize);
+
+    if (Number.isFinite(parsedPage) && Number.isFinite(parsedPageSize)) {
+      const currentPage = Math.max(1, Math.floor(parsedPage));
+      const take = Math.min(100, Math.max(1, Math.floor(parsedPageSize)));
+      const where = { recipient_id: currentUser.id };
+      const [items, total] = await Promise.all([
+        this.prisma.notification.findMany({
+          where,
+          orderBy: { created_at: 'desc' },
+          skip: (currentPage - 1) * take,
+          take
+        }),
+        this.prisma.notification.count({ where })
+      ]);
+
+      return {
+        items,
+        total,
+        page: currentPage,
+        page_size: take,
+        total_pages: Math.max(1, Math.ceil(total / take))
+      };
+    }
+
     return this.prisma.notification.findMany({
       where: { recipient_id: currentUser.id },
       orderBy: { created_at: 'desc' }

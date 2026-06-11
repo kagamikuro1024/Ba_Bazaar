@@ -17,6 +17,7 @@ import {
   type Booking,
   type BookingPriority,
   type BookingStatus,
+  type PaginatedResponse,
   type RequestType
 } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
@@ -232,7 +233,7 @@ export function ManagerInboxPage() {
   const bookings = useQuery({
     queryKey: ['manager-inbox-bookings', inboxRange.from, inboxRange.to],
     queryFn: () =>
-      apiFetch<Booking[]>(
+      apiFetch<Booking[] | PaginatedResponse<Booking>>(
         `/api/bookings?from=${inboxRange.from}&to=${inboxRange.to}&page_size=100`
       )
   });
@@ -245,6 +246,11 @@ export function ManagerInboxPage() {
     queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
   });
 
+  const bookingItems = useMemo(() => {
+    const payload = bookings.data;
+    return Array.isArray(payload) ? payload : payload?.items ?? [];
+  }, [bookings.data]);
+
   const filteredBookings = useMemo(() => {
     const capacityByBaId = new Map(
       (summary.data?.items ?? []).map((item) => [item.ba_id, item])
@@ -255,7 +261,7 @@ export function ManagerInboxPage() {
         .map((item) => item.ba_id)
     );
 
-    return (bookings.data ?? [])
+    return bookingItems
       .filter((booking) => {
         const requestType = getRequestType(booking);
         const requestState = getManagerRequestState(booking);
@@ -363,7 +369,7 @@ export function ManagerInboxPage() {
 
         return new Date(left.start_date).getTime() - new Date(right.start_date).getTime();
       });
-  }, [bookings.data, filters, summary.data]);
+  }, [bookingItems, filters, summary.data]);
 
   const counts = useMemo(() => {
     const riskBaIds = new Set(
@@ -371,7 +377,7 @@ export function ManagerInboxPage() {
         .filter((item) => item.risk_capacity > 100)
         .map((item) => item.ba_id)
     );
-    const allBookings = bookings.data ?? [];
+    const allBookings = bookingItems;
 
     return {
       ALL: allBookings.length,
@@ -382,7 +388,7 @@ export function ManagerInboxPage() {
         (booking) => booking.ba_id && riskBaIds.has(booking.ba_id)
       ).length
     };
-  }, [bookings.data, summary.data]);
+  }, [bookingItems, summary.data]);
 
   const quickTabs = useMemo<Array<QuickTab<InboxTab>>>(
     () => [
@@ -500,10 +506,10 @@ export function ManagerInboxPage() {
 
     return (
       filteredBookings.find((booking) => booking.id === selectedRequestId) ??
-      bookings.data?.find((booking) => booking.id === selectedRequestId) ??
+      bookingItems.find((booking) => booking.id === selectedRequestId) ??
       null
     );
-  }, [bookings.data, filteredBookings, selectedRequestId]);
+  }, [bookingItems, filteredBookings, selectedRequestId]);
 
   useEffect(() => {
     if (!filteredBookings.length) {
@@ -1166,7 +1172,7 @@ export function ManagerInboxPage() {
   }
 
   function handleReject(id: string) {
-    const booking = bookings.data?.find((item) => item.id === id);
+    const booking = bookingItems.find((item) => item.id === id);
     setDecisionReason('');
     setDecisionModal({
       kind: 'reject',
@@ -1176,7 +1182,7 @@ export function ManagerInboxPage() {
   }
 
   function handleCancel(id: string) {
-    const booking = bookings.data?.find((item) => item.id === id);
+    const booking = bookingItems.find((item) => item.id === id);
     setDecisionReason('');
     setDecisionModal({
       kind: 'cancel',

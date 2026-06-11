@@ -17,17 +17,31 @@ export function NotificationsPage() {
   const [page, setPage] = useState(1);
   const notifications = useQuery({
     queryKey: ['notifications-page', page],
-    queryFn: () => apiFetch<PaginatedResponse<NotificationItem>>(`/api/notifications?page=${page}&page_size=${PAGE_SIZE}`),
+    queryFn: () =>
+      apiFetch<PaginatedResponse<NotificationItem> | NotificationItem[]>(
+        `/api/notifications?page=${page}&page_size=${PAGE_SIZE}`
+      ),
     placeholderData: (previous) => previous
   });
   const markRead = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: 'POST' }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications-page'] });
+    }
   });
 
-  const items = notifications.data?.items ?? [];
-  const totalItems = notifications.data?.total ?? 0;
-  const totalPages = notifications.data?.total_pages ?? 1;
+  const notificationPayload = notifications.data;
+  const allItems = Array.isArray(notificationPayload) ? notificationPayload : notificationPayload?.items ?? [];
+  const items = Array.isArray(notificationPayload)
+    ? allItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : allItems;
+  const totalItems = Array.isArray(notificationPayload)
+    ? notificationPayload.length
+    : notificationPayload?.total ?? 0;
+  const totalPages = Array.isArray(notificationPayload)
+    ? Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+    : notificationPayload?.total_pages ?? 1;
   const firstItem = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const lastItem = Math.min(page * PAGE_SIZE, totalItems);
 

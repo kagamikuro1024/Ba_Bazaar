@@ -13,8 +13,16 @@ export class NotificationsController {
   ) {}
 
   @Get()
-  async list(@Req() request: Request) {
-    return this.notificationsService.list(await this.authService.getCurrentUser(request));
+  async list(
+    @Req() request: Request,
+    @Query('page') page?: string,
+    @Query('page_size') pageSize?: string
+  ) {
+    return this.notificationsService.list(
+      await this.authService.getCurrentUser(request),
+      page,
+      pageSize
+    );
   }
 
   @Post(':id/read')
