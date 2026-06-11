@@ -93,15 +93,6 @@ type TimelineColumn = {
   end: Date;
 };
 
-type QuarterProjectTag = {
-  id: string;
-  name: string;
-  color: string;
-  totalCapacity: number;
-  bookingCount: number;
-  hasOverbookRisk: boolean;
-};
-
 function usePrefersCoarsePointer() {
   const [isCoarsePointer, setIsCoarsePointer] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia('(pointer: coarse)').matches
@@ -365,81 +356,6 @@ function formatBaSortMode(sortMode: BASortMode) {
 function getMobileBACompactName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   return parts.at(-1) ?? fullName;
-}
-
-function getQuarterProjectTags(bookings: Booking[], column: TimelineColumn) {
-  const projectMap = new Map<string, QuarterProjectTag>();
-
-  for (const booking of bookings) {
-    if (
-      !rangesOverlap(
-        booking.start_date,
-        booking.end_date,
-        format(column.start, 'yyyy-MM-dd'),
-        format(column.end, 'yyyy-MM-dd')
-      )
-    ) {
-      continue;
-    }
-
-    const current = projectMap.get(booking.project_id) ?? {
-      id: booking.project_id,
-      name: booking.project.name,
-      color: booking.project.color,
-      totalCapacity: 0,
-      bookingCount: 0,
-      hasOverbookRisk: false
-    };
-
-    current.totalCapacity += booking.capacity_percent;
-    current.bookingCount += 1;
-    current.hasOverbookRisk =
-      current.hasOverbookRisk ||
-      (booking.status !== 'REJECTED' &&
-        booking.status !== 'CANCELLED' &&
-        booking.capacity_percent >= 100);
-    projectMap.set(booking.project_id, current);
-  }
-
-  return Array.from(projectMap.values()).sort(
-    (left, right) =>
-      Number(right.hasOverbookRisk) - Number(left.hasOverbookRisk) ||
-      right.totalCapacity - left.totalCapacity ||
-      right.bookingCount - left.bookingCount ||
-      left.name.localeCompare(right.name)
-  );
-}
-
-function computeQuarterSummaryRowHeight(
-  columns: TimelineColumn[],
-  bookings: Booking[],
-  _hasOverbookRisk: boolean,
-  isMobile: boolean
-) {
-  const visibleTagLimit = isMobile ? 2 : 3;
-  const headerHeight = isMobile ? 52 : 56;
-  const tagHeight = isMobile ? 40 : 42;
-  const footerHeight = 14;
-  const emptyStateHeight = isMobile ? 44 : 72;
-  const hiddenRowHeight = isMobile ? 24 : 28;
-  const containerPadding = isMobile ? 20 : 32;
-
-  const contentHeight = columns.reduce((maxHeight, column) => {
-    const tagCount = getQuarterProjectTags(bookings, column).length;
-
-    if (tagCount === 0) {
-      return Math.max(maxHeight, emptyStateHeight);
-    }
-
-    const visibleCount = Math.min(tagCount, visibleTagLimit);
-    const hiddenCount = Math.max(0, tagCount - visibleCount);
-    const monthHeight =
-      visibleCount * tagHeight + (hiddenCount > 0 ? hiddenRowHeight : 0);
-
-    return Math.max(maxHeight, monthHeight);
-  }, 0);
-
-  return headerHeight + contentHeight + footerHeight + containerPadding;
 }
 
 function buildWeekPickerSections(year: number) {
@@ -722,22 +638,24 @@ export function TimelinePage() {
     () =>
       sortedVisibleBas.map((ba) => {
         const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
-        const riskCapacity = capacityByBaId.get(ba.id)?.risk_capacity ?? 0;
-        const hasOverbookRisk = riskCapacity > 100;
         return {
           ba,
           bookings: baBookings,
-          desktopRowMinHeight:
-            viewMode === 'quarter'
-              ? computeQuarterSummaryRowHeight(columns, baBookings, hasOverbookRisk, false)
-              : computeRowMinHeight(columns, baBookings, desktopBarBaseTop, 72),
-          mobileRowMinHeight:
-            viewMode === 'quarter'
-              ? computeQuarterSummaryRowHeight(columns, baBookings, hasOverbookRisk, true)
-              : computeRowMinHeight(columns, baBookings, mobileBarBaseTop, 120)
+          desktopRowMinHeight: computeRowMinHeight(
+            columns,
+            baBookings,
+            desktopBarBaseTop,
+            72
+          ),
+          mobileRowMinHeight: computeRowMinHeight(
+            columns,
+            baBookings,
+            mobileBarBaseTop,
+            120
+          )
         };
       }),
-    [capacityByBaId, columns, sortedVisibleBas, viewMode, visibleBookings]
+    [columns, sortedVisibleBas, visibleBookings]
   );
 
   function cycleBaSortMode() {
@@ -1277,9 +1195,7 @@ export function TimelinePage() {
                   <div
                     key={ba.id}
                     className={cn(
-                      viewMode === 'quarter'
-                        ? 'pointer-events-auto grid w-[260px] grid-rows-[auto_minmax(0,1fr)_auto] border-b border-r p-3'
-                        : 'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
+                      'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
                       (capacity?.risk_capacity ?? 0) > 100
                         ? 'bg-rose-50 ring-1 ring-inset ring-rose-300'
                         : isAlternateRow
@@ -1290,46 +1206,21 @@ export function TimelinePage() {
                     onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    {viewMode === 'quarter' ? (
-                      <>
-                        <div className="h-[34px]" />
-                        <div className="flex items-start justify-between gap-3">
-                          <BAIdentity ba={ba} />
-                          <span
-                            className={cn(
-                              'shrink-0 self-start text-sm font-bold',
-                              (capacity?.risk_capacity ?? 0) > 100
-                                ? 'inline-flex items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 py-1 text-[11px] text-white shadow-sm shadow-rose-200'
-                                : capacityColor(capacity?.risk_capacity ?? 0)
-                            )}
-                          >
-                            {(capacity?.risk_capacity ?? 0) > 100 ? (
-                              <AlertTriangle className="h-3 w-3" />
-                            ) : null}
-                            {capacity?.risk_capacity ?? 0}%
-                          </span>
-                        </div>
-                        <div className="h-6" />
-                      </>
+                    <BAIdentity ba={ba} />
+                    {(capacity?.risk_capacity ?? 0) > 100 ? (
+                      <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
+                        <AlertTriangle className="h-3 w-3" />
+                        {capacity?.risk_capacity ?? 0}%
+                      </span>
                     ) : (
-                      <>
-                        <BAIdentity ba={ba} />
-                        {(capacity?.risk_capacity ?? 0) > 100 ? (
-                          <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
-                            <AlertTriangle className="h-3 w-3" />
-                            {capacity?.risk_capacity ?? 0}%
-                          </span>
-                        ) : (
-                          <span
-                            className={cn(
-                              'text-sm font-bold',
-                              capacityColor(capacity?.risk_capacity ?? 0)
-                            )}
-                          >
-                            {capacity?.risk_capacity ?? 0}%
-                          </span>
+                      <span
+                        className={cn(
+                          'text-sm font-bold',
+                          capacityColor(capacity?.risk_capacity ?? 0)
                         )}
-                      </>
+                      >
+                        {capacity?.risk_capacity ?? 0}%
+                      </span>
                     )}
                   </div>
                 );
@@ -1376,7 +1267,7 @@ function TimelineRow({
   allowDragSelection,
   hasOverbookRisk,
   currentDate,
-  riskCapacity,
+  riskCapacity: _riskCapacity,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -1402,24 +1293,6 @@ function TimelineRow({
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
-  if (viewMode === 'quarter') {
-    return (
-      <QuarterTimelineRow
-        ba={ba}
-        columns={columns}
-        bookings={bookings}
-        rowMinHeight={rowMinHeight}
-        isAlternateRow={isAlternateRow}
-        canCreateBooking={canCreateBooking}
-        hasOverbookRisk={hasOverbookRisk}
-        currentDate={currentDate}
-        riskCapacity={riskCapacity}
-        onEmptyClick={onEmptyClick}
-        onBookingClick={onBookingClick}
-      />
-    );
-  }
-
   const layouts = computeBookingLayouts(columns, bookings);
   const selectedRange = activeSelection ? sortSelectionRange(activeSelection) : null;
 
@@ -1507,13 +1380,13 @@ function TimelineRow({
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   ) : null}
                   <span className="truncate">
-                    {viewMode === 'month' ? (
-                      `${booking.project.name} - ${booking.capacity_percent}%`
-                    ) : (
+                    {viewMode === 'week' ? (
                       <>
                         {booking.project.name} - {booking.capacity_percent}%
                         {hasOverbookRisk ? ' - Overbooked' : ''}
                       </>
+                    ) : (
+                      `${booking.project.name} - ${booking.capacity_percent}%`
                     )}
                   </span>
                 </span>
@@ -1528,7 +1401,7 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
-  viewMode,
+  viewMode: _viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1536,7 +1409,7 @@ function MobileTimelineRow({
   canCreateBooking,
   hasOverbookRisk,
   currentDate,
-  riskCapacity,
+  riskCapacity: _riskCapacity,
   onEmptyClick,
   onBookingClick
 }: {
@@ -1553,24 +1426,6 @@ function MobileTimelineRow({
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
 }) {
-  if (viewMode === 'quarter') {
-    return (
-      <MobileQuarterTimelineRow
-        ba={ba}
-        columns={columns}
-        bookings={bookings}
-        rowMinHeight={rowMinHeight}
-        isAlternateRow={isAlternateRow}
-        canCreateBooking={canCreateBooking}
-        hasOverbookRisk={hasOverbookRisk}
-        currentDate={currentDate}
-        riskCapacity={riskCapacity}
-        onEmptyClick={onEmptyClick}
-        onBookingClick={onBookingClick}
-      />
-    );
-  }
-
   const layouts = computeBookingLayouts(columns, bookings);
 
   return (
@@ -1634,260 +1489,6 @@ function MobileTimelineRow({
           })}
         </div>
       </div>
-    </>
-  );
-}
-
-function QuarterTimelineRow({
-  ba,
-  columns,
-  bookings,
-  rowMinHeight,
-  isAlternateRow,
-  canCreateBooking,
-  hasOverbookRisk,
-  currentDate,
-  riskCapacity: _riskCapacity,
-  onEmptyClick,
-  onBookingClick
-}: {
-  ba: BAProfile;
-  columns: TimelineColumn[];
-  bookings: Booking[];
-  rowMinHeight: number;
-  isAlternateRow: boolean;
-  canCreateBooking: boolean;
-  hasOverbookRisk: boolean;
-  currentDate: Date;
-  riskCapacity: number;
-  onEmptyClick: (column: TimelineColumn) => void;
-  onBookingClick: (booking: Booking) => void;
-}) {
-  return (
-    <>
-      <div
-        className={cn(
-          'border-b border-r',
-          hasOverbookRisk ? 'bg-rose-50/70' : isAlternateRow ? 'bg-sky-50' : 'bg-white'
-        )}
-        style={{ height: rowMinHeight }}
-        aria-hidden="true"
-      />
-      <div className="relative col-span-full hidden" />
-      {columns.map((column) => {
-        const projectTags = getQuarterProjectTags(bookings, column);
-        const visibleTags = projectTags.slice(0, 3);
-        const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
-        const currentMonth = isCurrentTimelineColumn(column, currentDate);
-
-        return (
-          <div
-            key={`${ba.id}-${column.id}`}
-            className={cn(
-              'grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-3 text-left transition',
-              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
-              currentMonth && 'bg-blue-50/75',
-              canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
-            )}
-            style={{ height: rowMinHeight }}
-            onClick={() => {
-              if (projectTags.length === 0 && canCreateBooking) {
-                onEmptyClick(column);
-              }
-            }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {column.label}
-                </p>
-                <p className="text-xs text-slate-400">{column.subLabel}</p>
-              </div>
-              {currentMonth ? (
-                <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Current
-                </span>
-              ) : null}
-            </div>
-            {projectTags.length > 0 ? (
-              <div className="grid content-start gap-2 overflow-hidden">
-                {visibleTags.map((tag) => {
-                  const relatedBooking = bookings.find(
-                    (booking) => booking.project_id === tag.id
-                  );
-                  return (
-                    <button
-                      key={`${ba.id}-${column.id}-${tag.id}`}
-                      type="button"
-                      className={cn(
-                        'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                        'border-slate-200 bg-white text-slate-700'
-                      )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (relatedBooking) {
-                          onBookingClick(relatedBooking);
-                        }
-                      }}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        <span className="truncate">{tag.name}</span>
-                      </span>
-                      <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                        {tag.totalCapacity}%
-                      </span>
-                    </button>
-                  );
-                })}
-                {hiddenCount > 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-500">
-                    +{hiddenCount} more project{hiddenCount > 1 ? 's' : ''}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  'flex flex-1 items-center justify-center rounded-xl border border-dashed px-3 text-center text-xs font-medium',
-                  'border-slate-200 bg-slate-50 text-slate-400'
-                )}
-              >
-                {canCreateBooking ? 'No project summary in this month' : 'No project'}
-              </div>
-            )}
-            <div className="h-6" />
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function MobileQuarterTimelineRow({
-  ba,
-  columns,
-  bookings,
-  rowMinHeight,
-  isAlternateRow,
-  canCreateBooking,
-  hasOverbookRisk: _hasOverbookRisk,
-  currentDate,
-  riskCapacity: _riskCapacity,
-  onEmptyClick,
-  onBookingClick
-}: {
-  ba: BAProfile;
-  columns: TimelineColumn[];
-  bookings: Booking[];
-  rowMinHeight: number;
-  isAlternateRow: boolean;
-  canCreateBooking: boolean;
-  hasOverbookRisk: boolean;
-  currentDate: Date;
-  riskCapacity: number;
-  onEmptyClick: (column: TimelineColumn) => void;
-  onBookingClick: (booking: Booking) => void;
-}) {
-  return (
-    <>
-      {columns.map((column) => {
-        const projectTags = getQuarterProjectTags(bookings, column);
-        const visibleTags = projectTags.slice(0, 2);
-        const hiddenCount = Math.max(0, projectTags.length - visibleTags.length);
-        const currentMonth = isCurrentTimelineColumn(column, currentDate);
-
-        return (
-          <div
-            key={`${ba.id}-${column.id}`}
-            className={cn(
-              'grid grid-rows-[auto_minmax(0,1fr)_auto] gap-2 border-b border-r p-2.5 text-left',
-              isAlternateRow ? 'bg-sky-50/55' : 'bg-white',
-              currentMonth && 'bg-blue-50/75',
-              canCreateBooking ? 'hover:bg-slate-50' : 'cursor-default'
-            )}
-            style={{ height: rowMinHeight }}
-            onClick={() => {
-              if (projectTags.length === 0 && canCreateBooking) {
-                onEmptyClick(column);
-              }
-            }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  {column.label}
-                </p>
-                <p className="text-[10px] text-slate-400">{column.subLabel}</p>
-              </div>
-              {currentMonth ? (
-                <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                  Current
-                </span>
-              ) : null}
-            </div>
-            <div className="grid content-start gap-2 overflow-hidden">
-              {visibleTags.map((tag) => {
-                const relatedBooking = bookings.find(
-                  (booking) => booking.project_id === tag.id
-                );
-                return (
-                  <button
-                    key={`${ba.id}-${column.id}-${tag.id}`}
-                    type="button"
-                    className={cn(
-                      'flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold shadow-sm',
-                      tag.hasOverbookRisk
-                        ? 'border-rose-300 bg-rose-50 text-rose-900'
-                        : 'border-slate-200 bg-white text-slate-700'
-                    )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (relatedBooking) {
-                        onBookingClick(relatedBooking);
-                      }
-                    }}
-                  >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-left text-[10px] font-semibold leading-tight">
-                        {tag.name}
-                      </span>
-                    </span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold',
-                        tag.hasOverbookRisk
-                          ? 'bg-white/80 text-rose-700'
-                          : 'bg-slate-100 text-slate-600'
-                      )}
-                    >
-                      {tag.totalCapacity}%
-                    </span>
-                  </button>
-                );
-              })}
-              {hiddenCount > 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 px-2.5 py-2 text-center text-[10px] font-semibold text-slate-500">
-                  +{hiddenCount} more project{hiddenCount > 1 ? 's' : ''}
-                </div>
-              ) : null}
-              {projectTags.length === 0 ? (
-                <div className="flex min-h-11 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-2.5 py-2 text-center text-[10px] font-medium text-slate-400">
-                  Empty
-                </div>
-              ) : null}
-            </div>
-            <div className="h-5" />
-          </div>
-        );
-      })}
     </>
   );
 }
