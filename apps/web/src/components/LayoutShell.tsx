@@ -37,6 +37,7 @@ import {
   globalSearchStorage,
   type PageItem
 } from './GlobalSearchModal';
+import { AIAssistant } from './AIAssistant';
 
 type LayoutShellProps = {
   children: ReactNode;
@@ -908,6 +909,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           </Card>
         </div>
       ) : null}
+      <AIAssistant />
     </div>
   );
 }

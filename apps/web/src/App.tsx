@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { type UserRole } from './lib/api';
 import { BADirectoryPage } from './pages/BADirectoryPage';
 import { BAProfilePage } from './pages/BAProfilePage';
+import { BriefComposerPage } from './pages/BriefComposerPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
@@ -40,6 +41,18 @@ export function App() {
         />
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard" element={<ProtectedPage><LayoutShell suppressPageHeader><DashboardPage /></LayoutShell></ProtectedPage>} />
+        <Route
+          path="/brief/new"
+          element={
+            <ProtectedPage>
+              <LayoutShell>
+                <RequireRole roles={['BA_MANAGER', 'PM_PO', 'ADMIN']}>
+                  <BriefComposerPage />
+                </RequireRole>
+              </LayoutShell>
+            </ProtectedPage>
+          }
+        />
         <Route path="/timeline" element={<ProtectedPage><LayoutShell><TimelinePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-schedule" element={<ProtectedPage><LayoutShell><MySchedulePage /></LayoutShell></ProtectedPage>} />
         <Route path="/my-requests" element={<ProtectedPage><LayoutShell><MyRequestsPage /></LayoutShell></ProtectedPage>} />

@@ -171,6 +171,17 @@ func (app *App) currentUser(r *http.Request) (*User, error) {
 		}
 		return user, nil
 	}
+	// SSE / EventSource fallback: allow the bearer token in the query
+	// string because the browser EventSource API can't set custom
+	// headers. This is safe because the connection is short-lived
+	// and the token still has the same TTL as a header-borne one.
+	if token := r.URL.Query().Get("token"); token != "" {
+		claims, err := parseAccessToken(token)
+		if err != nil {
+			return nil, err
+		}
+		return app.findUserByID(ctx, claims.Subject)
+	}
 	if !allowMockAuth() {
 		return nil, errors.New("authentication required")
 	}
