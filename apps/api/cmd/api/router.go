@@ -66,6 +66,22 @@ func (app *App) Routes() http.Handler {
 		r.Post("/bookings/{id}/changes/reject-fields", app.handleBookingRejectFields)
 		r.Post("/bookings/{id}/cancel", app.handleBookingCancel)
 		r.Patch("/bookings/{id}/assign", app.handleBookingsAssign)
+
+		// ----------------------------------------------------------------
+		// AI Assistant v2 — chat, confirm, undo, history
+		// Brief Composer (Week 4 flagship) — parse + match
+		// Manager Triage (Week 5) — lane classifier
+		// All endpoints are auth-gated by app.currentUser.
+		// ----------------------------------------------------------------
+		r.Post("/ai/agent/chat", app.handleAgentChat)
+		r.Get("/ai/agent/chat/stream", app.handleAgentChatStream)
+		r.Post("/ai/agent/confirm", app.handleAgentConfirm)
+		r.Post("/ai/agent/undo", app.handleAgentUndo)
+		r.Get("/ai/agent/conversations", app.handleAgentConversations)
+		r.Get("/ai/agent/conversations/{id}/messages", app.handleAgentMessages)
+		r.Post("/ai/brief/parse", app.handleBriefParse)
+		r.Post("/ai/brief/match", app.handleBriefMatch)
+		r.Post("/ai/triage/run", app.handleTriageRun)
 	})
 
 	return r
