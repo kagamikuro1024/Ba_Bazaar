@@ -13,7 +13,7 @@ func init() {
 }
 
 func loadEnvFiles() {
-	paths := []string{".env", "../.env", "../../.env"}
+	paths := []string{".env", "apps/api/.env", "../.env", "../../.env"}
 	for _, path := range paths {
 		loadEnvFile(path)
 	}

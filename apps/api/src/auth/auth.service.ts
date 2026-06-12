@@ -259,12 +259,12 @@ export class AuthService {
 
   private getAccessTokenTtl() {
     return this.parseDurationToSeconds(
-      this.configService.get<string>('JWT_ACCESS_TTL') ?? '15m'
+      this.configService.get<string>('JWT_ACCESS_TTL') ?? '8h'
     );
   }
 
   private getRefreshTokenTtlDays() {
-    return Number(this.configService.get<string>('JWT_REFRESH_TTL_DAYS') ?? '14');
+    return Number(this.configService.get<string>('JWT_REFRESH_TTL_DAYS') ?? '30');
   }
 
   private parseDurationToSeconds(value: string) {

@@ -42,6 +42,7 @@ func (app *App) Routes() http.Handler {
 		r.Get("/ba/{id}/audit", app.handleBAAudit)
 		r.Get("/ba/recommendations", app.handleRecommendations)
 		r.Get("/dashboard/manager-summary", app.handleDashboardManagerSummary)
+		r.Get("/dashboard/manager-summary/llm", app.handleDashboardManagerLLMSummary)
 		r.Get("/analytics/team-utilization", app.handleAnalyticsTeamUtilization)
 		r.Get("/analytics/project-effort", app.handleAnalyticsProjectEffort)
 		r.Get("/reports/utilization", app.handleReportsUtilization)

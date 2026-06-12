@@ -55,7 +55,7 @@ func jwtSecret() string {
 }
 
 func accessTTL() time.Duration {
-	value := strings.TrimSpace(envOr("JWT_ACCESS_TTL", "15m"))
+	value := strings.TrimSpace(envOr("JWT_ACCESS_TTL", "8h"))
 	if d, err := time.ParseDuration(value); err == nil {
 		return d
 	}
@@ -67,9 +67,9 @@ func accessTTL() time.Duration {
 
 func refreshTTLDays() int {
 	var days int
-	_, err := fmt.Sscanf(envOr("JWT_REFRESH_TTL_DAYS", "14"), "%d", &days)
+	_, err := fmt.Sscanf(envOr("JWT_REFRESH_TTL_DAYS", "30"), "%d", &days)
 	if err != nil || days <= 0 {
-		return 14
+		return 30
 	}
 	return days
 }

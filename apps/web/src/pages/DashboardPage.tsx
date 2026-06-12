@@ -41,6 +41,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader, StatCard } from '@/components';
 import { cn } from '@/lib/utils';
 
+type DashboardLLMSummary = {
+  summary: string;
+  bullets: Array<{
+    text: string;
+    citations: string[];
+    highlights?: string[];
+  }>;
+  citations: Array<{
+    id: string;
+    label: string;
+    value: string;
+  }>;
+  provider: 'deepseek' | 'fallback';
+  grounded: boolean;
+  reason?: string;
+};
+
 type TimeframeMode = 'week' | 'month' | 'quarter' | 'custom';
 type AttentionFilter = 'ALL' | ManagerAttentionFlag;
 type AttentionSort = 'PRIORITY' | 'OLDEST' | 'NEWEST';
@@ -153,6 +170,15 @@ export function DashboardPage() {
         `/api/dashboard/manager-summary?from=${managerRange.from}&to=${managerRange.to}`
       ),
     enabled: isManagerDashboard
+  });
+  const managerLLMSummary = useQuery({
+    queryKey: ['manager-dashboard-llm-summary', managerRange.from, managerRange.to],
+    queryFn: () =>
+      apiFetch<DashboardLLMSummary>(
+        `/api/dashboard/manager-summary/llm?from=${managerRange.from}&to=${managerRange.to}`
+      ),
+    enabled: isManagerDashboard && Boolean(managerSummary.data),
+    staleTime: 60_000
   });
 
   const dashboardData = useMemo(() => {
@@ -363,6 +389,8 @@ export function DashboardPage() {
         <ManagerDashboard
           actions={dashboardData.actionItems}
           summary={managerSummary.data}
+          llmSummary={managerLLMSummary.data}
+          llmSummaryLoading={managerLLMSummary.isLoading}
         />
       ) : (
         <>
@@ -468,10 +496,14 @@ function ManagerDashboardHeaderActions({
 
 function ManagerDashboard({
   actions,
-  summary
+  summary,
+  llmSummary,
+  llmSummaryLoading
 }: {
   actions: ManagerActionItem[];
   summary?: ManagerDashboardSummary;
+  llmSummary?: DashboardLLMSummary;
+  llmSummaryLoading?: boolean;
 }) {
   const team = summary?.team;
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>('ALL');
@@ -503,6 +535,7 @@ function ManagerDashboard({
       }
 
       return (
+        getManagerActionPriorityRank(right) - getManagerActionPriorityRank(left) ||
         getManagerActionScore(right) - getManagerActionScore(left) ||
         getManagerActionCreatedAt(left) - getManagerActionCreatedAt(right)
       );
@@ -578,6 +611,8 @@ function ManagerDashboard({
           tone="info"
         />
       </div>
+
+      <ManagerAISummary summary={llmSummary} isLoading={llmSummaryLoading} />
 
       <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.55fr)] 2xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <Card className="h-full">
@@ -707,6 +742,169 @@ function ManagerDashboard({
         </Card>
       </div>
     </>
+  );
+}
+
+function renderHighlightedText(text: string, highlights: string[] = [], citations: string[] = []) {
+  const semanticHighlights = buildSemanticHighlights(text, citations);
+  const uniqueHighlights = Array.from(
+    new Set([...semanticHighlights, ...highlights.map((item) => item.trim())].filter((item) => item && text.includes(item)))
+  ).slice(0, 8);
+
+  if (uniqueHighlights.length === 0) return text;
+
+  const pattern = new RegExp(`(${uniqueHighlights.map(escapeRegex).join('|')})`, 'gi');
+  return text.split(pattern).map((part, index) => {
+    const matchedHighlight = uniqueHighlights.find(
+      (highlight) => highlight.toLowerCase() === part.toLowerCase()
+    );
+
+    return matchedHighlight ? (
+      <mark key={`${part}-${index}`} className={cn('rounded px-1 font-semibold', highlightTone(part, citations))}>
+        {part}
+      </mark>
+    ) : (
+      part
+    );
+  });
+}
+
+function buildSemanticHighlights(text: string, citations: string[]) {
+  const terms: string[] = [];
+  const lower = text.toLowerCase();
+
+  if (citations.includes('C5') || citations.includes('C6')) {
+    if (lower.includes('overbooked')) terms.push('overbooked');
+    if (lower.includes('overbook risk')) terms.push('Overbook risk');
+  }
+  if (citations.includes('C5') || citations.includes('C7')) {
+    if (lower.includes('bench')) terms.push('bench');
+  }
+  if (citations.includes('C4')) {
+    if (lower.includes('urgent')) terms.push('urgent');
+    if (lower.includes('unassigned')) terms.push('unassigned');
+  }
+  if (citations.includes('C2') || citations.includes('C3')) {
+    const percentages = text.match(/\b\d+(?:\.\d+)?%\b/g) ?? [];
+    const manDays = text.match(/\b\d+(?:\.\d+)?\s+man-days?\b/gi) ?? [];
+    terms.push(...percentages, ...manDays);
+  }
+
+  return terms;
+}
+
+function highlightTone(value: string, citations: string[]) {
+  const lower = value.toLowerCase();
+  if (lower.includes('overbook')) return 'bg-rose-100 text-rose-800 ring-1 ring-rose-200';
+  if (lower.includes('bench')) return 'bg-sky-100 text-sky-800 ring-1 ring-sky-200';
+  if (lower.includes('urgent')) return 'bg-amber-100 text-amber-900 ring-1 ring-amber-200';
+  if (lower.includes('unassigned')) return 'bg-violet-100 text-violet-800 ring-1 ring-violet-200';
+  if (citations.includes('C2') || citations.includes('C3')) return 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200';
+  return 'bg-amber-100 text-amber-900 ring-1 ring-amber-200';
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function ManagerAISummary({
+  summary,
+  isLoading
+}: {
+  summary?: DashboardLLMSummary;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <Card className="overflow-hidden border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+        <CardContent className="relative grid gap-4 p-5">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent_20%,rgba(59,130,246,0.16)_45%,transparent_70%)] animate-[dashboard-shimmer_1.8s_ease-in-out_infinite]" />
+          <div className="relative flex items-start gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+              <Sparkles className="h-5 w-5 animate-pulse" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-slate-950">Grounding AI summary</h2>
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Checking dashboard facts, drafting cited bullets, then validating every claim.
+              </p>
+            </div>
+          </div>
+          <div className="relative grid gap-2">
+            {['Collecting metrics', 'Writing cited bullets', 'Verifying citation IDs'].map((label, index) => (
+              <div key={label} className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white/80 p-3">
+                <span className="h-2 w-2 rounded-full bg-blue-500 animate-[dashboard-dot_1.2s_ease-in-out_infinite]" style={{ animationDelay: `${index * 160}ms` }} />
+                <span className="text-sm font-medium text-slate-700">{label}</span>
+                <span className="ml-auto h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+                  <span className="block h-full w-1/2 rounded-full bg-blue-400 animate-[dashboard-progress_1.5s_ease-in-out_infinite]" style={{ animationDelay: `${index * 120}ms` }} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!summary) return null;
+
+  const citationMap = new Map(summary.citations.map((citation) => [citation.id, citation]));
+
+  return (
+    <Card className="border-blue-100 bg-gradient-to-br from-blue-50/80 to-white">
+      <CardContent className="grid gap-4 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-600" />
+              <h2 className="text-base font-semibold text-slate-950">Grounded AI Summary</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{summary.summary}</p>
+          </div>
+          <Badge tone={summary.provider === 'deepseek' ? 'info' : 'neutral'}>
+            {summary.provider === 'deepseek' ? 'DeepSeek' : 'Fallback'} · cited
+          </Badge>
+        </div>
+        {summary.provider === 'fallback' && summary.reason ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            LLM unavailable: {summary.reason}
+          </p>
+        ) : null}
+        <div className="grid gap-2">
+          {summary.bullets.map((bullet) => (
+            <div key={bullet.text} className="rounded-lg border border-blue-100 bg-white/80 p-3 text-sm text-slate-700">
+              <p>{renderHighlightedText(bullet.text, bullet.highlights, bullet.citations)}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {bullet.citations.map((id) => {
+                  const citation = citationMap.get(id);
+                  return citation ? (
+                    <span key={id} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                      {id}: {citation.label}
+                    </span>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <details className="text-xs text-slate-500">
+          <summary className="cursor-pointer font-semibold text-slate-600">View grounding data</summary>
+          <div className="mt-2 grid gap-1 sm:grid-cols-2">
+            {summary.citations.map((citation) => (
+              <p key={citation.id} className="rounded-md bg-white/70 px-2 py-1">
+                <span className="font-semibold text-slate-700">{citation.id} {citation.label}:</span> {citation.value}
+              </p>
+            ))}
+          </div>
+        </details>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -975,9 +1173,16 @@ function buildManagerActionItems(
     )
     .sort(
       (left, right) =>
+        getManagerActionPriorityRank(right) - getManagerActionPriorityRank(left) ||
         getManagerActionScore(right) - getManagerActionScore(left) ||
         getManagerActionCreatedAt(left) - getManagerActionCreatedAt(right)
     );
+}
+
+function getManagerActionPriorityRank(item: ManagerActionItem) {
+  if (item.priority === 'URGENT') return 3;
+  if (item.priority === 'HIGH') return 2;
+  return 1;
 }
 
 function getManagerActionScore(item: ManagerActionItem) {
