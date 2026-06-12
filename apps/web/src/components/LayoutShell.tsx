@@ -745,10 +745,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-3 z-40 rounded-[1.75rem] border border-slate-200/90 bg-white/95 p-1.5 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
+        className="fixed inset-x-4 bottom-4 z-40 rounded-[1.25rem] border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-4 gap-1.5">
           {mobileNavigation.map((item) => {
             const Icon = item.icon;
             return (
