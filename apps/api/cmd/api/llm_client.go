@@ -83,9 +83,86 @@ func callDeepSeekJSON(ctx context.Context, request deepSeekChatRequest) (string,
 	}
 
 	content := strings.TrimSpace(decoded.Choices[0].Message.Content)
-	// Defensive: some models still wrap JSON in code fences.
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
+	return extractDeepSeekJSONContent(content)
+}
+
+func extractDeepSeekJSONContent(content string) (string, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "", fmt.Errorf("deepseek returned empty JSON content")
+	}
+
+	content = stripMarkdownJSONFence(content)
+	if isJSONObject(content) && json.Valid([]byte(content)) {
+		return content, nil
+	}
+
+	if object, ok := firstJSONObject(content); ok {
+		return object, nil
+	}
+
+	return "", fmt.Errorf("deepseek returned invalid JSON content")
+}
+
+func stripMarkdownJSONFence(content string) string {
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, "```") {
+		return content
+	}
+
+	if newline := strings.IndexByte(content, '\n'); newline >= 0 {
+		content = content[newline+1:]
+	} else {
+		content = strings.TrimPrefix(content, "```")
+	}
+	content = strings.TrimSpace(content)
 	content = strings.TrimSuffix(content, "```")
-	return strings.TrimSpace(content), nil
+	return strings.TrimSpace(content)
+}
+
+func isJSONObject(content string) bool {
+	content = strings.TrimSpace(content)
+	return strings.HasPrefix(content, "{") && strings.HasSuffix(content, "}")
+}
+
+func firstJSONObject(content string) (string, bool) {
+	start := strings.IndexByte(content, '{')
+	if start < 0 {
+		return "", false
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+	for index := start; index < len(content); index++ {
+		ch := content[index]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch ch {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				candidate := strings.TrimSpace(content[start : index+1])
+				return candidate, json.Valid([]byte(candidate))
+			}
+		}
+	}
+
+	return "", false
 }

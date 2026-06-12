@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -94,6 +95,12 @@ var llmSummaryCache = struct {
 }{items: map[string]cachedLLMSummary{}}
 
 const llmSummaryCacheMaxEntries = 200
+
+var (
+	citationIDPattern       = regexp.MustCompile(`(?i)\bC\d+\b`)
+	citationEvidencePattern = regexp.MustCompile(`(?i)\b\d{4}-\d{2}-\d{2}\b|\b\d+(?:\.\d+)?%?\b`)
+	citationWordPattern     = regexp.MustCompile(`(?i)\b[a-z][a-z0-9-]{3,}\b`)
+)
 
 // serveLLMSummary runs the shared pipeline and writes the JSON response.
 func serveLLMSummary(w http.ResponseWriter, spec llmSummarySpec) {
@@ -204,8 +211,12 @@ Facts:
 
 	var summary llmSummary
 	if err := json.Unmarshal([]byte(content), &summary); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid summary JSON: %w", err)
 	}
+	return validateLLMSummary(summary, spec, maxBullets)
+}
+
+func validateLLMSummary(summary llmSummary, spec llmSummarySpec, maxBullets int) (*llmSummary, error) {
 	allowed := map[string]llmCitation{}
 	for _, citation := range spec.Citations {
 		allowed[citation.ID] = citation
@@ -213,15 +224,34 @@ Facts:
 	if len(summary.Bullets) == 0 {
 		return nil, fmt.Errorf("summary has no bullets")
 	}
-	if len(summary.Bullets) > maxBullets {
-		summary.Bullets = summary.Bullets[:maxBullets]
-	}
-	for i := range summary.Bullets {
-		summary.Bullets[i].Citations = sanitizeCitationIDs(summary.Bullets[i].Citations, allowed)
-		if len(summary.Bullets[i].Citations) == 0 {
-			return nil, fmt.Errorf("summary bullet lacks citation")
+
+	bullets := make([]llmSummaryBullet, 0, maxBullets)
+	for _, bullet := range summary.Bullets {
+		text := strings.TrimSpace(bullet.Text)
+		if text == "" {
+			continue
+		}
+		ids := sanitizeCitationIDs(bullet.Citations, allowed)
+		if len(ids) == 0 {
+			ids = inferCitationIDsForBullet(text, spec.Citations, allowed)
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		bullets = append(bullets, llmSummaryBullet{Text: text, Citations: ids})
+		if len(bullets) >= maxBullets {
+			break
 		}
 	}
+	if len(bullets) == 0 {
+		return nil, fmt.Errorf("summary has no cited bullets")
+	}
+
+	summary.Summary = strings.TrimSpace(summary.Summary)
+	if summary.Summary == "" {
+		summary.Summary = "Grounded summary generated from cited facts."
+	}
+	summary.Bullets = bullets
 	summary.Citations = spec.Citations
 	summary.Provider = "deepseek"
 	summary.Grounded = true
@@ -247,6 +277,12 @@ func safeLLMSummaryReason(err error) string {
 	if strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "timeout") {
 		return "DeepSeek request timed out; check network access to api.deepseek.com or increase DASHBOARD_LLM_TIMEOUT_SECONDS"
 	}
+	if strings.Contains(lower, "invalid summary json") || strings.Contains(lower, "json content") || strings.Contains(lower, "unexpected end of json input") {
+		return "DeepSeek returned invalid JSON; using the cited fallback summary"
+	}
+	if strings.Contains(lower, "cited bullets") || strings.Contains(lower, "citation") {
+		return "DeepSeek response did not pass citation validation; using the cited fallback summary"
+	}
 	return message
 }
 
@@ -268,18 +304,116 @@ func llmSummaryTimeout() time.Duration {
 func sanitizeCitationIDs(ids []string, allowed map[string]llmCitation) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id == "" || seen[id] {
-			continue
+	for _, raw := range ids {
+		candidates := citationIDPattern.FindAllString(raw, -1)
+		if len(candidates) == 0 {
+			candidates = []string{raw}
 		}
-		if _, ok := allowed[id]; !ok {
-			continue
+		for _, id := range candidates {
+			id = normalizeCitationID(id)
+			if id == "" || seen[id] {
+				continue
+			}
+			if _, ok := allowed[id]; !ok {
+				continue
+			}
+			seen[id] = true
+			out = append(out, id)
 		}
-		seen[id] = true
-		out = append(out, id)
 	}
 	return out
+}
+
+func normalizeCitationID(id string) string {
+	return strings.ToUpper(strings.Trim(strings.TrimSpace(id), "[](){}.,;:#"))
+}
+
+func inferCitationIDsForBullet(text string, citations []llmCitation, allowed map[string]llmCitation) []string {
+	if ids := sanitizeCitationIDs([]string{text}, allowed); len(ids) > 0 {
+		return ids
+	}
+
+	lower := strings.ToLower(text)
+	bestScore := 0
+	scored := make([]struct {
+		id    string
+		score int
+	}, 0, len(citations))
+	for _, citation := range citations {
+		if _, ok := allowed[citation.ID]; !ok {
+			continue
+		}
+		score := citationEvidenceScore(lower, citation)
+		if score == 0 {
+			continue
+		}
+		if score > bestScore {
+			bestScore = score
+		}
+		scored = append(scored, struct {
+			id    string
+			score int
+		}{id: citation.ID, score: score})
+	}
+	if bestScore < 2 {
+		return []string{}
+	}
+
+	out := make([]string, 0, 2)
+	for _, item := range scored {
+		if item.score == bestScore {
+			out = append(out, item.id)
+			if len(out) == 2 {
+				break
+			}
+		}
+	}
+	return out
+}
+
+func citationEvidenceScore(lowerText string, citation llmCitation) int {
+	score := 0
+	label := strings.ToLower(strings.TrimSpace(citation.Label))
+	if label != "" && strings.Contains(lowerText, label) {
+		score += 4
+	}
+
+	value := strings.ToLower(citation.Value)
+	for _, token := range citationEvidencePattern.FindAllString(value, -1) {
+		if lowSignalEvidenceToken(token) {
+			continue
+		}
+		if strings.Contains(lowerText, strings.ToLower(token)) {
+			score += 2
+		}
+	}
+
+	seenWords := map[string]bool{}
+	for _, token := range citationWordPattern.FindAllString(label+" "+value, -1) {
+		token = strings.ToLower(token)
+		if citationStopWord(token) || seenWords[token] {
+			continue
+		}
+		seenWords[token] = true
+		if strings.Contains(lowerText, token) {
+			score++
+		}
+	}
+	return score
+}
+
+func lowSignalEvidenceToken(token string) bool {
+	token = strings.TrimSuffix(strings.TrimSpace(token), "%")
+	return token == "" || token == "0" || token == "1"
+}
+
+func citationStopWord(token string) bool {
+	switch token {
+	case "with", "from", "that", "this", "then", "than", "into", "onto", "would", "could", "more", "less", "most", "none", "provided":
+		return true
+	default:
+		return false
+	}
 }
 
 func mapValue(input map[string]any, key string) map[string]any {
