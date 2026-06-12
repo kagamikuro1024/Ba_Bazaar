@@ -793,13 +793,6 @@ export function TimelinePage() {
         eyebrow="Planning"
         title="Timeline"
         description="Plan BA workload on the Gantt timeline. Filter by BA or project, move between periods, and review assignment pressure quickly."
-        actions={
-          canCreateBooking ? (
-            <Button className="hidden lg:inline-flex" onClick={openCreateBooking}>
-              <Plus className="h-4 w-4" /> Create booking
-            </Button>
-          ) : null
-        }
       />
       <div>
         <div className="grid w-full gap-2 sm:grid-cols-[minmax(150px,1fr)_minmax(160px,1fr)] lg:flex lg:w-full lg:flex-nowrap lg:items-center">
@@ -827,6 +820,11 @@ export function TimelinePage() {
               </option>
             ))}
           </select>
+          {canCreateBooking ? (
+            <Button className="hidden lg:ml-auto lg:inline-flex" onClick={openCreateBooking}>
+              <Plus className="h-4 w-4" /> Create booking
+            </Button>
+          ) : null}
         </div>
       </div>
       {isMobile ? (
