@@ -93,7 +93,7 @@ export function App() {
             </ProtectedPage>
           }
         />
-        <Route path="/notifications" element={<ProtectedPage><LayoutShell><NotificationsManagerPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/notifications" element={<ProtectedPage><LayoutShell suppressPageHeader><NotificationsManagerPage /></LayoutShell></ProtectedPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
