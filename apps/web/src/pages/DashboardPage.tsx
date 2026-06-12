@@ -56,6 +56,7 @@ type DashboardLLMSummary = {
   provider: 'deepseek' | 'fallback';
   grounded: boolean;
   reason?: string;
+  cached?: boolean;
 };
 
 type TimeframeMode = 'week' | 'month' | 'quarter' | 'custom';
@@ -177,8 +178,7 @@ export function DashboardPage() {
       apiFetch<DashboardLLMSummary>(
         `/api/dashboard/manager-summary/llm?from=${managerRange.from}&to=${managerRange.to}`
       ),
-    enabled: isManagerDashboard && Boolean(managerSummary.data),
-    staleTime: 60_000
+    enabled: isManagerDashboard && Boolean(managerSummary.data)
   });
 
   const dashboardData = useMemo(() => {
@@ -868,7 +868,7 @@ function ManagerAISummary({
             <p className="mt-1 text-sm text-slate-600">{summary.summary}</p>
           </div>
           <Badge tone={summary.provider === 'deepseek' ? 'info' : 'neutral'}>
-            {summary.provider === 'deepseek' ? 'DeepSeek' : 'Fallback'} · cited
+            {summary.provider === 'deepseek' ? 'DeepSeek' : 'Fallback'} · {summary.cached ? 'cached' : 'cited'}
           </Badge>
         </div>
         {summary.provider === 'fallback' && summary.reason ? (

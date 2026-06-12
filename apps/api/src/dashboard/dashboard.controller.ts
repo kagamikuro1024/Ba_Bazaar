@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Controller, Get, Inject, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
@@ -16,6 +17,7 @@ type DashboardLLMSummary = {
   provider: 'deepseek' | 'fallback';
   grounded: boolean;
   reason?: string;
+  cached?: boolean;
 };
 
 type GroundingPacket = {
@@ -28,6 +30,14 @@ type GroundingPacket = {
   highest_utilization_ba: Array<Record<string, unknown>>;
   top_project_effort: Array<Record<string, unknown>>;
 };
+
+type CachedDashboardLLMSummary = {
+  fingerprint: string;
+  summary: DashboardLLMSummary;
+};
+
+const dashboardLLMSummaryCache = new Map<string, CachedDashboardLLMSummary>();
+const DASHBOARD_LLM_CACHE_MAX_ENTRIES = 100;
 
 @Controller('api/dashboard')
 export class DashboardController {
@@ -57,18 +67,63 @@ export class DashboardController {
     @Query('from') from?: string,
     @Query('to') to?: string
   ): Promise<DashboardLLMSummary> {
+    const currentUser = await this.authService.getCurrentUser(request);
     const summary = await this.reportsService.managerSummary(
-      await this.authService.getCurrentUser(request),
+      currentUser,
       from,
       to
     );
 
+    const cacheKey = dashboardLLMCacheKey(currentUser.id, from, to);
+    const fingerprint = dashboardSummaryFingerprint(summary);
+    const cached = dashboardLLMSummaryCache.get(cacheKey);
+    if (cached?.fingerprint === fingerprint) {
+      return { ...cached.summary, cached: true };
+    }
+
     try {
-      return await summarizeDashboardWithDeepSeek(summary);
+      const llmSummary = await summarizeDashboardWithDeepSeek(summary);
+      rememberDashboardLLMSummary(cacheKey, fingerprint, llmSummary);
+      return llmSummary;
     } catch (error) {
-      return buildGroundedDashboardFallback(summary, safeDashboardLLMReason(error));
+      const fallback = buildGroundedDashboardFallback(summary, safeDashboardLLMReason(error));
+      rememberDashboardLLMSummary(cacheKey, fingerprint, fallback);
+      return fallback;
     }
   }
+}
+
+function dashboardLLMCacheKey(userId: string, from?: string, to?: string) {
+  return [userId, from ?? '', to ?? ''].join(':');
+}
+
+function dashboardSummaryFingerprint(summary: unknown) {
+  return createHash('sha256').update(stableStringify(summary)).digest('hex');
+}
+
+function rememberDashboardLLMSummary(
+  cacheKey: string,
+  fingerprint: string,
+  summary: DashboardLLMSummary
+) {
+  if (dashboardLLMSummaryCache.size >= DASHBOARD_LLM_CACHE_MAX_ENTRIES) {
+    const oldestKey = dashboardLLMSummaryCache.keys().next().value;
+    if (oldestKey) dashboardLLMSummaryCache.delete(oldestKey);
+  }
+  dashboardLLMSummaryCache.set(cacheKey, { fingerprint, summary: { ...summary, cached: false } });
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableStringify(nested)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 async function summarizeDashboardWithDeepSeek(payload: unknown): Promise<DashboardLLMSummary> {

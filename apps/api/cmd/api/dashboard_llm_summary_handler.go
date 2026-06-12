@@ -3,22 +3,28 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type dashboardLLMSummary struct {
-	Summary   string                      `json:"summary"`
-	Bullets   []dashboardLLMSummaryBullet `json:"bullets"`
-	Citations []dashboardLLMCitation      `json:"citations"`
-	Provider  string                      `json:"provider"`
-	Grounded  bool                        `json:"grounded"`
-	Reason    string                      `json:"reason,omitempty"`
+	Summary     string                      `json:"summary"`
+	Bullets     []dashboardLLMSummaryBullet `json:"bullets"`
+	Citations   []dashboardLLMCitation      `json:"citations"`
+	Provider    string                      `json:"provider"`
+	Grounded    bool                        `json:"grounded"`
+	Reason      string                      `json:"reason,omitempty"`
+	Cached      bool                        `json:"cached,omitempty"`
+	CacheKey    string                      `json:"cache_key,omitempty"`
+	Fingerprint string                      `json:"fingerprint,omitempty"`
 }
 
 type dashboardLLMSummaryBullet struct {
@@ -32,6 +38,18 @@ type dashboardLLMCitation struct {
 	Value string `json:"value"`
 }
 
+type cachedDashboardLLMSummary struct {
+	Fingerprint string
+	Summary     *dashboardLLMSummary
+}
+
+var dashboardLLMCache = struct {
+	sync.Mutex
+	items map[string]cachedDashboardLLMSummary
+}{items: map[string]cachedDashboardLLMSummary{}}
+
+const dashboardLLMCacheMaxEntries = 100
+
 func (app *App) handleDashboardManagerLLMSummary(w http.ResponseWriter, r *http.Request) {
 	payload, status, err := app.managerSummaryPayload(r)
 	if err != nil {
@@ -39,15 +57,77 @@ func (app *App) handleDashboardManagerLLMSummary(w http.ResponseWriter, r *http.
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), dashboardLLMTimeout())
+	cacheKey := dashboardLLMCacheKey(r)
+	fingerprint := dashboardLLMFingerprint(payload)
+	if cached := getCachedDashboardLLMSummary(cacheKey, fingerprint); cached != nil {
+		writeJSON(w, http.StatusOK, cached)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), dashboardLLMTimeout())
 	defer cancel()
 	if summary, err := summarizeDashboardWithDeepSeek(ctx, payload); err == nil {
+		rememberDashboardLLMSummary(cacheKey, fingerprint, summary)
+		summary.CacheKey = shortHash(cacheKey)
+		summary.Fingerprint = shortHash(fingerprint)
 		writeJSON(w, http.StatusOK, summary)
 		return
 	} else {
-		writeJSON(w, http.StatusOK, buildGroundedDashboardFallback(payload, safeDashboardLLMReason(err)))
+		fallback := buildGroundedDashboardFallback(payload, safeDashboardLLMReason(err))
+		rememberDashboardLLMSummary(cacheKey, fingerprint, fallback)
+		fallback.CacheKey = shortHash(cacheKey)
+		fallback.Fingerprint = shortHash(fingerprint)
+		writeJSON(w, http.StatusOK, fallback)
 		return
 	}
+}
+
+func dashboardLLMCacheKey(r *http.Request) string {
+	return strings.Join([]string{strings.TrimSpace(r.URL.Query().Get("from")), strings.TrimSpace(r.URL.Query().Get("to")), strings.TrimSpace(r.Header.Get("X-User-Id")), strings.TrimSpace(r.Header.Get("X-Mock-Role"))}, ":")
+}
+
+func dashboardLLMFingerprint(payload map[string]any) string {
+	body, _ := json.Marshal(payload)
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
+}
+
+func shortHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func getCachedDashboardLLMSummary(cacheKey string, fingerprint string) *dashboardLLMSummary {
+	dashboardLLMCache.Lock()
+	defer dashboardLLMCache.Unlock()
+	cached, ok := dashboardLLMCache.items[cacheKey]
+	if !ok || cached.Fingerprint != fingerprint || cached.Summary == nil {
+		return nil
+	}
+	copy := *cached.Summary
+	copy.Cached = true
+	copy.CacheKey = shortHash(cacheKey)
+	copy.Fingerprint = shortHash(fingerprint)
+	return &copy
+}
+
+func rememberDashboardLLMSummary(cacheKey string, fingerprint string, summary *dashboardLLMSummary) {
+	if summary == nil {
+		return
+	}
+	dashboardLLMCache.Lock()
+	defer dashboardLLMCache.Unlock()
+	if len(dashboardLLMCache.items) >= dashboardLLMCacheMaxEntries {
+		for key := range dashboardLLMCache.items {
+			delete(dashboardLLMCache.items, key)
+			break
+		}
+	}
+	copy := *summary
+	copy.Cached = false
+	copy.CacheKey = shortHash(cacheKey)
+	copy.Fingerprint = shortHash(fingerprint)
+	dashboardLLMCache.items[cacheKey] = cachedDashboardLLMSummary{Fingerprint: fingerprint, Summary: &copy}
 }
 
 func summarizeDashboardWithDeepSeek(ctx context.Context, payload map[string]any) (*dashboardLLMSummary, error) {
@@ -182,6 +262,9 @@ func safeDashboardLLMReason(err error) string {
 	lower := strings.ToLower(message)
 	if strings.Contains(lower, "api_key") {
 		return "DEEPSEEK_API_KEY is not configured"
+	}
+	if strings.Contains(lower, "context canceled") {
+		return "DeepSeek request was cancelled before completion; retry once after API restart so the detached request can populate cache"
 	}
 	if strings.Contains(lower, "deadline exceeded") || strings.Contains(lower, "timeout") {
 		return "DeepSeek request timed out; check network access to api.deepseek.com or increase DASHBOARD_LLM_TIMEOUT_SECONDS"

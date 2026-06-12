@@ -102,7 +102,7 @@ if [ "${HF_AUTO_SEED}" = "true" ]; then
   fi
 fi
 
-node dist/main.js &
+/app/ba-bazaar-api &
 API_PID="$!"
 
 until node -e "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))" "http://127.0.0.1:${API_PORT}/health"; do

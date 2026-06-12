@@ -20,6 +20,17 @@ COPY packages packages
 
 RUN pnpm build
 
+FROM golang:1.24-bookworm AS api-build
+
+WORKDIR /app/apps/api
+
+COPY apps/api/go.mod apps/api/go.sum ./
+RUN go mod download
+
+COPY apps/api/cmd ./cmd
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/ba-bazaar-api ./cmd/api
+
 FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
@@ -47,6 +58,7 @@ COPY --from=build --chown=1000:0 /app/apps/api/prisma apps/api/prisma
 COPY --from=build --chown=1000:0 /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY --from=build --chown=1000:0 /app/apps/web/dist apps/web/dist
 COPY --from=build --chown=1000:0 /app/packages/shared packages/shared
+COPY --from=api-build --chown=1000:0 /out/ba-bazaar-api /app/ba-bazaar-api
 COPY --chown=1000:0 scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
 COPY --chown=1000:0 scripts/hf-web-server.mjs scripts/hf-web-server.mjs
 

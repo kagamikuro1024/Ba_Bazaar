@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "go run ./cmd/api",
+    "dev:node": "tsx watch src/main.ts",
     "build": "prisma generate --schema prisma/schema.prisma && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "prisma generate --schema prisma/schema.prisma && tsc -p tsconfig.json --noEmit",
