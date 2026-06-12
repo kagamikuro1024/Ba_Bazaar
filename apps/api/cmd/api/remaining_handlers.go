@@ -11,6 +11,79 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+type capacityExplanationDay struct {
+	Date              string `json:"date"`
+	ApprovedCapacity  int    `json:"approved_capacity"`
+	PendingCapacity   int    `json:"pending_capacity"`
+	RiskCapacity      int    `json:"risk_capacity"`
+	RequestedCapacity int    `json:"requested_capacity"`
+	RiskAfterRequest  int    `json:"risk_after_request"`
+	OverflowCapacity  int    `json:"overflow_capacity"`
+}
+
+func buildCapacityRangeExplanation(riskDays []capacityExplanationDay) map[string]any {
+	approvedStatuses := strings.ToLower("APPROVED") + " + " + strings.ToLower("IN_PROGRESS")
+	if len(riskDays) == 0 {
+		return map[string]any{
+			"risk_level": "SAFE",
+			"summary":    "No overbook risk detected for the selected BA and date range.",
+			"why_flagged": []string{},
+			"signals_used": []string{
+				"Daily approved capacity",
+				"Daily pending capacity",
+				"Requested capacity",
+				"Risk formula: " + approvedStatuses + " + pending + requested",
+			},
+			"suggested_actions": []string{
+				"Submit the request as planned.",
+				"Keep monitoring pending requests before approval.",
+			},
+			"risk_days": []capacityExplanationDay{},
+		}
+	}
+
+	firstRiskDay := riskDays[0]
+	maxAfterRequest := 0
+	maxOverflow := 0
+	for _, day := range riskDays {
+		if day.RiskAfterRequest > maxAfterRequest {
+			maxAfterRequest = day.RiskAfterRequest
+		}
+		if day.OverflowCapacity > maxOverflow {
+			maxOverflow = day.OverflowCapacity
+		}
+	}
+
+	actions := []string{
+		"Reduce the requested capacity or split the booking across fewer days.",
+		"Move the request to dates with lower pending or approved load.",
+		"Assign a different BA with more headroom in the same window.",
+	}
+	if maxOverflow > 25 {
+		actions = append(actions, "Review and reject lower-priority pending requests before approving this one.")
+	} else {
+		actions = append(actions, "Review pending requests and confirm whether they still need the BA.")
+	}
+
+	return map[string]any{
+		"risk_level": "OVERBOOK_RISK",
+		"summary":    fmt.Sprintf("Capacity reaches %d%% once this request is included, peaking on %s.", maxAfterRequest, firstRiskDay.Date),
+		"why_flagged": []string{
+			fmt.Sprintf("%s already carries %d%% at-risk load before this request.", firstRiskDay.Date, firstRiskDay.RiskCapacity),
+			fmt.Sprintf("Adding %d%% pushes the BA to %d%%, which is %d%% over capacity.", firstRiskDay.RequestedCapacity, firstRiskDay.RiskAfterRequest, firstRiskDay.OverflowCapacity),
+			"Pending requests are counted so managers can resolve conflicts before approving work.",
+		},
+		"signals_used": []string{
+			"Approved and in-progress bookings on the same BA",
+			"Pending requests overlapping the selected date range",
+			"Requested capacity for this new booking",
+			"Daily overlap by date inside the selected range",
+		},
+		"suggested_actions": actions,
+		"risk_days":          riskDays,
+	}
+}
+
 func (app *App) handleCapacitySummary(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
 	if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Authentication required."}); return }
@@ -84,13 +157,21 @@ func (app *App) handleCapacityRangeCheck(w http.ResponseWriter, r *http.Request)
 	for _, booking := range bookings { capRows = append(capRows, CapacityBooking{ID: booking.ID, BAID: booking.BAID, StartDate: booking.StartDate, EndDate: booking.EndDate, CapacityPercent: booking.CapacityPercent, Status: booking.Status}) }
 	capacity := getRangeCapacity(capRows, startDate, endDate, "")
 	daily := make([]map[string]any, 0, len(capacity.Daily))
+	riskDays := make([]capacityExplanationDay, 0)
 	hasRisk := false
+	maxRiskAfter := 0
 	for _, day := range capacity.Daily {
 		riskAfter := day.RiskCapacity + requested
-		if riskAfter > 100 { hasRisk = true }
+		if riskAfter > maxRiskAfter { maxRiskAfter = riskAfter }
+		overflow := 0
+		if riskAfter > 100 {
+			hasRisk = true
+			overflow = riskAfter - 100
+			riskDays = append(riskDays, capacityExplanationDay{Date: day.Date, ApprovedCapacity: day.ApprovedCapacity, PendingCapacity: day.PendingCapacity, RiskCapacity: day.RiskCapacity, RequestedCapacity: requested, RiskAfterRequest: riskAfter, OverflowCapacity: overflow})
+		}
 		daily = append(daily, map[string]any{"date": day.Date, "approved_capacity": day.ApprovedCapacity, "pending_capacity": day.PendingCapacity, "risk_capacity": day.RiskCapacity, "requested_capacity": requested, "risk_after_request": riskAfter})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"daily": daily, "max_approved_capacity": capacity.MaxApprovedCapacity, "max_pending_capacity": capacity.MaxPendingCapacity, "max_risk_capacity": capacity.MaxRiskCapacity, "has_overbook_risk": capacity.HasOverbookRisk, "requested_capacity": requested, "has_overbook_risk_after_request": hasRisk})
+	writeJSON(w, http.StatusOK, map[string]any{"daily": daily, "max_approved_capacity": capacity.MaxApprovedCapacity, "max_pending_capacity": capacity.MaxPendingCapacity, "max_risk_capacity": capacity.MaxRiskCapacity, "has_overbook_risk": capacity.HasOverbookRisk, "requested_capacity": requested, "max_risk_capacity_after_request": maxRiskAfter, "has_overbook_risk_after_request": hasRisk, "explanation": buildCapacityRangeExplanation(riskDays)})
 }
 
 func countIf(items []map[string]any, predicate func(map[string]any) bool) int {

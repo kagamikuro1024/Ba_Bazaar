@@ -4,7 +4,7 @@ import {
   Inject,
   Injectable
 } from '@nestjs/common';
-import { BAStatus, User, UserRole } from '@prisma/client';
+import { BAStatus, BookingStatus, User, UserRole } from '@prisma/client';
 import {
   calculateBookedWorkingDays,
   calculateUtilizationPercent,
@@ -19,6 +19,75 @@ import { syncBookingStatuses } from '../bookings/bookings.utils';
 @Injectable()
 export class CapacityService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  private buildRangeExplanation(
+    riskDays: Array<{
+      date: string;
+      approved_capacity: number;
+      pending_capacity: number;
+      risk_capacity: number;
+      requested_capacity: number;
+      risk_after_request: number;
+      overflow_capacity: number;
+    }>
+  ) {
+    const firstRiskDay = riskDays[0];
+    const maxAfterRequest = riskDays.reduce(
+      (max, day) => Math.max(max, day.risk_after_request),
+      0
+    );
+    const maxOverflow = riskDays.reduce(
+      (max, day) => Math.max(max, day.overflow_capacity),
+      0
+    );
+    const approvedStatuses = [BookingStatus.APPROVED, BookingStatus.IN_PROGRESS]
+      .map((status) => status.toLowerCase())
+      .join(' + ');
+
+    if (!firstRiskDay) {
+      return {
+        risk_level: 'SAFE' as const,
+        summary: 'No overbook risk detected for the selected BA and date range.',
+        why_flagged: [],
+        signals_used: [
+          'Daily approved capacity',
+          'Daily pending capacity',
+          'Requested capacity',
+          `Risk formula: ${approvedStatuses} + pending + requested`
+        ],
+        suggested_actions: [
+          'Submit the request as planned.',
+          'Keep monitoring pending requests before approval.'
+        ],
+        risk_days: []
+      };
+    }
+
+    return {
+      risk_level: 'OVERBOOK_RISK' as const,
+      summary: `Capacity reaches ${maxAfterRequest}% once this request is included, peaking on ${firstRiskDay.date}.`,
+      why_flagged: [
+        `${firstRiskDay.date} already carries ${firstRiskDay.risk_capacity}% at-risk load before this request.`,
+        `Adding ${firstRiskDay.requested_capacity}% pushes the BA to ${firstRiskDay.risk_after_request}%, which is ${firstRiskDay.overflow_capacity}% over capacity.`,
+        'Pending requests are counted so managers can resolve conflicts before approving work.'
+      ],
+      signals_used: [
+        'Approved and in-progress bookings on the same BA',
+        'Pending requests overlapping the selected date range',
+        'Requested capacity for this new booking',
+        'Daily overlap by date inside the selected range'
+      ],
+      suggested_actions: [
+        'Reduce the requested capacity or split the booking across fewer days.',
+        'Move the request to dates with lower pending or approved load.',
+        'Assign a different BA with more headroom in the same window.',
+        maxOverflow > 25
+          ? 'Review and reject lower-priority pending requests before approving this one.'
+          : 'Review pending requests and confirm whether they still need the BA.'
+      ],
+      risk_days: riskDays
+    };
+  }
 
   async summary(currentUser: User, start = '2026-06-01', end = '2026-06-30') {
     await syncBookingStatuses(this.prisma);
@@ -129,19 +198,30 @@ export class CapacityService {
       }
     });
     const capacity = getRangeCapacity(bookings, startDate, endDate);
-    const riskDays = capacity.daily.map((day) => ({
-      ...day,
-      requested_capacity: requestedCapacity,
-      risk_after_request: day.risk_capacity + requestedCapacity
-    }));
+    const riskDays = capacity.daily
+      .map((day) => ({
+        ...day,
+        requested_capacity: requestedCapacity,
+        risk_after_request: day.risk_capacity + requestedCapacity,
+        overflow_capacity: Math.max(0, day.risk_capacity + requestedCapacity - 100)
+      }))
+      .filter((day) => day.risk_after_request > 100);
+    const maxRiskCapacityAfterRequest = capacity.daily.reduce(
+      (max, day) => Math.max(max, day.risk_capacity + requestedCapacity),
+      0
+    );
 
     return {
       ...capacity,
       requested_capacity: requestedCapacity,
-      has_overbook_risk_after_request: riskDays.some(
-        (day) => day.risk_after_request > 100
-      ),
-      daily: riskDays
+      max_risk_capacity_after_request: maxRiskCapacityAfterRequest,
+      has_overbook_risk_after_request: riskDays.length > 0,
+      explanation: this.buildRangeExplanation(riskDays),
+      daily: capacity.daily.map((day) => ({
+        ...day,
+        requested_capacity: requestedCapacity,
+        risk_after_request: day.risk_capacity + requestedCapacity
+      }))
     };
   }
 }

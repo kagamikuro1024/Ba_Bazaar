@@ -145,7 +145,7 @@ func (app *App) utilizationReportPayload(r *http.Request) (map[string]any, int, 
 			bookingViews = append(bookingViews, map[string]any{"project_name": projectName, "start_date": toDateKey(booking.StartDate), "end_date": toDateKey(booking.EndDate), "capacity_percent": booking.CapacityPercent, "status": booking.Status, "requester_name": requesterName})
 			projects[booking.ProjectID] = true
 		}
-		bookedDays := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
+		bookedDays := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
 		resultRows = append(resultRows, map[string]any{"ba_id": ba.ID, "ba_name": ba.FullName, "level": ba.Level, "status": ba.Status, "period": month, "working_days": workingDays, "booked_days": bookedDays, "utilization_percent": calculateUtilizationPercent(bookedDays, workingDays), "project_count": len(projects), "bookings": bookingViews})
 	}
 	currentCount, _ := app.countOfficialBookings(r.Context(), startDate, endDate)
@@ -184,7 +184,7 @@ func (app *App) managerSummaryPayload(r *http.Request) (map[string]any, int, err
 			capRows = append(capRows, CapacityBooking{ID: booking.ID, BAID: booking.BAID, StartDate: booking.StartDate, EndDate: booking.EndDate, CapacityPercent: booking.CapacityPercent, Status: booking.Status})
 		}
 		capacity := getRangeCapacity(capRows, startDate, endDate, "")
-		bookedManDays := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
+		bookedManDays := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
 		utilization := calculateUtilizationPercent(bookedManDays, workingDays)
 		label := classifyCapacity(utilization)
 		if capacity.MaxRiskCapacity > 100 { label = "OVERBOOKED" }

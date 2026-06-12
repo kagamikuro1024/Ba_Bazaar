@@ -26,6 +26,7 @@ func (app *App) Routes() http.Handler {
 
 		r.Get("/projects", app.handleProjects)
 		r.Get("/tags", app.handleTags)
+		r.Post("/tags/extract", app.handleTagExtraction)
 		r.Get("/ba", app.handleBAList)
 		r.Post("/ba", app.handleBACreate)
 		r.Get("/ba/{id}", app.handleBAByID)

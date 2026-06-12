@@ -18,17 +18,18 @@ func canApproveBooking(role string) bool       { return role == "BA_MANAGER" }
 func canAssignBooking(role string) bool        { return role == "BA_MANAGER" }
 
 type bookingInput struct {
-	BAID            *string `json:"ba_id"`
-	ProjectID       *string `json:"project_id"`
-	ProjectName     *string `json:"project_name"`
-	Title           *string `json:"title"`
-	Description     *string `json:"description"`
-	Notes           *string `json:"notes"`
-	StartDate       *string `json:"start_date"`
-	EndDate         *string `json:"end_date"`
-	CapacityPercent *int    `json:"capacity_percent"`
-	Priority        *string `json:"priority"`
-	ManagerComment  *string `json:"manager_comment"`
+	BAID             *string  `json:"ba_id"`
+	ProjectID        *string  `json:"project_id"`
+	ProjectName      *string  `json:"project_name"`
+	Title            *string  `json:"title"`
+	Description      *string  `json:"description"`
+	Notes            *string  `json:"notes"`
+	RequiredSkillIDs []string `json:"required_skill_ids"`
+	StartDate        *string  `json:"start_date"`
+	EndDate          *string  `json:"end_date"`
+	CapacityPercent  *int     `json:"capacity_percent"`
+	Priority         *string  `json:"priority"`
+	ManagerComment   *string  `json:"manager_comment"`
 }
 
 func (app *App) handleBookingsList(w http.ResponseWriter, r *http.Request) {
@@ -510,7 +511,7 @@ func (app *App) normalizeBookingInput(ctx context.Context, input bookingInput) (
 	if input.Priority != nil && strings.TrimSpace(*input.Priority) != "" {
 		priority = strings.TrimSpace(*input.Priority)
 	}
-	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: strings.TrimSpace(*input.Description), Notes: trimStringPtr(input.Notes), StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
+	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: strings.TrimSpace(*input.Description), Notes: trimStringPtr(input.Notes), RequiredSkillIDs: ParseSkillIDsFromSlice(input.RequiredSkillIDs), StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
 	warning := map[string]any(nil)
 	if baID != nil {
 		warning = app.submitWarning(ctx, *baID, startDate, endDate, *input.CapacityPercent)
@@ -519,15 +520,16 @@ func (app *App) normalizeBookingInput(ctx context.Context, input bookingInput) (
 }
 
 type bookingInputNormalized struct {
-	BAID            *string
-	ProjectID       string
-	Title           string
-	Description     string
-	Notes           *string
-	StartDate       time.Time
-	EndDate         time.Time
-	CapacityPercent int
-	Priority        string
+	BAID             *string
+	ProjectID        string
+	Title            string
+	Description      string
+	Notes            *string
+	RequiredSkillIDs []string
+	StartDate        time.Time
+	EndDate          time.Time
+	CapacityPercent  int
+	Priority         string
 }
 
 func allowedCapacity(value int) bool {
@@ -586,7 +588,11 @@ func (app *App) insertBooking(ctx context.Context, input *bookingInputNormalized
 	if status == "APPROVED" {
 		approvedAt = time.Now().UTC()
 	}
-	_, err := app.DB.Pool.Exec(ctx, `insert into bookings (id, ba_id, project_id, requester_id, manager_id, title, description, notes, start_date, end_date, capacity_percent, priority, status, manager_comment, approved_at, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),now())`, id, nullableString(input.BAID), input.ProjectID, requesterID, nullableString(managerID), input.Title, input.Description, nullableString(input.Notes), input.StartDate, input.EndDate, input.CapacityPercent, input.Priority, status, nullableString(managerComment), approvedAt)
+	pendingChanges := any(nil)
+	if len(input.RequiredSkillIDs) > 0 {
+		pendingChanges = map[string]any{"required_skill_ids": input.RequiredSkillIDs}
+	}
+	_, err := app.DB.Pool.Exec(ctx, `insert into bookings (id, ba_id, project_id, requester_id, manager_id, title, description, notes, pending_changes, start_date, end_date, capacity_percent, priority, status, manager_comment, approved_at, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())`, id, nullableString(input.BAID), input.ProjectID, requesterID, nullableString(managerID), input.Title, input.Description, nullableString(input.Notes), pendingChanges, input.StartDate, input.EndDate, input.CapacityPercent, input.Priority, status, nullableString(managerComment), approvedAt)
 	if err != nil {
 		return nil, err
 	}

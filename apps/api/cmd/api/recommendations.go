@@ -354,3 +354,17 @@ func ParseSkillIDs(values []string) []string {
 	}
 	return out
 }
+
+func ParseSkillIDsFromSlice(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		part := strings.TrimSpace(raw)
+		if part == "" || seen[part] {
+			continue
+		}
+		seen[part] = true
+		out = append(out, part)
+	}
+	return out
+}

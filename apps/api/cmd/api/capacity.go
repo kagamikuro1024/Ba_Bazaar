@@ -34,7 +34,11 @@ func isOfficialCapacityStatus(status string) bool {
 	return status == "APPROVED" || status == "IN_PROGRESS"
 }
 
-func isUtilizationStatus(status string) bool {
+func isCurrentUtilizationStatus(status string) bool {
+	return isOfficialCapacityStatus(status)
+}
+
+func isHistoricalUtilizationStatus(status string) bool {
 	return status == "APPROVED" || status == "IN_PROGRESS" || status == "COMPLETED"
 }
 
@@ -101,9 +105,17 @@ func canApproveCapacity(bookings []CapacityBooking, startDate, endDate time.Time
 }
 
 func calculateBookedWorkingDays(bookings []CapacityBooking, startDate, endDate time.Time) float64 {
+	return calculateBookedWorkingDaysByStatus(bookings, startDate, endDate, isCurrentUtilizationStatus)
+}
+
+func calculateHistoricalBookedWorkingDays(bookings []CapacityBooking, startDate, endDate time.Time) float64 {
+	return calculateBookedWorkingDaysByStatus(bookings, startDate, endDate, isHistoricalUtilizationStatus)
+}
+
+func calculateBookedWorkingDaysByStatus(bookings []CapacityBooking, startDate, endDate time.Time, includeStatus func(string) bool) float64 {
 	booked := 0.0
 	for _, booking := range bookings {
-		if !isUtilizationStatus(booking.Status) {
+		if !includeStatus(booking.Status) {
 			continue
 		}
 		overlapStart := maxDate(booking.StartDate, startDate)
@@ -126,10 +138,14 @@ func calculateBookingManDays(booking CapacityBooking, startDate, endDate time.Ti
 }
 
 func calculateUtilizationPercent(bookedManDays float64, availableManDays int) float64 {
-	if availableManDays <= 0 {
+	return calculateUtilizationPercentByCommittedCapacity(bookedManDays, availableManDays)
+}
+
+func calculateUtilizationPercentByCommittedCapacity(bookedManDays float64, committedCapacityDays int) float64 {
+	if committedCapacityDays <= 0 {
 		return 0
 	}
-	return round1((bookedManDays / float64(availableManDays)) * 100)
+	return round1((bookedManDays / float64(committedCapacityDays)) * 100)
 }
 
 func calculateBenchRate(benchCount, totalCount int) float64 {
