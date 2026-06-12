@@ -33,6 +33,7 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
 import { useInboxDirty } from '@/lib/unsaved-changes';
+import { cn } from '@/lib/utils';
 import {
   GlobalSearchModal,
   globalSearchStorage,
@@ -186,6 +187,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     globalSearchStorage.load()
   );
   const notificationRef = useRef<HTMLDivElement | null>(null);
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const [notificationPanelPos, setNotificationPanelPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
@@ -268,6 +270,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   }, []);
 
   const toggleNotificationPanel = useCallback(() => {
+    setUserMenuOpen(false);
     setNotificationOpen((current) => {
       if (!current) {
         const rect = notificationRef.current?.getBoundingClientRect();
@@ -335,6 +338,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
       if (
         notificationRef.current?.contains(target) ||
+        notificationPanelRef.current?.contains(target) ||
         userMenuRef.current?.contains(target)
       ) {
         return;
@@ -449,11 +453,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 </span>
               ) : null}
             </Link>
+            <span
+              className="mx-0.5 h-5 w-px shrink-0 rounded-full bg-slate-200"
+              aria-hidden="true"
+            />
             <div ref={setUserMenuRootRef} className="relative">
               <UserAvatarButton
                 user={user}
                 userMenuOpen={userMenuOpen}
-                onClick={() => setUserMenuOpen((current) => !current)}
+                onClick={() => {
+                  setNotificationOpen(false);
+                  setUserMenuOpen((current) => !current);
+                }}
               />
               {userMenuOpen ? (
                 <Card className="absolute right-0 top-12 z-[70] w-56 shadow-lg">
@@ -646,7 +657,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   <UserAvatarButton
                     user={user}
                     userMenuOpen={userMenuOpen}
-                    onClick={() => setUserMenuOpen((current) => !current)}
+                    onClick={() => {
+                      setNotificationOpen(false);
+                      setUserMenuOpen((current) => !current);
+                    }}
                   />
                   {userMenuOpen ? (
                     <Card className="absolute bottom-0 left-full z-[70] ml-3 w-56 shadow-lg">
@@ -667,43 +681,66 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <UserAvatarButton
-                  user={user}
-                  userMenuOpen={userMenuOpen}
-                  onClick={() => setUserMenuOpen((current) => !current)}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-700">
-                    {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">{displayRole}</p>
-                </div>
-                <div ref={setNotificationRootRef} className="relative">
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    aria-label="Notifications"
-                    aria-expanded={notificationOpen}
-                    onClick={toggleNotificationPanel}
+                <div ref={setUserMenuRootRef} className="relative min-w-0 flex-1">
+                  <div
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 transition',
+                      userMenuOpen
+                        ? 'border-slate-300 bg-slate-100 text-slate-950'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    )}
                   >
-                    <Bell className="h-4 w-4" />
-                  </Button>
-                  {unreadCount > 0 ? (
-                    <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
-                      {unreadCount}
-                    </span>
-                  ) : null}
-                </div>
-                <div ref={setUserMenuRootRef} className="relative">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="User menu"
-                    aria-expanded={userMenuOpen}
-                    onClick={() => setUserMenuOpen((current) => !current)}
-                  >
-                    <ChevronRight className="h-4 w-4 rotate-90" />
-                  </Button>
+                    <button
+                      type="button"
+                      aria-label="User menu"
+                      aria-expanded={userMenuOpen}
+                      onClick={() => {
+                        setNotificationOpen(false);
+                        setUserMenuOpen((current) => !current);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                        {user?.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-semibold text-slate-700">
+                            {(user?.full_name ?? 'U')
+                              .split(' ')
+                              .map((part) => part[0])
+                              .slice(0, 2)
+                              .join('')}
+                          </span>
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-700">
+                          {me.data?.user.full_name ?? user?.full_name ?? 'Authenticated user'}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">{displayRole}</p>
+                      </div>
+                    </button>
+                    <span className="h-5 w-px shrink-0 rounded-full bg-slate-200" aria-hidden="true" />
+                    <div ref={setNotificationRootRef} className="relative shrink-0">
+                      <button
+                        type="button"
+                        aria-label="Notifications"
+                        aria-expanded={notificationOpen}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleNotificationPanel();
+                        }}
+                        className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-700"
+                      >
+                        <Bell className="h-4 w-4" />
+                        {unreadCount > 0 ? (
+                          <span className="absolute -right-1 -top-1 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white">
+                            {unreadCount}
+                          </span>
+                        ) : null}
+                      </button>
+                    </div>
+                  </div>
                   {userMenuOpen ? (
                     <Card className="absolute bottom-12 right-0 z-[70] w-56 shadow-lg">
                       <CardContent className="p-2">
@@ -985,13 +1022,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       ) : null}
       {notificationOpen && notificationPanelPos
         ? createPortal(
-            <Card className="fixed z-[100] w-96 shadow-lg" style={notificationPanelPos}>
+            <Card
+              ref={notificationPanelRef}
+              className="fixed z-[100] w-96 shadow-lg"
+              style={notificationPanelPos}
+            >
               <CardContent className="p-0">
                 <NotificationPanel
                   unreadCount={unreadCount}
                   recentNotifications={recentNotifications}
                   resolveNotificationPath={resolveNotificationPath}
                   markRead={(id) => markRead.mutate(id)}
+                  onViewAll={() => setNotificationOpen(false)}
                 />
               </CardContent>
             </Card>,
@@ -1006,12 +1048,14 @@ function NotificationPanel({
   unreadCount,
   recentNotifications,
   resolveNotificationPath,
-  markRead
+  markRead,
+  onViewAll
 }: {
   unreadCount: number;
   recentNotifications: NotificationItem[];
   resolveNotificationPath: (item: NotificationItem) => string;
   markRead: (id: string) => void;
+  onViewAll: () => void;
 }) {
   return (
     <>
@@ -1021,7 +1065,9 @@ function NotificationPanel({
           <p className="text-xs text-slate-500">{unreadCount} unread</p>
         </div>
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/notifications">View all</Link>
+          <Link to="/notifications" onClick={onViewAll}>
+            View all
+          </Link>
         </Button>
       </div>
       <div
@@ -1040,6 +1086,7 @@ function NotificationPanel({
                 if (!item.read_at) {
                   markRead(item.id);
                 }
+                onViewAll();
               }}
             >
               <div className="flex items-start justify-between gap-3">
