@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CalendarDays, Plus, Search } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
+import { PageHeader } from '@/components';
 import {
   apiFetch,
   type BAProfile,
@@ -80,13 +81,22 @@ export function BADirectoryPage() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-        {canManageBa ? (
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> Create BA
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        eyebrow="Directory"
+        title="BA Directory"
+        description={
+          isManagerView
+            ? 'Browse BA profiles, availability, levels, and skills before assigning work or creating booking requests.'
+            : 'Browse active BA profiles, availability, levels, and skills before creating booking requests.'
+        }
+        actions={
+          canManageBa ? (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> Create BA
+            </Button>
+          ) : null
+        }
+      />
 
       {successMessage ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
