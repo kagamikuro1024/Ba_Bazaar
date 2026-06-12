@@ -85,7 +85,7 @@ export function App() {
           path="/reports"
           element={
             <ProtectedPage>
-              <LayoutShell>
+              <LayoutShell suppressPageHeader>
                 <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
                   <ReportsPage />
                 </RequireRole>

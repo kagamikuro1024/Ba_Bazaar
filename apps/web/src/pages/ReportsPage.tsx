@@ -4,6 +4,7 @@ import { Download, Search, X } from 'lucide-react';
 import { apiFetch, downloadCsv, type ManagerDashboardSummary } from '@/lib/api';
 import { AISummaryCard } from '@/components/AISummaryCard';
 import { useAISummary } from '@/lib/aiSummary';
+import { PageHeader } from '@/components';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
@@ -91,23 +92,29 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-4 sm:gap-5">
-      <div className="grid gap-2 sm:gap-3 md:flex md:items-center md:justify-between">
-        <div className="hidden md:block" />
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex">
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => {
-              setMonth(event.target.value);
-              setPage(1);
-            }}
-            className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          />
-          <Button onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}>
-            <Download className="h-4 w-4" /> CSV
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Insights"
+        title="Reports"
+        description="Analyze monthly utilization, staffing pressure, and project effort across the BA team."
+        actions={
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex">
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => {
+                setMonth(event.target.value);
+                setPage(1);
+              }}
+              className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            />
+            <Button
+              onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+          </div>
+        }
+      />
       {report.isLoading || managerSummary.isLoading ? (
         <LoadingScreen message="Loading report" />
       ) : null}
