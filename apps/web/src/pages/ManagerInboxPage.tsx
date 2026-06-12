@@ -1434,7 +1434,7 @@ export function ManagerInboxPage() {
       {successMessage || saveForLaterMessage ? (
         <div className="fixed left-4 right-4 top-4 z-[60] flex flex-col gap-3 sm:left-auto sm:max-w-sm">
           {successMessage ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
               <div className="flex items-start justify-between gap-3">
                 <span>{successMessage}</span>
                 <button
@@ -1449,7 +1449,7 @@ export function ManagerInboxPage() {
             </div>
           ) : null}
           {saveForLaterMessage ? (
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-lg">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-lg">
               <div className="flex items-start justify-between gap-3">
                 <span>{saveForLaterMessage}</span>
                 <button
@@ -1480,7 +1480,7 @@ export function ManagerInboxPage() {
       rejectChanges.error ||
       approveFields.error ||
       rejectFields.error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {
             (
               approve.error ??
@@ -1498,7 +1498,7 @@ export function ManagerInboxPage() {
         </div>
       ) : null}
       {!canManageInbox ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           Admin support role can review this inbox but cannot approve, reject, cancel, or
           assign bookings.
         </div>
@@ -1636,7 +1636,7 @@ export function ManagerInboxPage() {
 
       <div className="grid items-start gap-5">
         <div className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-sm font-medium text-slate-500">
               Showing {filteredBookings.length} request
               {filteredBookings.length === 1 ? '' : 's'}
@@ -1678,7 +1678,7 @@ export function ManagerInboxPage() {
             pageSize={pageSize}
             total={filteredBookings.length}
             onPageChange={setPage}
-            className="rounded-xl border border-slate-200 bg-white shadow-sm"
+            className="rounded-2xl border border-slate-200 bg-white shadow-sm"
           />
         </div>
 
@@ -1993,7 +1993,7 @@ export function ManagerInboxPage() {
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Changes summary
               </p>
@@ -2070,7 +2070,7 @@ export function ManagerInboxPage() {
             {selectedPendingChangeEntries.map((entry) => (
               <div
                 key={entry.key}
-                className="rounded-lg border border-slate-200 p-3 text-sm"
+                className="rounded-2xl border border-slate-200 p-3 text-sm"
               >
                 <p className="font-medium text-slate-950">{entry.label}</p>
                 <p className="mt-1 text-slate-600">
@@ -2260,7 +2260,7 @@ export function RequestDetailPanel({
           </div>
         </div>
 
-        <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-2 xl:grid-cols-4">
           <RequestSummaryItem
             label={assignmentLabel}
             value={assignmentName}
@@ -2290,7 +2290,7 @@ export function RequestDetailPanel({
 
       <CardContent className="grid gap-5 p-5">
         {hasPendingChanges ? (
-          <section className="grid gap-4 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-blue-50 p-4">
+          <section className="grid gap-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-blue-50 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">Changes Proposed</p>
@@ -2308,7 +2308,7 @@ export function RequestDetailPanel({
           </section>
         ) : null}
 
-        <section className="grid gap-2 rounded-xl border border-slate-200 p-4">
+        <section className="grid gap-2 rounded-2xl border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-950">Project / Business need</p>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-semibold text-slate-900">{booking.project.name}</span>
@@ -2324,7 +2324,7 @@ export function RequestDetailPanel({
         </section>
 
         {verificationItems.length > 0 ? (
-          <section className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <section className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-amber-600" />
               <p className="text-sm font-semibold text-amber-900">
@@ -2343,7 +2343,7 @@ export function RequestDetailPanel({
         ) : null}
 
         {canEditCapacity ? (
-          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+          <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">Capacity decision</p>
@@ -2388,7 +2388,7 @@ export function RequestDetailPanel({
           </section>
         ) : null}
 
-        <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+        <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-950">Capacity preview</p>
             <Badge
@@ -2448,7 +2448,7 @@ export function RequestDetailPanel({
         </section>
 
         {canManageActions && canAssign ? (
-          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+          <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-950">
                 {booking.ba ? 'Reassign BA' : 'Select BA for Assignment'}
@@ -2466,7 +2466,7 @@ export function RequestDetailPanel({
 
             <div className="relative">
               <div
-                className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300"
+                className="flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200 bg-white p-3 hover:border-slate-300"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               >
                 {selectedBa ? (
@@ -2488,7 +2488,7 @@ export function RequestDetailPanel({
               </div>
 
               {isDropdownOpen && (
-                <div className="absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                <div className="absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                   <div className="flex items-center gap-2 border-b border-slate-100 p-3">
                     <Search className="h-4 w-4 text-slate-400" />
                     <input
@@ -2541,7 +2541,7 @@ export function RequestDetailPanel({
             </div>
           </section>
         ) : (
-          <section className="grid gap-3 rounded-xl border border-slate-200 p-4">
+          <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-950">
               {canAssign ? 'Requested BA / Assignment' : 'Assigned BA'}
             </p>

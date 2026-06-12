@@ -60,7 +60,7 @@ export function AISummaryCard({
           {summary.bullets.map((bullet) => (
             <div
               key={bullet.text}
-              className="rounded-lg border border-blue-100 bg-white/80 p-3 text-sm text-slate-700"
+              className="rounded-2xl border border-blue-100 bg-white/80 p-3 text-sm text-slate-700"
             >
               <p>{renderHighlightedText(bullet.text, bullet.highlights ?? [])}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -155,7 +155,7 @@ function AISummaryLoadingCard({ title, className }: { title: string; className?:
             (label, index) => (
               <div
                 key={label}
-                className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white/80 p-3"
+                className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white/80 p-3"
               >
                 <span
                   className="h-2 w-2 rounded-full bg-blue-500 animate-[dashboard-dot_1.2s_ease-in-out_infinite]"

@@ -122,10 +122,10 @@ const timelineRows = [
 function ProductPreview() {
   return (
     <div
-      className="relative min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-2xl shadow-slate-900/10"
+      className="relative min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-2xl shadow-slate-900/10"
       aria-label="Bản xem trước giao diện dashboard và timeline BA Bazaar"
     >
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase text-blue-700">Manager Dashboard</p>
@@ -165,7 +165,7 @@ function ProductPreview() {
                 tone: 'border-rose-200 bg-rose-50'
               }
             ].map((item) => (
-              <div key={item.title} className={`rounded-lg border p-3 ${item.tone}`}>
+              <div key={item.title} className={`rounded-2xl border p-3 ${item.tone}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-950">{item.title}</p>
@@ -179,7 +179,7 @@ function ProductPreview() {
             ))}
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-3">
               <div>
                 <p className="text-xs font-bold uppercase text-slate-500">Resource timeline</p>
@@ -322,7 +322,7 @@ export function LandingPage() {
               {stats.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-lg border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur"
+                  className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur"
                 >
                   <p className="text-sm font-medium text-slate-500">{item.label}</p>
                   <p className="mt-2 text-3xl font-bold text-slate-950">{item.value}</p>
@@ -460,7 +460,7 @@ export function LandingPage() {
 
         <section className="bg-white py-14 sm:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-6 rounded-lg border border-blue-200 bg-blue-50 p-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="grid gap-6 rounded-2xl border border-blue-200 bg-blue-50 p-6 md:grid-cols-[1fr_auto] md:items-center">
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold uppercase text-blue-700">
                   <LayoutDashboard className="h-4 w-4" />

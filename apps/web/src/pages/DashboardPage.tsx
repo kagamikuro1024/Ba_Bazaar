@@ -431,7 +431,7 @@ export function DashboardPage() {
               ))}
 
               {dashboardData.upcoming.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
                   {isBaDashboard
                     ? 'No upcoming approved work has been assigned yet.'
                     : 'No booking requests found for your account.'}
@@ -463,7 +463,7 @@ function ManagerDashboardHeaderActions({
   return (
     <Card className="w-full border-slate-200 shadow-sm">
       <CardContent className="flex w-full flex-wrap items-center justify-end gap-2 p-3 sm:p-4">
-        <div className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
+        <div className="grid w-full grid-cols-4 rounded-2xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
           {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
             <button
               key={mode}
@@ -860,7 +860,7 @@ function ManagerAlertLink({
   return (
     <Link
       to={to}
-      className="flex gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
+      className="flex gap-3 rounded-2xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
     >
       <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', dotClass)} />
       <span className="min-w-0">
@@ -912,7 +912,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
 
   return (
     <Link to={target}>
-      <div className="grid gap-4 rounded-lg border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-base font-semibold text-slate-950">

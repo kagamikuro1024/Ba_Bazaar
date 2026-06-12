@@ -544,7 +544,7 @@ function RequestDetailModal({
             <p className="mt-1 text-slate-500">{booking.project.name}</p>
           </div>
           <p className="leading-6 text-slate-600">{booking.description}</p>
-          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p>
               Date: {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
             </p>

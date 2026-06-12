@@ -78,7 +78,7 @@ export function AdvancedFilterPopover({
       role="presentation"
     >
       <div
-        className="absolute left-4 right-4 top-32 z-50 rounded-lg border border-slate-200 bg-white shadow-2xl sm:left-auto"
+        className="absolute left-4 right-4 top-32 z-50 rounded-2xl border border-slate-200 bg-white shadow-2xl sm:left-auto"
         style={{ maxWidth: width, width: `min(${width}px, calc(100vw - 2rem))` }}
         onClick={(event) => event.stopPropagation()}
         role="dialog"

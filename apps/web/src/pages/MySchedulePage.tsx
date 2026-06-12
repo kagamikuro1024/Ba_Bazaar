@@ -221,7 +221,7 @@ function ScheduleMeta({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex min-w-0 gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>

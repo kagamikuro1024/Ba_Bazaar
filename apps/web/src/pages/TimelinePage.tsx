@@ -1600,7 +1600,7 @@ function PeriodPickerPopover({
                         type="button"
                         onClick={() => onSelect(week.start)}
                         className={cn(
-                          'flex items-center justify-between rounded-lg border px-3 py-2 text-left transition',
+                          'flex items-center justify-between rounded-2xl border px-3 py-2 text-left transition',
                           selected
                             ? 'border-blue-300 bg-blue-50 text-blue-800'
                             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
@@ -1711,7 +1711,7 @@ function PeriodPickerModal({
       onClose={onClose}
     >
       <div className="grid gap-4">
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
           <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -1744,7 +1744,7 @@ function PeriodPickerModal({
                         type="button"
                         onClick={() => onSelect(week.start)}
                         className={cn(
-                          'flex items-center justify-between rounded-xl border px-3 py-2 text-left transition',
+                          'flex items-center justify-between rounded-2xl border px-3 py-2 text-left transition',
                           selected
                             ? 'border-blue-300 bg-blue-50 text-blue-800'
                             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
@@ -1775,7 +1775,7 @@ function PeriodPickerModal({
                   type="button"
                   onClick={() => onSelect(monthDate)}
                   className={cn(
-                    'rounded-xl border px-3 py-4 text-left transition',
+                    'rounded-2xl border px-3 py-4 text-left transition',
                     selected
                       ? 'border-blue-300 bg-blue-50 text-blue-800'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'

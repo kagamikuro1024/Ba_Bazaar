@@ -243,7 +243,7 @@ export function BAProfilePage() {
               {historyBookings.length > 0 ? (
                 <>
                   {completedHistoryBookings.length > 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 via-white to-blue-50/40 p-4">
+                    <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 via-white to-blue-50/40 p-4">
                       <div className="mb-3 grid gap-3 md:flex md:items-start md:justify-between">
                         <div>
                           <p className="text-sm font-medium text-slate-900">Completed booking capacity trend</p>

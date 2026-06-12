@@ -268,7 +268,7 @@ export function NotificationsManagerPage() {
     <>
       <NotificationsListPage />
       {successMessage ? (
-        <div className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
+        <div className="fixed right-4 top-4 z-[60] max-w-sm rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
           <div className="flex items-start justify-between gap-3">
             <span>{successMessage}</span>
             <button

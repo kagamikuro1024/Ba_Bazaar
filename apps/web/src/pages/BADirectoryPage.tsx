@@ -282,7 +282,7 @@ function BAAvailabilityCard({
           </div>
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-slate-500">Current capacity</span>
             <span className="font-bold text-slate-950">{capacityPercent}%</span>
