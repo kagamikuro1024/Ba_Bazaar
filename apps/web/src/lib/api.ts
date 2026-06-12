@@ -291,6 +291,27 @@ export function getRequestType(booking: Booking): RequestType {
   return booking.ba_id ? 'SPECIFIC_BA' : 'OPEN_REQUEST';
 }
 
+// Requirement metadata stored inside pending_changes at request creation.
+// These are inputs for AI Suggest scoring, not manager-reviewable changes.
+export const BOOKING_REQUIREMENT_KEYS = ['required_skill_ids', 'required_level'];
+
+export function getBookingRequirements(booking: Booking): {
+  requiredSkillIds: string[];
+  requiredLevel: BALevel | '';
+} {
+  const changes = booking.pending_changes ?? {};
+  const rawIds = changes['required_skill_ids'];
+  const requiredSkillIds = Array.isArray(rawIds)
+    ? rawIds.filter((value): value is string => typeof value === 'string')
+    : [];
+  const rawLevel = changes['required_level'];
+  const requiredLevel =
+    rawLevel === 'JUNIOR' || rawLevel === 'MIDDLE' || rawLevel === 'SENIOR' || rawLevel === 'LEAD'
+      ? rawLevel
+      : '';
+  return { requiredSkillIds, requiredLevel };
+}
+
 export function needsManagerVerification(booking: Booking) {
   const content = `${booking.description}\n${booking.notes ?? ''}`.toLowerCase();
 

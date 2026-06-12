@@ -1,15 +1,38 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+)
+
+// ============================================================================
+// Extract Skill from PRD — POST /api/tags/extract
+//
+// PM/PO pastes PRD text; we suggest required skill tags + BA level.
+// Order of attempts:
+//   1. In-memory cache (keyed by hash of normalized PRD text + active tag set)
+//      so re-clicking "Extract" on the same text never re-bills the LLM.
+//   2. DeepSeek with JSON-mode output.
+//   3. Deterministic keyword heuristic (always succeeds).
+// ============================================================================
+
+const (
+	// Hard cap on PRD characters sent to the LLM. Beyond this, extra text
+	// rarely changes the suggested tags but always costs tokens.
+	tagExtractionMaxInputChars = 8000
+	tagExtractionMaxTags       = 6
+	tagExtractionMaxReasons    = 6
+	tagExtractionCacheMax      = 200
+	tagExtractionCacheTTL      = 24 * time.Hour
 )
 
 type skillExtractionRequest struct {
@@ -24,7 +47,18 @@ type skillExtractionResponse struct {
 	SuggestedLevel  string   `json:"suggested_level"`
 	Reasoning       []string `json:"reasoning"`
 	Provider        string   `json:"provider"`
+	Cached          bool     `json:"cached,omitempty"`
 }
+
+type cachedSkillExtraction struct {
+	Response  skillExtractionResponse
+	ExpiresAt time.Time
+}
+
+var tagExtractionCache = struct {
+	sync.Mutex
+	items map[string]cachedSkillExtraction
+}{items: map[string]cachedSkillExtraction{}}
 
 func (app *App) handleTagExtraction(w http.ResponseWriter, r *http.Request) {
 	user, err := app.currentUser(r)
@@ -48,10 +82,12 @@ func (app *App) handleTagExtraction(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(valueOrEmpty(body.Title)),
 		strings.TrimSpace(valueOrEmpty(body.Description)),
 	}, "\n")
-	if strings.TrimSpace(combinedRaw) == "" {
+	combinedRaw = strings.TrimSpace(combinedRaw)
+	if combinedRaw == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "text is required"})
 		return
 	}
+	combinedRaw = truncateForLLM(combinedRaw, tagExtractionMaxInputChars)
 
 	tags, err := app.fetchActiveSkillTags(r)
 	if err != nil {
@@ -59,15 +95,81 @@ func (app *App) handleTagExtraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cache key covers the PRD text AND the active tag set: if a manager
+	// adds/retires tags, old cached suggestions are not reused.
+	cacheKey := tagExtractionCacheKey(combinedRaw, tags)
+	if cached := getCachedTagExtraction(cacheKey); cached != nil {
+		writeJSON(w, http.StatusOK, cached)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
 	if response, err := extractSkillTagsWithDeepSeek(ctx, combinedRaw, tags); err == nil {
+		rememberTagExtraction(cacheKey, *response)
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
 
+	// Heuristic results are cheap; cache them too so the response stays
+	// stable, but they will be replaced once the LLM succeeds after a
+	// cache expiry.
 	response := extractSkillTagsHeuristic(combinedRaw, tags)
 	writeJSON(w, http.StatusOK, response)
+}
+
+func truncateForLLM(text string, max int) string {
+	if len(text) <= max {
+		return text
+	}
+	cut := text[:max]
+	// Avoid cutting a multi-byte rune in half.
+	for len(cut) > 0 && !isUTF8Start(cut[len(cut)-1]) {
+		cut = cut[:len(cut)-1]
+	}
+	return cut
+}
+
+func isUTF8Start(b byte) bool { return b < 0x80 || b >= 0xC0 }
+
+func tagExtractionCacheKey(text string, tags []SkillTag) string {
+	normalized := strings.ToLower(strings.Join(strings.Fields(text), " "))
+	ids := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		ids = append(ids, tag.ID)
+	}
+	sort.Strings(ids)
+	sum := sha256.Sum256([]byte(normalized + "|" + strings.Join(ids, ",")))
+	return hex.EncodeToString(sum[:])
+}
+
+func getCachedTagExtraction(key string) *skillExtractionResponse {
+	tagExtractionCache.Lock()
+	defer tagExtractionCache.Unlock()
+	cached, ok := tagExtractionCache.items[key]
+	if !ok {
+		return nil
+	}
+	if time.Now().After(cached.ExpiresAt) {
+		delete(tagExtractionCache.items, key)
+		return nil
+	}
+	copy := cached.Response
+	copy.Cached = true
+	return &copy
+}
+
+func rememberTagExtraction(key string, response skillExtractionResponse) {
+	tagExtractionCache.Lock()
+	defer tagExtractionCache.Unlock()
+	if len(tagExtractionCache.items) >= tagExtractionCacheMax {
+		for k := range tagExtractionCache.items {
+			delete(tagExtractionCache.items, k)
+			break
+		}
+	}
+	response.Cached = false
+	tagExtractionCache.items[key] = cachedSkillExtraction{Response: response, ExpiresAt: time.Now().Add(tagExtractionCacheTTL)}
 }
 
 func (app *App) fetchActiveSkillTags(r *http.Request) ([]SkillTag, error) {
@@ -92,13 +194,6 @@ func (app *App) fetchActiveSkillTags(r *http.Request) ([]SkillTag, error) {
 }
 
 func extractSkillTagsWithDeepSeek(ctx context.Context, text string, tags []SkillTag) (*skillExtractionResponse, error) {
-	apiKey := strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY"))
-	if apiKey == "" {
-		return nil, fmt.Errorf("DEEPSEEK_API_KEY is not configured")
-	}
-	model := envOr("DEEPSEEK_MODEL", "deepseek-chat")
-	baseURL := strings.TrimRight(envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com"), "/")
-
 	type tagOption struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
@@ -117,61 +212,27 @@ Return ONLY compact JSON matching this schema:
 {"suggested_tag_ids":["tag-id"],"suggested_level":"JUNIOR|MIDDLE|SENIOR|LEAD|","reasoning":["short reason"]}
 Rules:
 - Use only tag IDs from the provided tag list.
-- Pick at most 6 tags.
+- Pick at most %d tags, ordered most relevant first.
 - Pick exactly one suggested_level when the PRD gives enough complexity signal; otherwise use "".
 - Level rubric: JUNIOR = simple documentation/clear low-risk work; MIDDLE = normal feature discovery and moderate ambiguity; SENIOR = complex rules, integrations, compliance, payments, reporting, or multi-stakeholder work; LEAD = enterprise-wide strategy, operating-model redesign, or high-risk multi-workstream governance.
-- Prefer tags and levels directly supported by the PRD text.
+- Each reasoning item must be one short sentence tied to a chosen tag or to the level, max %d items.
+- Prefer tags and levels directly supported by the PRD text. Do not invent tags.
 
 Available tags:
 %s
 
 PRD text:
-%s`, string(optionsJSON), text)
+%s`, tagExtractionMaxTags, tagExtractionMaxReasons, string(optionsJSON), text)
 
-	payload := map[string]any{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": "You extract structured skill tags. Return valid JSON only."},
-			{"role": "user", "content": prompt},
-		},
-		"temperature": 0.1,
-	}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/chat/completions", bytes.NewReader(body))
+	content, err := callDeepSeekJSON(ctx, deepSeekChatRequest{
+		System:      "You extract structured skill tags. Return valid JSON only.",
+		User:        prompt,
+		Temperature: 0.1,
+		MaxTokens:   600,
+	})
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("deepseek status %d", resp.StatusCode)
-	}
-
-	var decoded struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, err
-	}
-	if len(decoded.Choices) == 0 {
-		return nil, fmt.Errorf("deepseek returned no choices")
-	}
-
-	content := strings.TrimSpace(decoded.Choices[0].Message.Content)
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
-	content = strings.TrimSuffix(content, "```")
-	content = strings.TrimSpace(content)
 
 	var parsed skillExtractionResponse
 	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
@@ -179,15 +240,22 @@ PRD text:
 	}
 	parsed.Provider = "deepseek"
 	parsed.SuggestedTagIDs = sanitizeTagIDs(parsed.SuggestedTagIDs, valid)
+	if len(parsed.SuggestedTagIDs) > tagExtractionMaxTags {
+		parsed.SuggestedTagIDs = parsed.SuggestedTagIDs[:tagExtractionMaxTags]
+	}
 	parsed.SuggestedLevel = sanitizeSuggestedLevel(parsed.SuggestedLevel)
 	if parsed.Reasoning == nil {
 		parsed.Reasoning = []string{}
+	}
+	if len(parsed.Reasoning) > tagExtractionMaxReasons {
+		parsed.Reasoning = parsed.Reasoning[:tagExtractionMaxReasons]
 	}
 	return &parsed, nil
 }
 
 func extractSkillTagsHeuristic(text string, tags []SkillTag) *skillExtractionResponse {
 	combined := strings.ToLower(text)
+	corpusTokens := tokenSet(combined)
 	type scoredTag struct {
 		ID        string
 		Name      string
@@ -196,7 +264,7 @@ func extractSkillTagsHeuristic(text string, tags []SkillTag) *skillExtractionRes
 	}
 	matches := make([]scoredTag, 0)
 	for _, tag := range tags {
-		score, reasons := scoreSkillTag(tag, combined)
+		score, reasons := scoreSkillTag(tag, combined, corpusTokens)
 		if score == 0 {
 			continue
 		}
@@ -208,8 +276,8 @@ func extractSkillTagsHeuristic(text string, tags []SkillTag) *skillExtractionRes
 		}
 		return matches[i].Score > matches[j].Score
 	})
-	if len(matches) > 6 {
-		matches = matches[:6]
+	if len(matches) > tagExtractionMaxTags {
+		matches = matches[:tagExtractionMaxTags]
 	}
 	response := &skillExtractionResponse{
 		SuggestedTagIDs: make([]string, 0, len(matches)),
@@ -221,7 +289,24 @@ func extractSkillTagsHeuristic(text string, tags []SkillTag) *skillExtractionRes
 		response.SuggestedTagIDs = append(response.SuggestedTagIDs, match.ID)
 		response.Reasoning = append(response.Reasoning, match.Reasoning...)
 	}
+	if len(response.Reasoning) > tagExtractionMaxReasons {
+		response.Reasoning = response.Reasoning[:tagExtractionMaxReasons]
+	}
 	return response
+}
+
+var tokenSplitPattern = regexp.MustCompile(`[^a-z0-9+#]+`)
+
+// tokenSet splits a lowercase corpus into whole-word tokens so short skill
+// tokens like "api" no longer match inside unrelated words ("rapid").
+func tokenSet(corpus string) map[string]bool {
+	out := map[string]bool{}
+	for _, token := range tokenSplitPattern.Split(corpus, -1) {
+		if token != "" {
+			out[token] = true
+		}
+	}
+	return out
 }
 
 func sanitizeTagIDs(ids []string, valid map[string]SkillTag) []string {
@@ -275,7 +360,7 @@ func sanitizeSuggestedLevel(level string) string {
 	}
 }
 
-func scoreSkillTag(tag SkillTag, corpus string) (int, []string) {
+func scoreSkillTag(tag SkillTag, corpus string, corpusTokens map[string]bool) (int, []string) {
 	name := strings.ToLower(tag.Name)
 	tokens := strings.FieldsFunc(name, func(r rune) bool {
 		return r == ' ' || r == '-' || r == '/' || r == '(' || r == ')'
@@ -286,13 +371,21 @@ func scoreSkillTag(tag SkillTag, corpus string) (int, []string) {
 		score += 4
 		reasons = append(reasons, "Matched exact skill phrase: "+tag.Name)
 	}
+	matchedTokens := 0
 	for _, token := range tokens {
 		if len(token) < 3 {
 			continue
 		}
-		if strings.Contains(corpus, token) {
+		if corpusTokens[token] {
 			score++
+			matchedTokens++
 		}
+	}
+	// Multi-word tags need more than one stray token in common with the
+	// PRD before we suggest them (e.g. "Data Migration" should not fire
+	// on the lone word "data").
+	if len(reasons) == 0 && len(tokens) > 1 && matchedTokens < 2 {
+		return 0, nil
 	}
 	if score == 0 {
 		return 0, nil

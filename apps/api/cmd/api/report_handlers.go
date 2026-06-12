@@ -169,15 +169,23 @@ func (app *App) managerSummaryPayload(r *http.Request) (map[string]any, int, err
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
-	bas, err := app.activeBAProfiles(r.Context())
+	payload, err := app.managerSummaryPayloadForRange(r.Context(), startDate, endDate)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
+	}
+	return payload, http.StatusOK, nil
+}
+
+func (app *App) managerSummaryPayloadForRange(ctx context.Context, startDate, endDate time.Time) (map[string]any, error) {
+	bas, err := app.activeBAProfiles(ctx)
+	if err != nil {
+		return nil, err
 	}
 	workingDays := len(workingDaysInRange(startDate, endDate))
 	baRows := make([]map[string]any, 0, len(bas))
 	allBookings := make([]Booking, 0)
 	for _, ba := range bas {
-		bookings, _ := app.fetchBookingsForBA(r.Context(), ba.ID, startDate, endDate)
+		bookings, _ := app.fetchBookingsForBA(ctx, ba.ID, startDate, endDate)
 		allBookings = append(allBookings, bookings...)
 		capRows := make([]CapacityBooking, 0, len(bookings))
 		for _, booking := range bookings {
@@ -203,7 +211,7 @@ func (app *App) managerSummaryPayload(r *http.Request) (map[string]any, int, err
 		if row["utilization_percent"].(float64) == 0 { benchCount++ }
 		if row["risk_capacity"].(int) > 100 { overbookedCount++ }
 	}
-	pendingRequests, unassignedRequests, urgentRequests := app.pendingActionCounts(r.Context(), startDate, endDate)
+	pendingRequests, unassignedRequests, urgentRequests := app.pendingActionCounts(ctx, startDate, endDate)
 	projectEffort, _ := app.projectEffortRowsFromBookings(allBookings, startDate, endDate)
 	return map[string]any{
 		"timeframe": map[string]string{"from": toDateKey(startDate), "to": toDateKey(endDate)},
@@ -212,7 +220,7 @@ func (app *App) managerSummaryPayload(r *http.Request) (map[string]any, int, err
 		"capacity_distribution": distribution,
 		"ba_utilization": baRows,
 		"project_effort": projectEffort,
-	}, http.StatusOK, nil
+	}, nil
 }
 
 func (app *App) activeBAProfiles(ctx context.Context) ([]BAProfile, error) {

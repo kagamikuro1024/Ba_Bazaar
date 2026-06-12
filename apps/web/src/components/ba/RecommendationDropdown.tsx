@@ -29,9 +29,6 @@ export function RecommendationDropdown({
   className?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  // Force-refetch trigger. We bump this and the hook reruns; the refetch
-  // is invoked explicitly through the panel's onRefresh callback.
-  const [, setRefreshTick] = useState(0);
   const recommendations = useBARecommendations(open ? query : null);
 
   const handleSelect = useCallback(
@@ -87,7 +84,6 @@ export function RecommendationDropdown({
             recommendations.isFetching
               ? undefined
               : () => {
-                  setRefreshTick((value) => value + 1);
                   void recommendations.refetch();
                 }
           }

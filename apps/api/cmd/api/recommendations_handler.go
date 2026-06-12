@@ -91,7 +91,7 @@ func (app *App) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch candidate BAs. BA users are scoped to themselves.
-	candidates, err := app.loadCandidateBAs(r.Context(), user, level, requiredSkillIDs)
+	candidates, err := app.loadCandidateBAs(r.Context(), user, requiredSkillIDs)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
 		return
@@ -188,7 +188,11 @@ type candidateBA struct {
 // loadCandidateBAs returns all BAs that should be considered. PM_PO and
 // "bookable" callers only see ACTIVE. BA users see only themselves (further
 // filtered downstream). Manager/Admin see everything.
-func (app *App) loadCandidateBAs(ctx context.Context, user *User, level string, requiredSkillIDs []string) ([]candidateBA, error) {
+//
+// Note: the requested level is intentionally NOT filtered here. Per
+// docs/plans/recommendation-model.md, level is a soft signal (level_fit,
+// weight 0.15) — a near-level BA should still rank, just lower.
+func (app *App) loadCandidateBAs(ctx context.Context, user *User, requiredSkillIDs []string) ([]candidateBA, error) {
 	query := `select id, user_id, full_name, level, status from ba_profiles where 1=1`
 	args := make([]any, 0)
 	idx := 1
@@ -200,11 +204,6 @@ func (app *App) loadCandidateBAs(ctx context.Context, user *User, level string, 
 	if user.Role == "BA" {
 		query += " and user_id = $1"
 		args = append(args, user.ID)
-		idx++
-	}
-	if level != "" {
-		query += " and level = $" + strconv.Itoa(idx)
-		args = append(args, level)
 		idx++
 	}
 	// If skills are required, narrow at the SQL level to BAs that have at
@@ -230,16 +229,49 @@ func (app *App) loadCandidateBAs(ctx context.Context, user *User, level string, 
 			return nil, err
 		}
 		c.UserID = uid
-		tags, err := fetchSkillTagsForBA(app.DB.Pool, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, t := range tags {
-			c.SkillTagIDs = append(c.SkillTagIDs, t.Tag.ID)
-		}
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Load every candidate's skill tags in one query instead of N+1.
+	if err := app.attachSkillTagIDs(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// attachSkillTagIDs fills SkillTagIDs for all candidates with a single
+// ba_skill_tags query.
+func (app *App) attachSkillTagIDs(ctx context.Context, candidates []candidateBA) error {
+	if len(candidates) == 0 {
+		return nil
+	}
+	ids := make([]string, len(candidates))
+	index := make(map[string]int, len(candidates))
+	for i := range candidates {
+		ids[i] = candidates[i].ID
+		index[candidates[i].ID] = i
+	}
+	rows, err := app.DB.Pool.Query(ctx, `
+		select ba_id, tag_id
+		from ba_skill_tags
+		where ba_id = any($1::uuid[])`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var baID, tagID string
+		if err := rows.Scan(&baID, &tagID); err != nil {
+			return err
+		}
+		if i, ok := index[baID]; ok {
+			candidates[i].SkillTagIDs = append(candidates[i].SkillTagIDs, tagID)
+		}
+	}
+	return rows.Err()
 }
 
 // loadBookingsForCandidates fetches all bookings overlapping [start, end]

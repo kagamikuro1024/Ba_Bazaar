@@ -25,6 +25,7 @@ type bookingInput struct {
 	Description      *string  `json:"description"`
 	Notes            *string  `json:"notes"`
 	RequiredSkillIDs []string `json:"required_skill_ids"`
+	RequiredLevel    *string  `json:"required_level"`
 	StartDate        *string  `json:"start_date"`
 	EndDate          *string  `json:"end_date"`
 	CapacityPercent  *int     `json:"capacity_percent"`
@@ -511,7 +512,11 @@ func (app *App) normalizeBookingInput(ctx context.Context, input bookingInput) (
 	if input.Priority != nil && strings.TrimSpace(*input.Priority) != "" {
 		priority = strings.TrimSpace(*input.Priority)
 	}
-	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: strings.TrimSpace(*input.Description), Notes: trimStringPtr(input.Notes), RequiredSkillIDs: ParseSkillIDsFromSlice(input.RequiredSkillIDs), StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
+	requiredLevel := ""
+	if input.RequiredLevel != nil {
+		requiredLevel = sanitizeSuggestedLevel(*input.RequiredLevel)
+	}
+	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: strings.TrimSpace(*input.Description), Notes: trimStringPtr(input.Notes), RequiredSkillIDs: ParseSkillIDsFromSlice(input.RequiredSkillIDs), RequiredLevel: requiredLevel, StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
 	warning := map[string]any(nil)
 	if baID != nil {
 		warning = app.submitWarning(ctx, *baID, startDate, endDate, *input.CapacityPercent)
@@ -526,6 +531,7 @@ type bookingInputNormalized struct {
 	Description      string
 	Notes            *string
 	RequiredSkillIDs []string
+	RequiredLevel    string
 	StartDate        time.Time
 	EndDate          time.Time
 	CapacityPercent  int
@@ -588,9 +594,20 @@ func (app *App) insertBooking(ctx context.Context, input *bookingInputNormalized
 	if status == "APPROVED" {
 		approvedAt = time.Now().UTC()
 	}
-	pendingChanges := any(nil)
+	// Booking requirements (skills/level) ride along in pending_changes so
+	// the manager's AI Suggest can score against them. They are metadata,
+	// not "proposed changes" — the web client filters them out of the
+	// change-review UI (see REQUIREMENT_METADATA_KEYS).
+	requirementChanges := map[string]any{}
 	if len(input.RequiredSkillIDs) > 0 {
-		pendingChanges = map[string]any{"required_skill_ids": input.RequiredSkillIDs}
+		requirementChanges["required_skill_ids"] = input.RequiredSkillIDs
+	}
+	if input.RequiredLevel != "" {
+		requirementChanges["required_level"] = input.RequiredLevel
+	}
+	pendingChanges := any(nil)
+	if len(requirementChanges) > 0 {
+		pendingChanges = requirementChanges
 	}
 	_, err := app.DB.Pool.Exec(ctx, `insert into bookings (id, ba_id, project_id, requester_id, manager_id, title, description, notes, pending_changes, start_date, end_date, capacity_percent, priority, status, manager_comment, approved_at, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now())`, id, nullableString(input.BAID), input.ProjectID, requesterID, nullableString(managerID), input.Title, input.Description, nullableString(input.Notes), pendingChanges, input.StartDate, input.EndDate, input.CapacityPercent, input.Priority, status, nullableString(managerComment), approvedAt)
 	if err != nil {

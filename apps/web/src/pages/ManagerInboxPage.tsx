@@ -10,6 +10,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   apiFetch,
+  BOOKING_REQUIREMENT_KEYS,
+  getBookingRequirements,
   getManagerRequestState,
   getRequestType,
   needsManagerVerification,
@@ -35,6 +37,8 @@ import {
   type QuickTab
 } from '@/components';
 import { Avatar, BAIdentity } from '@/components/common';
+import { AISummaryCard } from '@/components/AISummaryCard';
+import { useAISummary } from '@/lib/aiSummary';
 import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { type RecommendationQuery } from '@/lib/recommendations';
 import { Badge } from '@/components/ui/badge';
@@ -105,6 +109,13 @@ const stateLabelMap = {
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled'
 } as const;
+
+const ACTION_CENTER_ACTION_ROUTES: Record<string, string> = {
+  review_urgent: '/manager/action-center?priority=URGENT',
+  assign_open: '/manager/action-center?type=OPEN_REQUEST',
+  review_capacity_risk: '/manager/action-center?overbookRisk=true',
+  review_pending: '/manager/action-center?status=PENDING'
+};
 
 const defaultFilters: FilterState = {
   search: '',
@@ -245,6 +256,10 @@ export function ManagerInboxPage() {
     queryKey: ['manager-inbox-capacity-summary'],
     queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
   });
+  const queueSummary = useAISummary(
+    '/api/bookings/action-center/llm-summary',
+    user?.role === 'BA_MANAGER' || user?.role === 'ADMIN'
+  );
 
   const bookingItems = useMemo(() => {
     const payload = bookings.data;
@@ -1499,6 +1514,14 @@ export function ManagerInboxPage() {
         </Card>
       ) : null}
 
+      <AISummaryCard
+        summary={queueSummary.data}
+        isLoading={queueSummary.isLoading}
+        title="AI Queue Summary"
+        loadingTitle="Summarizing the request queue"
+        actionRoutes={ACTION_CENTER_ACTION_ROUTES}
+      />
+
       <FilterCard>
         <div className="grid gap-3">
           <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] 2xl:items-center">
@@ -2164,14 +2187,17 @@ export function RequestDetailPanel({
   const assignmentLabel = booking.ba_id ? 'Requested BA' : 'Assignment';
 
   // Build the recommendation query from the booking. We always pass the
-  // date range, capacity, and project_id (so project_affinity is real). The
-  // manager opens the panel manually to avoid hitting the API on every
-  // keystroke in the capacity input above.
+  // date range, capacity, project_id (so project_affinity is real), and the
+  // requester's stored skill/level requirements (so skill_match and
+  // level_fit score against what the PM/PO actually asked for). The manager
+  // opens the panel manually to avoid hitting the API on every keystroke in
+  // the capacity input above.
   const recommendationQuery: RecommendationQuery | null = useMemo(() => {
     if (!booking.start_date || !booking.end_date) return null;
     if (booking.end_date < booking.start_date) return null;
     const cap = capacityPercent;
     if (!Number.isFinite(cap) || cap < 1 || cap > 100) return null;
+    const { requiredSkillIds, requiredLevel } = getBookingRequirements(booking);
     return {
       start_date: typeof booking.start_date === 'string'
         ? booking.start_date.slice(0, 10)
@@ -2181,17 +2207,14 @@ export function RequestDetailPanel({
         : new Date(booking.end_date).toISOString().slice(0, 10),
       capacity_percent: cap,
       project_id: booking.project_id,
+      required_skill_ids: requiredSkillIds.length ? requiredSkillIds : undefined,
+      level: requiredLevel || undefined,
       // Exclude the currently-assigned BA so a manager can pick "show me
       // alternatives" if they want; we keep this OFF by default because
       // re-assigning to the same BA should be allowed.
       limit: 5
     };
-  }, [
-    booking.start_date,
-    booking.end_date,
-    booking.project_id,
-    capacityPercent
-  ]);
+  }, [booking, capacityPercent]);
 
   return (
     <Card className="h-fit">
@@ -2582,7 +2605,9 @@ export function RequestDetailPanel({
 
 function getPendingChangeEntries(booking: Booking): PendingChangeEntry[] {
   const changes = booking.pending_changes ?? {};
-  return Object.entries(changes).map(([key, value]) => ({
+  return Object.entries(changes)
+    .filter(([key]) => !BOOKING_REQUIREMENT_KEYS.includes(key))
+    .map(([key, value]) => ({
     key,
     label: toTitleLabel(key),
     currentDisplay: formatPendingChangeValue(
