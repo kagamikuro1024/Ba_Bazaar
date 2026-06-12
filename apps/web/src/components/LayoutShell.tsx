@@ -412,7 +412,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
   return (
     <div
-      className="isolate min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
+      className="isolate min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.22,1,0.36,1)]"
       style={
         { '--sidebar-width': sidebarCollapsed ? '72px' : '288px' } as CSSProperties
       }
@@ -480,19 +480,19 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </header>
 
-      <aside className="sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex relative">
+      <aside className="relative sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex lg:transition-[width,padding] lg:duration-300 lg:ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div
           className={[
-            'flex min-h-0 flex-1 flex-col gap-3 py-4',
+            'flex min-h-0 flex-1 flex-col gap-3 py-4 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
             sidebarCollapsed ? 'px-2' : 'px-3'
           ].join(' ')}
         >
           {sidebarCollapsed ? (
             <>
-              <div className="flex flex-col items-center gap-2 px-0">
+              <div className="mb-3 flex flex-col items-center gap-2 px-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                 <Link
                   to="/dashboard"
-                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   title="BA Bazaar"
                 >
                   <img src="/favicon.png" alt="BA Bazaar" className="h-full w-full object-cover" />
@@ -510,8 +510,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             </>
           ) : (
             <>
-              <div className="flex justify-center px-2 pb-3">
-                <Link to="/dashboard" className="flex min-w-0 items-center justify-center">
+              <div className="flex justify-center px-2 pb-3 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+                <Link to="/dashboard" className="flex min-w-0 items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                   <img
                     src="/logo-blue.png"
                     alt="BA Bazaar"
@@ -519,11 +519,11 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   />
                 </Link>
               </div>
-              <div className="relative px-2">
+              <div className="relative px-2 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                 <button
                   type="button"
                   onClick={() => setSearchOpen(true)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white"
+                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-slate-300 hover:bg-white"
                   aria-label="Open global search"
                 >
                   <Search className="h-4 w-4 shrink-0 text-slate-400" />
@@ -740,7 +740,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         <button
           type="button"
           onClick={() => setSidebarCollapsed((current) => !current)}
-          className="absolute -right-[18px] top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-100 hover:text-slate-950"
+          className="absolute -right-[18px] top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-slate-100 hover:text-slate-950"
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
