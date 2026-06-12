@@ -775,7 +775,7 @@ export function TimelinePage() {
   return (
     <div className="grid gap-5">
       {successMessage ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
           {successMessage}
         </div>
       ) : null}
@@ -799,7 +799,7 @@ export function TimelinePage() {
           <select
             value={baFilter}
             onChange={(event) => setBaFilter(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-48"
+            className="h-9 w-full min-w-0 rounded-lg border bg-white px-2 text-sm lg:w-48"
           >
             <option value="">All BA</option>
             {timelineBas.map((ba) => (
@@ -811,7 +811,7 @@ export function TimelinePage() {
           <select
             value={projectFilter}
             onChange={(event) => setProjectFilter(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-md border bg-white px-2 text-sm lg:w-52"
+            className="h-9 w-full min-w-0 rounded-lg border bg-white px-2 text-sm lg:w-52"
           >
             <option value="">All Projects</option>
             {(projects.data ?? []).map((project) => (
@@ -889,7 +889,7 @@ export function TimelinePage() {
             </div>
             <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
               <span className="hidden sm:inline">View mode</span>
-              <div className="grid w-full grid-cols-3 rounded-md border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
+              <div className="grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
                 {(['week', 'month', 'quarter'] as const).map((mode) => (
                   <button
                     key={mode}
@@ -1205,7 +1205,7 @@ export function TimelinePage() {
                   >
                     <BAIdentity ba={ba} />
                     {(capacity?.risk_capacity ?? 0) > 100 ? (
-                      <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
+                      <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
                         <AlertTriangle className="h-3 w-3" />
                         {capacity?.risk_capacity ?? 0}%
                       </span>
@@ -1361,7 +1361,7 @@ function TimelineRow({
               <button
                 key={booking.id}
                 className={cn(
-                  'pointer-events-auto absolute h-8 truncate rounded-md px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
+                  'pointer-events-auto absolute h-8 truncate rounded-lg px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
                   bookingBarClass(booking.status, hasOverbookRisk)
                 )}
                 style={{
@@ -1462,7 +1462,7 @@ function MobileTimelineRow({
               <button
                 key={booking.id}
                 className={cn(
-                  'pointer-events-auto absolute h-9 truncate rounded-md px-2 text-left text-[11px] font-semibold shadow-sm transition hover:-translate-y-0.5',
+                  'pointer-events-auto absolute h-9 truncate rounded-lg px-2 text-left text-[11px] font-semibold shadow-sm transition hover:-translate-y-0.5',
                   bookingBarClass(booking.status, hasOverbookRisk)
                 )}
                 style={{
@@ -2016,7 +2016,7 @@ function BookingDetailModal({
           <BAIdentity ba={booking.ba} />
           <StatusBadge status={booking.status} />
         </div>
-        <div className="rounded-md border p-4">
+        <div className="rounded-lg border p-4">
           <h3 className="font-semibold text-slate-950">{booking.title}</h3>
           <p className="mt-1 text-slate-600">{booking.description}</p>
           <div className="mt-3 grid gap-2 text-slate-600">
@@ -2034,7 +2034,7 @@ function BookingDetailModal({
           </div>
         </div>
         {isOverbooked ? (
-          <div className="grid gap-3 rounded-md border border-rose-200 bg-rose-50 p-4 text-rose-950">
+          <div className="grid gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-semibold">Overbooked capacity</p>
@@ -2053,7 +2053,7 @@ function BookingDetailModal({
               </p>
               <div className="grid gap-1">
                 {projectBreakdown.map((item) => (
-                  <div key={item.project} className="rounded-md bg-white/70 px-3 py-2">
+                  <div key={item.project} className="rounded-lg bg-white/70 px-3 py-2">
                     <p className="font-semibold">
                       {item.project}: {item.capacity}%
                     </p>
@@ -2073,7 +2073,7 @@ function BookingDetailModal({
           </div>
         ) : null}
         {canEditCapacity ? (
-          <div className="grid gap-3 rounded-md border p-4">
+          <div className="grid gap-3 rounded-lg border p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-slate-950">Capacity decision</p>
@@ -2083,7 +2083,7 @@ function BookingDetailModal({
               </div>
               <span
                 className={[
-                  'rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset',
+                  'rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset',
                   capacityChanged
                     ? 'bg-amber-50 text-amber-700 ring-amber-200'
                     : 'bg-gray-100 text-gray-700 ring-gray-200'
@@ -2093,14 +2093,14 @@ function BookingDetailModal({
               </span>
             </div>
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+              <div className="grid grid-cols-4 rounded-lg border border-slate-200 bg-slate-100 p-1">
                 {CAPACITY_OPTIONS.map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => setCapacityDraft(String(option))}
                     className={[
-                      'h-9 rounded-md text-sm font-semibold transition-colors',
+                      'h-9 rounded-lg text-sm font-semibold transition-colors',
                       capacityPercent === option
                         ? 'bg-white text-slate-950 shadow-sm'
                         : 'text-slate-600 hover:text-slate-950'
@@ -2160,7 +2160,7 @@ function BookingDetailModal({
         ) : null}
         {decisionKind ? (
           <form
-            className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4"
+            className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
             onSubmit={(event) => {
               event.preventDefault();
               submitDecision();
@@ -2173,7 +2173,7 @@ function BookingDetailModal({
               <textarea
                 value={decisionReason}
                 onChange={(event) => setDecisionReason(event.target.value)}
-                className="min-h-24 rounded-md border border-slate-200 bg-white p-3 text-sm"
+                className="min-h-24 rounded-lg border border-slate-200 bg-white p-3 text-sm"
                 placeholder={
                   decisionKind === 'reject'
                     ? 'Explain why this pending schedule is rejected...'
@@ -2211,7 +2211,7 @@ function BookingDetailModal({
           </form>
         ) : null}
         {approve.error || reject.error || cancel.error || updateCapacity.error ? (
-          <div className="rounded-md bg-rose-50 p-3 text-rose-700">
+          <div className="rounded-lg bg-rose-50 p-3 text-rose-700">
             {
               (approve.error ?? reject.error ?? cancel.error ?? updateCapacity.error)
                 ?.message

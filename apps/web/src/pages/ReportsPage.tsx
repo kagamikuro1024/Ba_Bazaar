@@ -105,7 +105,7 @@ export function ReportsPage() {
                 setMonth(event.target.value);
                 setPage(1);
               }}
-              className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
             <Button
               onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}
@@ -227,7 +227,7 @@ export function ReportsPage() {
                     value={search}
                     onChange={(event) => handleSearchChange(event.target.value)}
                     placeholder="Search BA, status, utilization..."
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:h-10 md:rounded-md"
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:h-10 md:rounded-lg"
                     autoComplete="off"
                   />
                   {search ? (
@@ -250,7 +250,7 @@ export function ReportsPage() {
               <select
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(event.target.value)}
-                className="h-11 w-full self-start rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto md:h-10 md:rounded-md"
+                className="h-11 w-full self-start rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto md:h-10 md:rounded-lg"
                 aria-label="Rows per page"
               >
                 {pageSizeOptions.map((size) => (

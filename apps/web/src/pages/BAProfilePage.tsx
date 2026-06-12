@@ -214,7 +214,7 @@ export function BAProfilePage() {
               <select
                 value={ba.data.status}
                 onChange={(event) => changeStatus.mutate(event.target.value)}
-                className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto"
+                className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto"
               >
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="ON_LEAVE">ON_LEAVE</option>
@@ -254,7 +254,7 @@ export function BAProfilePage() {
                             type="month"
                             value={historyMonth}
                             onChange={(event) => setHistoryMonth(event.target.value)}
-                            className="h-10 min-w-0 rounded-md border px-3 text-sm"
+                            className="h-10 min-w-0 rounded-lg border px-3 text-sm"
                             aria-label="Filter completed booking chart by month"
                           />
                           <div className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200">
@@ -267,20 +267,20 @@ export function BAProfilePage() {
                           <Bar data={historyChartData} options={historyChartOptions} />
                         </div>
                       ) : (
-                        <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                        <div className="rounded-lg border border-dashed p-6 text-sm text-slate-500">
                           No completed bookings found in {historyMonth}.
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                    <div className="rounded-lg border border-dashed p-6 text-sm text-slate-500">
                       No completed bookings available for the chart yet.
                     </div>
                   )}
 
                   <div className="grid gap-3">
                     {historyBookings.map((booking) => (
-                      <div key={booking.id} className="rounded-md border p-3 text-sm">
+                      <div key={booking.id} className="rounded-lg border p-3 text-sm">
                         <div className="flex items-center justify-between gap-3">
                           <strong>{booking.project.name}</strong>
                           <StatusBadge status={booking.status} />
@@ -293,7 +293,7 @@ export function BAProfilePage() {
                   </div>
                 </>
               ) : (
-                <div className="rounded-md border border-dashed p-6 text-sm text-slate-500">
+                <div className="rounded-lg border border-dashed p-6 text-sm text-slate-500">
                   No booking history available yet.
                 </div>
               )}
@@ -323,7 +323,7 @@ export function BAProfilePage() {
               </div>
               {canManageBa ? (
                 <div className="flex gap-2">
-                  <select value={tagId} onChange={(event) => setTagId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border px-2 text-sm">
+                  <select value={tagId} onChange={(event) => setTagId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border px-2 text-sm">
                     <option value="">Add tag</option>
                     {(tags.data ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>
@@ -340,13 +340,13 @@ export function BAProfilePage() {
                 {canManageBa ? (
                   <>
                     <Field label="Append note">
-                      <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-24 rounded-md border p-3" maxLength={5000} />
+                      <textarea value={note} onChange={(event) => setNote(event.target.value)} className="min-h-24 rounded-lg border p-3" maxLength={5000} />
                     </Field>
                     <Button onClick={() => appendNote.mutate()} disabled={!note}>Append Note</Button>
                   </>
                 ) : null}
                 {(notes.data ?? []).map((item) => (
-                  <div key={item.id} className="rounded-md border bg-slate-50 p-3 text-sm">
+                  <div key={item.id} className="rounded-lg border bg-slate-50 p-3 text-sm">
                     <p>{item.content}</p>
                     <p className="mt-2 text-xs text-slate-500">{item.creator.full_name} · {formatDate(item.created_at)}</p>
                   </div>

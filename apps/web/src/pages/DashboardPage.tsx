@@ -463,7 +463,7 @@ function ManagerDashboardHeaderActions({
   return (
     <Card className="w-full border-slate-200 shadow-sm">
       <CardContent className="flex w-full flex-wrap items-center justify-end gap-2 p-3 sm:p-4">
-        <div className="grid w-full grid-cols-4 rounded-2xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
+        <div className="grid w-full grid-cols-4 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-auto">
           {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
             <button
               key={mode}
@@ -486,13 +486,13 @@ function ManagerDashboardHeaderActions({
               type="date"
               value={customFrom}
               onChange={(event) => onCustomFromChange(event.target.value)}
-              className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-lg"
             />
             <input
               type="date"
               value={customTo}
               onChange={(event) => onCustomToChange(event.target.value)}
-              className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-lg"
             />
           </>
         ) : null}
@@ -647,7 +647,7 @@ function ManagerDashboard({
                   onChange={(event) =>
                     setAttentionSort(event.target.value as AttentionSort)
                   }
-                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="PRIORITY">Priority</option>
                   <option value="OLDEST">Oldest first</option>
@@ -819,7 +819,7 @@ function ManagerAlertRail({
             <Link
               key={row.ba_id}
               to={`/crm/ba/${row.ba_id}`}
-              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
+              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
             >
               <span className="min-w-0 truncate font-medium text-slate-800">
                 {row.ba_name}
@@ -830,7 +830,7 @@ function ManagerAlertRail({
             </Link>
           ))}
           {watchlist.length === 0 ? (
-            <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
               No utilization alerts in this timeframe.
             </p>
           ) : null}
@@ -935,7 +935,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
           label="Date range"
           value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
         />
-        <span className="inline-flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 sm:w-auto xl:justify-self-end">
+        <span className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 sm:w-auto xl:justify-self-end">
           View details <ArrowRight className="ml-2 h-4 w-4" />
         </span>
       </div>

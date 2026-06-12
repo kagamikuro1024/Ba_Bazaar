@@ -492,7 +492,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
               <div className="mb-3 flex flex-col items-center gap-2 px-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
                 <Link
                   to="/dashboard"
-                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                   title="BA Bazaar"
                 >
                   <img src="/favicon.png" alt="BA Bazaar" className="h-full w-full object-cover" />
@@ -523,14 +523,14 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 <button
                   type="button"
                   onClick={() => setSearchOpen(true)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-slate-300 hover:bg-white"
+                  className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-slate-300 hover:bg-white"
                   aria-label="Open global search"
                 >
                   <Search className="h-4 w-4 shrink-0 text-slate-400" />
                   <span className="min-w-0 flex-1 truncate">
                     Search requests, BAs, pages...
                   </span>
-                  <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
                     Ctrl K
                   </span>
                 </button>
@@ -567,8 +567,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       [
                         'flex items-center text-sm font-medium transition-colors',
                         sidebarCollapsed
-                          ? 'h-10 w-10 justify-center rounded-xl px-0 py-0'
-                          : 'gap-3 rounded-md px-3 py-2',
+                          ? 'h-10 w-10 justify-center rounded-lg px-0 py-0'
+                          : 'gap-3 rounded-lg px-3 py-2',
                         isActive
                           ? 'bg-blue-50 text-blue-700'
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -598,8 +598,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   className={[
                     'flex items-center text-sm font-semibold text-blue-600 transition-colors hover:bg-blue-50',
                     sidebarCollapsed
-                      ? 'mx-auto h-10 w-10 justify-center rounded-xl px-0 py-0'
-                      : 'w-full gap-3 rounded-md px-3 py-2'
+                      ? 'mx-auto h-10 w-10 justify-center rounded-lg px-0 py-0'
+                      : 'w-full gap-3 rounded-lg px-3 py-2'
                   ].join(' ')}
                   title={sidebarCollapsed ? 'Create Booking' : undefined}
                 >
@@ -660,7 +660,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 <div ref={setUserMenuRootRef} className="relative min-w-0 flex-1">
                   <div
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 transition',
+                      'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 transition',
                       userMenuOpen
                         ? 'border-slate-300 bg-slate-100 text-slate-950'
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
@@ -868,7 +868,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 ×
               </button>
             </div>
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Changes summary
               </p>
@@ -877,7 +877,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   {inboxDirty.summary.map((item) => (
                     <li
                       key={item.id}
-                      className="flex items-center gap-2 rounded-md bg-white px-2 py-1"
+                      className="flex items-center gap-2 rounded-lg bg-white px-2 py-1"
                     >
                       <span className="min-w-0 flex-1">{item.label}</span>
                       <button

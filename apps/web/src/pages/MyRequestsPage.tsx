@@ -99,7 +99,7 @@ export function MyRequestsPage() {
     <div className="grid gap-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         {successMessage ? (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
             {successMessage}
           </div>
         ) : (
@@ -112,7 +112,7 @@ export function MyRequestsPage() {
               setStatus(event.target.value);
               setPage(1);
             }}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All status</option>
             {[
@@ -262,14 +262,14 @@ function RequestCard({
             label={booking.ba ? 'Requested BA' : 'Assignment'}
             value={booking.ba?.full_name ?? 'Unassigned'}
           />
-          <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
             <span>Capacity</span>
             <strong className="text-slate-950">{booking.capacity_percent}%</strong>
           </div>
         </div>
 
         {booking.reject_reason ? (
-          <p className="line-clamp-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p className="line-clamp-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {booking.reject_reason}
           </p>
         ) : null}
@@ -304,7 +304,7 @@ function CompactMeta({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md bg-slate-50 px-3 py-2">
+    <div className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
       <Icon className="h-4 w-4 shrink-0 text-slate-400" />
       <span className="shrink-0 text-slate-500">{label}</span>
       <span className="min-w-0 truncate font-medium text-slate-800">{value}</span>
@@ -388,7 +388,7 @@ function EditRequestModal({
           <input
             value={draft.title}
             onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-            className="h-10 rounded-md border px-3 text-sm"
+            className="h-10 rounded-lg border px-3 text-sm"
             required
           />
         </label>
@@ -400,7 +400,7 @@ function EditRequestModal({
               type="date"
               value={draft.start_date}
               onChange={(event) => setDraft({ ...draft, start_date: event.target.value })}
-              className="h-10 rounded-md border px-3 text-sm"
+              className="h-10 rounded-lg border px-3 text-sm"
               required
             />
           </label>
@@ -410,7 +410,7 @@ function EditRequestModal({
               type="date"
               value={draft.end_date}
               onChange={(event) => setDraft({ ...draft, end_date: event.target.value })}
-              className="h-10 rounded-md border px-3 text-sm"
+              className="h-10 rounded-lg border px-3 text-sm"
               required
             />
           </label>
@@ -424,7 +424,7 @@ function EditRequestModal({
               onChange={(event) =>
                 setDraft({ ...draft, capacity_percent: Number(event.target.value) })
               }
-              className="h-10 rounded-md border px-3 text-sm"
+              className="h-10 rounded-lg border px-3 text-sm"
             >
               {CAPACITY_OPTIONS.map((capacityPercent) => (
                 <option key={capacityPercent} value={capacityPercent}>
@@ -440,7 +440,7 @@ function EditRequestModal({
               onChange={(event) =>
                 setDraft({ ...draft, priority: event.target.value as BookingPriority })
               }
-              className="h-10 rounded-md border px-3 text-sm"
+              className="h-10 rounded-lg border px-3 text-sm"
             >
               {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((priority) => (
                 <option key={priority} value={priority}>
@@ -459,7 +459,7 @@ function EditRequestModal({
               onChange={(event) =>
                 setDraft({ ...draft, ba_id: event.target.value || undefined })
               }
-              className="h-10 rounded-md border px-3 text-sm"
+              className="h-10 rounded-lg border px-3 text-sm"
               required
             >
               <option value="">Select BA</option>
@@ -478,7 +478,7 @@ function EditRequestModal({
             <textarea
               value={draft.notes}
               onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-              className="min-h-20 rounded-md border p-3 text-sm"
+              className="min-h-20 rounded-lg border p-3 text-sm"
               placeholder="Mention required domain or analysis skills..."
             />
           </label>
@@ -491,13 +491,13 @@ function EditRequestModal({
           <textarea
             value={draft.description}
             onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-            className="min-h-28 rounded-md border p-3 text-sm"
+            className="min-h-28 rounded-lg border p-3 text-sm"
             required
           />
         </label>
 
         {localError || error ? (
-          <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+          <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
             {localError || error?.message}
           </p>
         ) : null}

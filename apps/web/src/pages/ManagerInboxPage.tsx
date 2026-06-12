@@ -1593,7 +1593,7 @@ export function ManagerInboxPage() {
                   onChange={(event) =>
                     updateFilterDraft({ startDate: event.target.value })
                   }
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 />
                 <input
                   type="date"
@@ -1601,7 +1601,7 @@ export function ManagerInboxPage() {
                   onChange={(event) =>
                     updateFilterDraft({ endDate: event.target.value })
                   }
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 />
               </div>
             </div>
@@ -1609,7 +1609,7 @@ export function ManagerInboxPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Flags
               </p>
-              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
                 <input
                   type="checkbox"
                   checked={filterDraft.needsVerification}
@@ -1619,7 +1619,7 @@ export function ManagerInboxPage() {
                 />
                 Needs verification
               </label>
-              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
                 <input
                   type="checkbox"
                   checked={filterDraft.overbookRisk}
@@ -1648,7 +1648,7 @@ export function ManagerInboxPage() {
                 onChange={(event) =>
                   setFilter({ sort: event.target.value as FilterState['sort'] })
                 }
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
               >
                 <option value="PRIORITY">Priority</option>
                 <option value="CAPACITY_RISK">Capacity risk</option>
@@ -1932,7 +1932,7 @@ export function ManagerInboxPage() {
             <textarea
               value={decisionReason}
               onChange={(event) => setDecisionReason(event.target.value)}
-              className="min-h-28 rounded-md border border-slate-200 p-3 text-sm"
+              className="min-h-28 rounded-lg border border-slate-200 p-3 text-sm"
               placeholder={
                 decisionModal?.kind === 'reject'
                   ? 'Explain why this request is rejected...'
@@ -2000,7 +2000,7 @@ export function ManagerInboxPage() {
               {unsavedChangeSummary.length > 0 ? (
                 <ul className="mt-2 grid gap-1 text-sm text-slate-700">
                   {unsavedChangeSummary.map((item) => (
-                    <li key={item} className="rounded-md bg-white px-2 py-1">
+                    <li key={item} className="rounded-lg bg-white px-2 py-1">
                       {item}
                     </li>
                   ))}
@@ -2358,14 +2358,14 @@ export function RequestDetailPanel({
               )}
             </div>
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <div className="grid grid-cols-4 rounded-md border border-slate-200 bg-slate-100 p-1">
+              <div className="grid grid-cols-4 rounded-lg border border-slate-200 bg-slate-100 p-1">
                 {CAPACITY_OPTIONS.map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => onCapacityChange(option)}
                     className={[
-                      'h-9 rounded-md text-sm font-semibold transition-colors',
+                      'h-9 rounded-lg text-sm font-semibold transition-colors',
                       capacityPercent === option
                         ? 'bg-white text-slate-950 shadow-sm'
                         : 'text-slate-600 hover:text-slate-950'
@@ -2765,7 +2765,7 @@ function FilterOptionGroup<T extends string>({
             type="button"
             onClick={() => onChange(option.value)}
             className={[
-              'rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors',
+              'rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors',
               value === option.value
                 ? 'border-blue-300 bg-blue-50 text-blue-700'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
