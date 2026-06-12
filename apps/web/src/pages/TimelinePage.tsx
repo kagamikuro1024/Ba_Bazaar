@@ -899,7 +899,7 @@ export function TimelinePage() {
                       setAnchorDate(getCurrentAnchorDate(mode));
                     }}
                     className={cn(
-                      'w-full rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors sm:px-3 sm:text-sm',
+                      'w-full rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:px-3 sm:text-sm',
                       viewMode === mode
                         ? 'bg-white text-slate-950 shadow-sm'
                         : 'text-slate-600 hover:text-slate-950'
