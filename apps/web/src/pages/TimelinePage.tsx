@@ -122,7 +122,8 @@ const mobileQuarterColumnMinWidth = 152;
 const mobileBaCardWidth = 144;
 const mobileBaCardCompactWidth = 84;
 const mobileCompactScrollThreshold = mobileWeekDayMinWidth * 2;
-const bookingLaneHeight = 36;
+const desktopBookingLaneStep = 36;
+const mobileBookingLaneStep = 40;
 const desktopBarBaseTop = 16;
 const mobileBarBaseTop = 58;
 const timelineViewModeStorageKey = 'ba-bazaar-timeline-view-mode';
@@ -223,11 +224,12 @@ function computeRowMinHeight(
   columns: TimelineColumn[],
   bookings: Booking[],
   barBaseTop: number,
+  laneStep: number,
   minHeight: number
 ) {
   const layouts = computeBookingLayouts(columns, bookings);
   const laneCount = Math.max(1, ...layouts.map((item) => item.lane + 1));
-  return Math.max(minHeight, barBaseTop + laneCount * bookingLaneHeight + 10);
+  return Math.max(minHeight, barBaseTop + laneCount * laneStep + 10);
 }
 
 function buildTimelineColumns(
@@ -351,11 +353,6 @@ function formatBaSortMode(sortMode: BASortMode) {
   }
 
   return 'A to Z';
-}
-
-function getMobileBACompactName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  return parts.at(-1) ?? fullName;
 }
 
 function buildWeekPickerSections(year: number) {
@@ -645,12 +642,14 @@ export function TimelinePage() {
             columns,
             baBookings,
             desktopBarBaseTop,
+            desktopBookingLaneStep,
             72
           ),
           mobileRowMinHeight: computeRowMinHeight(
             columns,
             baBookings,
             mobileBarBaseTop,
+            mobileBookingLaneStep,
             120
           )
         };
@@ -1370,7 +1369,7 @@ function TimelineRow({
                 style={{
                   left: `${leftPercent}%`,
                   width: `max(28px, calc(${widthPercent}% - 8px))`,
-                  top: `${desktopBarBaseTop + lane * bookingLaneHeight}px`
+                  top: `${desktopBarBaseTop + lane * desktopBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
@@ -1471,7 +1470,7 @@ function MobileTimelineRow({
                 style={{
                   left: `${leftPercent}%`,
                   width: `max(28px, calc(${widthPercent}% - 8px))`,
-                  top: `${mobileBarBaseTop + lane * bookingLaneHeight}px`
+                  top: `${mobileBarBaseTop + lane * mobileBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
@@ -1496,8 +1495,8 @@ function MobileTimelineRow({
 function MobileBAIdentity({
   ba,
   compact,
-  riskCapacity,
-  hasOverbookRisk,
+  riskCapacity: _riskCapacity,
+  hasOverbookRisk: _hasOverbookRisk,
   onWheel
 }: {
   ba: BAProfile;
@@ -1511,18 +1510,12 @@ function MobileBAIdentity({
     .map((part) => part[0])
     .slice(0, 2)
     .join('');
-  const compactName = getMobileBACompactName(ba.full_name);
 
   return (
     <button
       type="button"
       data-allow-scroll-drag="true"
-      className={cn(
-        'pointer-events-auto flex w-full min-w-0 overflow-hidden border border-slate-200 bg-white/95 text-xs shadow-sm backdrop-blur-sm transition-all',
-        compact
-          ? 'items-center justify-start rounded-full px-2 py-1'
-          : 'items-start gap-2 rounded-2xl px-2.5 py-2'
-      )}
+      className="pointer-events-auto flex min-w-0 items-center gap-2 text-xs"
       onClick={(event) => event.stopPropagation()}
       onWheel={onWheel}
     >
@@ -1540,39 +1533,18 @@ function MobileBAIdentity({
           </span>
         )}
       </span>
-      {compact ? (
-        <span
-          className={cn(
-            'inline-flex min-w-0 items-center gap-1 text-[10px] font-bold leading-none',
-            hasOverbookRisk
-              ? 'text-rose-700'
-              : capacityColor(riskCapacity)
-          )}
-        >
-          <span className="truncate">{compactName}</span>
-          <span className="shrink-0">{riskCapacity}%</span>
-        </span>
-      ) : (
-        <span className="min-w-0 flex-1">
-          <span className="block whitespace-normal text-[11px] font-semibold leading-tight text-slate-950">
-            {ba.full_name}
-          </span>
-          <span className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-[10px] uppercase leading-tight text-slate-500">
-            <span className="truncate">{ba.level}</span>
-            <span
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 font-bold normal-case',
-                hasOverbookRisk
-                  ? 'border-rose-800 bg-rose-700 text-white shadow-sm shadow-rose-200'
-                  : `border-slate-200 bg-white ${capacityColor(riskCapacity)}`
-              )}
-            >
-              {hasOverbookRisk ? <AlertTriangle className="h-3 w-3" /> : null}
-              {riskCapacity}%
-            </span>
-          </span>
-        </span>
-      )}
+      <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
+          compact ? 'max-w-0 translate-x-2 opacity-0' : 'max-w-20 translate-x-0 opacity-100'
+        )}
+      >
+        - {ba.level}
+      </span>
+      <span className={cn('shrink-0 font-bold', capacityColor(_riskCapacity))}>
+        {_riskCapacity}%
+      </span>
     </button>
   );
 }
@@ -2252,4 +2224,3 @@ function BookingDetailModal({
     </Modal>
   );
 }
-
