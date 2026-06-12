@@ -461,44 +461,46 @@ function ManagerDashboardHeaderActions({
   onCustomToChange: (value: string) => void;
 }) {
   return (
-    <div className="flex w-full flex-wrap items-center justify-end gap-2">
-      <div className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
-        {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => onTimeframeModeChange(mode)}
-            className={cn(
-              'rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:text-sm',
-              timeframeMode === mode
-                ? 'bg-white text-slate-950 shadow-sm'
-                : 'text-slate-600 hover:text-slate-950'
-            )}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-      {timeframeMode === 'custom' ? (
-        <>
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(event) => onCustomFromChange(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
-          />
-          <input
-            type="date"
-            value={customTo}
-            onChange={(event) => onCustomToChange(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
-          />
-        </>
-      ) : null}
-      <Button variant="secondary" asChild className="w-full sm:w-auto">
-        <Link to="/reports">View reports</Link>
-      </Button>
-    </div>
+    <Card className="w-full border-slate-200 shadow-sm">
+      <CardContent className="flex w-full flex-wrap items-center justify-end gap-2 p-3 sm:p-4">
+        <div className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
+          {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onTimeframeModeChange(mode)}
+              className={cn(
+                'rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:text-sm',
+                timeframeMode === mode
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-950'
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        {timeframeMode === 'custom' ? (
+          <>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(event) => onCustomFromChange(event.target.value)}
+              className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
+            />
+            <input
+              type="date"
+              value={customTo}
+              onChange={(event) => onCustomToChange(event.target.value)}
+              className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
+            />
+          </>
+        ) : null}
+        <Button variant="secondary" asChild className="w-full sm:w-auto">
+          <Link to="/reports">View reports</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
