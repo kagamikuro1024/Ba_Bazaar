@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   BarChart3,
   CalendarRange,
@@ -353,7 +354,7 @@ export function DashboardPage() {
         eyebrow={dashboardCopy.eyebrow}
         title={dashboardCopy.title}
         description={dashboardCopy.description}
-        actions={
+        meta={
           isManagerDashboard ? (
             <ManagerDashboardHeaderActions
               timeframeMode={timeframeMode}
@@ -589,7 +590,7 @@ function ManagerDashboard({
           label="Capacity risk"
           value={String(attentionCounts.capacityRisk)}
           hint="Over 100% bookings"
-          icon={AlertCircle}
+          icon={AlertTriangle}
           tone="warning"
           active={attentionFilter === 'CAPACITY_RISK'}
           onClick={() => setAttentionFilter('CAPACITY_RISK')}
