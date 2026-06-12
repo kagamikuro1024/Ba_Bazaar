@@ -262,9 +262,8 @@ export function LandingPage() {
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="fixed inset-x-0 top-0 z-40 border-b border-white/70 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="min-w-0" aria-label="Trang chủ BA Bazaar">
-            <p className="text-xs font-bold uppercase text-blue-700">BA Bazaar</p>
-            <p className="text-base font-bold text-slate-950">Booking + CRM</p>
+          <Link to="/" className="flex min-w-0 items-center justify-center" aria-label="BA Bazaar home">
+            <img src="/logo-blue.png" alt="BA Bazaar" className="h-10 w-auto object-contain" />
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
             <a href="#platform" className="transition hover:text-blue-700">

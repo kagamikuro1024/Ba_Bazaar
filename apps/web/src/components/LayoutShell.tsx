@@ -419,18 +419,12 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     >
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-          <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-[10px] font-black text-white shadow-sm shadow-blue-600/30">
-              BA
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-blue-700">
-                BA Bazaar
-              </span>
-              <span className="block truncate text-sm font-bold text-slate-950">
-                Booking + CRM
-              </span>
-            </span>
+          <Link to="/dashboard" className="flex min-w-0 items-center justify-center">
+            <img
+              src="/logo-blue.png"
+              alt="BA Bazaar"
+              className="h-10 w-auto shrink-0 object-contain"
+            />
           </Link>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
@@ -486,81 +480,63 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </header>
 
-      <aside className="sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex">
+      <aside className="sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex relative">
         <div
           className={[
             'flex min-h-0 flex-1 flex-col gap-3 py-4',
             sidebarCollapsed ? 'px-2' : 'px-3'
           ].join(' ')}
         >
-          <div
-            className={[
-              'flex',
-              sidebarCollapsed
-                ? 'flex-col items-center gap-2 px-0'
-                : 'items-start justify-between gap-2 px-2'
-            ].join(' ')}
-          >
-            {sidebarCollapsed ? (
-              <Link
-                to="/dashboard"
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-sm font-bold text-blue-700"
-                title="BA Bazaar"
+          {sidebarCollapsed ? (
+            <>
+              <div className="flex flex-col items-center gap-2 px-0">
+                <Link
+                  to="/dashboard"
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl"
+                  title="BA Bazaar"
+                >
+                  <img src="/favicon.png" alt="BA Bazaar" className="h-full w-full object-cover" />
+                </Link>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="flex h-10 w-10 self-center items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-0 py-0 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white"
+                aria-label="Open global search"
+                title="Search"
               >
-                BA
-              </Link>
-            ) : (
-              <Link to="/dashboard" className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                  BA Bazaar
-                </p>
-                <p className="truncate text-xl font-bold text-slate-950">
-                  Booking + CRM
-                </p>
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed((current) => !current)}
-              className={[
-                'inline-flex items-center justify-center text-slate-500 transition hover:bg-slate-100 hover:text-slate-950',
-                sidebarCollapsed ? 'h-8 w-8 rounded-full' : 'h-9 w-9 rounded-md'
-              ].join(' ')}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {sidebarCollapsed ? (
-                <ChevronsRight className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
-              )}
-            </button>
-          </div>
-
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className={[
-                'flex items-center rounded-xl border border-slate-200 bg-slate-50 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white',
-                sidebarCollapsed
-                  ? 'h-10 w-10 self-center justify-center rounded-2xl px-0 py-0'
-                  : 'gap-3 px-3 py-2'
-              ].join(' ')}
-              aria-label="Open global search"
-              title={sidebarCollapsed ? 'Search' : undefined}
-            >
-            <Search className="h-4 w-4 shrink-0 text-slate-400" />
-            {sidebarCollapsed ? null : (
-              <>
-                <span className="min-w-0 flex-1 truncate">
-                  Search requests, BAs, pages...
-                </span>
-                <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
-                  Ctrl K
-                </span>
-              </>
-            )}
-          </button>
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-center px-2 pb-3">
+                <Link to="/dashboard" className="flex min-w-0 items-center justify-center">
+                  <img
+                    src="/logo-blue.png"
+                    alt="BA Bazaar"
+                    className="h-12 w-auto object-contain"
+                  />
+                </Link>
+              </div>
+              <div className="relative px-2">
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white"
+                  aria-label="Open global search"
+                >
+                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Search requests, BAs, pages...
+                  </span>
+                  <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                    Ctrl K
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {sidebarCollapsed ? null : (
@@ -761,6 +737,19 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed((current) => !current)}
+          className="absolute -right-[18px] top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-100 hover:text-slate-950"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? (
+            <ChevronsRight className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
+          )}
+        </button>
       </aside>
 
       <div className="min-w-0 px-3 pb-28 pt-4 sm:px-6 lg:pb-5 lg:pt-5 xl:px-6 2xl:px-8">
