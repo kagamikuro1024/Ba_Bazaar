@@ -77,30 +77,30 @@ type ManagerAttentionFlag =
 
 type ManagerActionItem =
   | {
-      id: string;
-      kind: 'booking';
-      priority: Booking['priority'];
-      project: string;
-      requester: string;
-      dateRange: string;
-      assignedBa: string;
-      flag: ManagerAttentionFlag;
-      actionLabel: string;
-      actionTo: string;
-      booking: Booking;
-    }
+    id: string;
+    kind: 'booking';
+    priority: Booking['priority'];
+    project: string;
+    requester: string;
+    dateRange: string;
+    assignedBa: string;
+    flag: ManagerAttentionFlag;
+    actionLabel: string;
+    actionTo: string;
+    booking: Booking;
+  }
   | {
-      id: string;
-      kind: 'ba';
-      priority: 'URGENT';
-      project: string;
-      requester: string;
-      dateRange: string;
-      assignedBa: string;
-      flag: Extract<ManagerAttentionFlag, 'OVERBOOKED'>;
-      actionLabel: string;
-      actionTo: string;
-    };
+    id: string;
+    kind: 'ba';
+    priority: 'URGENT';
+    project: string;
+    requester: string;
+    dateRange: string;
+    assignedBa: string;
+    flag: Extract<ManagerAttentionFlag, 'OVERBOOKED'>;
+    actionLabel: string;
+    actionTo: string;
+  };
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -125,27 +125,27 @@ export function DashboardPage() {
 
   const dashboardCopy = isManagerDashboard
     ? {
-        eyebrow: 'Manager workspace',
-        title: 'Manager Dashboard',
-        description: 'See what needs manager action first, then jump into the action list.',
-        loading: 'Loading manager dashboard...',
-        error: 'Could not load manager dashboard. Check API connection and retry.'
-      }
+      eyebrow: 'Manager workspace',
+      title: 'Manager Dashboard',
+      description: 'See what needs manager action first, then jump into the action list.',
+      loading: 'Loading manager dashboard...',
+      error: 'Could not load manager dashboard. Check API connection and retry.'
+    }
     : isBaDashboard
       ? {
-          eyebrow: 'BA workspace',
-          title: 'BA Dashboard',
-          description: 'Track active assignments, upcoming work, and recent schedule changes.',
-          loading: 'Loading your dashboard...',
-          error: 'Could not load your dashboard. Check API connection and retry.'
-        }
+        eyebrow: 'BA workspace',
+        title: 'BA Dashboard',
+        description: 'Track active assignments, upcoming work, and recent schedule changes.',
+        loading: 'Loading your dashboard...',
+        error: 'Could not load your dashboard. Check API connection and retry.'
+      }
       : {
-          eyebrow: 'Requester workspace',
-          title: 'PM/PO Dashboard',
-          description: 'Review your booking requests and follow their approval status.',
-          loading: 'Loading your dashboard...',
-          error: 'Could not load your dashboard. Check API connection and retry.'
-        };
+        eyebrow: 'Requester workspace',
+        title: 'PM/PO Dashboard',
+        description: 'Review your booking requests and follow their approval status.',
+        loading: 'Loading your dashboard...',
+        error: 'Could not load your dashboard. Check API connection and retry.'
+      };
 
   const bookingsEndpoint = isManagerDashboard
     ? '/api/bookings'
@@ -184,13 +184,13 @@ export function DashboardPage() {
     const allBookings = bookings.data ?? [];
     const timeframeBookings = isManagerDashboard
       ? allBookings.filter((booking) =>
-          rangesOverlap(
-            booking.start_date,
-            booking.end_date,
-            managerRange.from,
-            managerRange.to
-          )
+        rangesOverlap(
+          booking.start_date,
+          booking.end_date,
+          managerRange.from,
+          managerRange.to
         )
+      )
       : allBookings;
     const pending = timeframeBookings.filter((booking) => booking.status === 'PENDING');
     const approved = timeframeBookings.filter(
@@ -253,12 +253,12 @@ export function DashboardPage() {
     const upcoming = isBaDashboard
       ? upcomingWork.slice(0, 4)
       : [...timeframeBookings]
-          .sort(
-            (left, right) =>
-              new Date(right.created_at).getTime() -
-              new Date(left.created_at).getTime()
-          )
-          .slice(0, 4);
+        .sort(
+          (left, right) =>
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime()
+        )
+        .slice(0, 4);
     const actionItems = buildManagerActionItems(
       pending,
       managerSummary.data,
@@ -296,51 +296,51 @@ export function DashboardPage() {
     ? []
     : isBaDashboard
       ? [
-          {
-            title: 'Active Assignments',
-            count: dashboardData.currentAssignments.length,
-            description: 'Running today',
-            icon: CalendarRange,
-            to: '/my-schedule?tab=current'
-          },
-          {
-            title: 'Upcoming Work',
-            count: dashboardData.upcomingWork.length,
-            description: 'Future approved work',
-            icon: ClipboardList,
-            to: '/my-schedule?tab=upcoming'
-          },
-          {
-            title: 'Completed',
-            count: dashboardData.completedWork.length,
-            description: 'Finished assignments',
-            icon: Sparkles,
-            to: '/my-schedule?tab=completed'
-          }
-        ]
+        {
+          title: 'Active Assignments',
+          count: dashboardData.currentAssignments.length,
+          description: 'Running today',
+          icon: CalendarRange,
+          to: '/my-schedule?tab=current'
+        },
+        {
+          title: 'Upcoming Work',
+          count: dashboardData.upcomingWork.length,
+          description: 'Future approved work',
+          icon: ClipboardList,
+          to: '/my-schedule?tab=upcoming'
+        },
+        {
+          title: 'Completed',
+          count: dashboardData.completedWork.length,
+          description: 'Finished assignments',
+          icon: Sparkles,
+          to: '/my-schedule?tab=completed'
+        }
+      ]
       : [
-          {
-            title: 'Pending Requests',
-            count: dashboardData.pending.length,
-            description: 'Awaiting manager review',
-            icon: ClipboardList,
-            to: '/my-requests?status=PENDING'
-          },
-          {
-            title: 'Approved Requests',
-            count: dashboardData.approved.length,
-            description: 'Ready or in progress',
-            icon: CalendarRange,
-            to: '/my-requests?status=APPROVED'
-          },
-          {
-            title: 'Rejected / Cancelled',
-            count: dashboardData.rejectedOrCancelled.length,
-            description: 'Closed without approval',
-            icon: AlertCircle,
-            to: '/my-requests'
-          }
-        ];
+        {
+          title: 'Pending Requests',
+          count: dashboardData.pending.length,
+          description: 'Awaiting manager review',
+          icon: ClipboardList,
+          to: '/my-requests?status=PENDING'
+        },
+        {
+          title: 'Approved Requests',
+          count: dashboardData.approved.length,
+          description: 'Ready or in progress',
+          icon: CalendarRange,
+          to: '/my-requests?status=APPROVED'
+        },
+        {
+          title: 'Rejected / Cancelled',
+          count: dashboardData.rejectedOrCancelled.length,
+          description: 'Closed without approval',
+          icon: AlertCircle,
+          to: '/my-requests'
+        }
+      ];
 
   const isLoading =
     bookings.isLoading ||
@@ -675,12 +675,11 @@ function ManagerDashboard({
                 </button>
               ))}
             </div>
-            <div className="hidden grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
+            <div className="hidden grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 lg:grid">
               <span>Priority</span>
               <span>Project</span>
               <span>Requester</span>
               <span>BA</span>
-              <span>Date Range</span>
               <span>Reason</span>
               <span className="text-right">Action</span>
             </div>
@@ -876,7 +875,7 @@ function ManagerAlertLink({
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
     <>
-      <div className="grid gap-4 px-4 py-4 text-sm xl:hidden">
+      <div className="grid gap-4 px-4 py-4 text-sm lg:hidden">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -925,20 +924,23 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
           </div>
         </div>
         <div className="flex justify-start">
-          <Button size="sm" asChild>
-            <Link to={item.actionTo}>
-              {item.actionLabel}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          <Link
+            to={item.actionTo}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800"
+          >
+            {item.actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
-      <div className="hidden gap-3 px-4 py-4 text-sm xl:grid xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
+      <div className="hidden gap-3 px-4 py-4 text-sm lg:grid lg:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] lg:items-center">
         <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
-        <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-950">{item.project}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">{item.dateRange}</p>
+        </div>
         <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
         <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
-        <span className="text-slate-600">{item.dateRange}</span>
         <Badge
           tone={
             item.flag === 'OVERBOOKED'
@@ -950,13 +952,14 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
         >
           {formatManagerFlag(item.flag)}
         </Badge>
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-          <Button size="sm" asChild>
-            <Link to={item.actionTo}>
-              {item.actionLabel}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+          <Link
+            to={item.actionTo}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800"
+          >
+            {item.actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </>
@@ -1069,7 +1072,7 @@ function buildManagerActionItems(
       dateRange: `${formatDate(range.from)} - ${formatDate(range.to)}`,
       assignedBa: row.ba_name,
       flag: 'OVERBOOKED',
-      actionLabel: 'View Timeline',
+      actionLabel: 'View timeline',
       actionTo: `/timeline?baId=${row.ba_id}`
     }));
 
@@ -1113,10 +1116,10 @@ function getManagerActionCreatedAt(item: ManagerActionItem) {
 }
 
 function formatManagerFlag(flag: ManagerActionItem['flag']) {
-  if (flag === 'CAPACITY_RISK') return 'Capacity Risk';
+  if (flag === 'CAPACITY_RISK') return 'Cap. risk';
   if (flag === 'OVERBOOKED') return 'Overbooked';
-  if (flag === 'NEEDS_ASSIGNMENT') return 'Needs Assignment';
-  return 'Pending Review';
+  if (flag === 'NEEDS_ASSIGNMENT') return 'Needs assign';
+  return 'Review';
 }
 
 function summarizeProjectNames(
