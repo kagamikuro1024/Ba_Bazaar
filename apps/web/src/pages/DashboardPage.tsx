@@ -662,7 +662,7 @@ function ManagerDashboard({
                   type="button"
                   onClick={() => setAttentionFilter(tab.value)}
                   className={cn(
-                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors',
+                    'inline-flex w-fit shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors',
                     attentionFilter === tab.value
                       ? 'border-blue-300 bg-blue-50 text-blue-700'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
@@ -875,23 +875,81 @@ function ManagerAlertLink({
 
 function ManagerActionRow({ item }: { item: ManagerActionItem }) {
   return (
-    <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
-      <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
-      <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
-      <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
-      <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
-      <span className="text-slate-600">{item.dateRange}</span>
-      <Badge
-        tone={
-          item.flag === 'OVERBOOKED'
-            ? 'danger'
-            : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
-              ? 'warning'
-              : 'info'
-        }
-      >
-        {formatManagerFlag(item.flag)}
-      </Badge>
+    <>
+      <div className="grid gap-4 px-4 py-4 text-sm xl:hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Project
+            </p>
+            <p className="mt-1 truncate font-medium text-slate-950">{item.project}</p>
+          </div>
+          <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Requester
+            </p>
+            <p className="mt-1 truncate text-slate-600">{item.requester}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              BA
+            </p>
+            <p className="mt-1 truncate text-slate-600">{item.assignedBa}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Date range
+            </p>
+            <p className="mt-1 text-slate-600">{item.dateRange}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Reason
+            </p>
+            <div className="mt-1">
+              <Badge
+                tone={
+                  item.flag === 'OVERBOOKED'
+                    ? 'danger'
+                    : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
+                      ? 'warning'
+                      : 'info'
+                }
+              >
+                {formatManagerFlag(item.flag)}
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-start">
+          <Button size="sm" asChild>
+            <Link to={item.actionTo}>
+              {item.actionLabel}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+      <div className="hidden gap-3 px-4 py-4 text-sm xl:grid xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
+        <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
+        <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
+        <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
+        <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
+        <span className="text-slate-600">{item.dateRange}</span>
+        <Badge
+          tone={
+            item.flag === 'OVERBOOKED'
+              ? 'danger'
+              : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
+                ? 'warning'
+                : 'info'
+          }
+        >
+          {formatManagerFlag(item.flag)}
+        </Badge>
         <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
           <Button size="sm" asChild>
             <Link to={item.actionTo}>
@@ -900,7 +958,8 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
             </Link>
           </Button>
         </div>
-    </div>
+      </div>
+    </>
   );
 }
 
