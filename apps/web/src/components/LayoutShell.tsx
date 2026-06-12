@@ -185,9 +185,9 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const [recentSearches, setRecentSearches] = useState<string[]>(() =>
     globalSearchStorage.load()
   );
-  const notificationRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement | null>(null);
   const [notificationPanelPos, setNotificationPanelPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const inboxDirty = useInboxDirty();
@@ -254,6 +254,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       .sort((a, b) => priority.indexOf(a.to) - priority.indexOf(b.to))
       .slice(0, 4);
   }, [visibleNavigation]);
+
+  const setNotificationRootRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && node.getClientRects().length > 0) {
+      notificationRef.current = node;
+    }
+  }, []);
+
+  const setUserMenuRootRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && node.getClientRects().length > 0) {
+      userMenuRef.current = node;
+    }
+  }, []);
 
   const toggleNotificationPanel = useCallback(() => {
     setNotificationOpen((current) => {
@@ -437,7 +449,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 </span>
               ) : null}
             </Link>
-            <div ref={userMenuRef} className="relative">
+            <div ref={setUserMenuRootRef} className="relative">
               <UserAvatarButton
                 user={user}
                 userMenuOpen={userMenuOpen}
@@ -614,7 +626,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           <div className="relative border-t border-slate-200 pt-3">
             {sidebarCollapsed ? (
               <div className="grid justify-items-center gap-2">
-                <div ref={notificationRef} className="relative">
+                <div ref={setNotificationRootRef} className="relative">
                   <Button
                     variant="secondary"
                     size="icon"
@@ -630,7 +642,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     </span>
                   ) : null}
                 </div>
-                <div ref={userMenuRef} className="relative">
+                <div ref={setUserMenuRootRef} className="relative">
                   <UserAvatarButton
                     user={user}
                     userMenuOpen={userMenuOpen}
@@ -666,7 +678,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   </p>
                   <p className="truncate text-xs text-slate-500">{displayRole}</p>
                 </div>
-                <div ref={notificationRef} className="relative">
+                <div ref={setNotificationRootRef} className="relative">
                   <Button
                     variant="secondary"
                     size="icon"
@@ -682,7 +694,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     </span>
                   ) : null}
                 </div>
-                <div ref={userMenuRef} className="relative">
+                <div ref={setUserMenuRootRef} className="relative">
                   <Button
                     variant="ghost"
                     size="icon"
