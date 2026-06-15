@@ -133,12 +133,17 @@ func (app *App) handleBAList(w http.ResponseWriter, r *http.Request) {
 		if ba.Status == "ACTIVE" {
 			availableDays = workingDays
 		}
-		bookedDays := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
+		// Man-day utilization counts COMPLETED work too (alongside APPROVED and
+		// IN_PROGRESS) so the number reflects work actually done, e.g. for payroll.
+		// The conflict/approve guard is separate and still ignores COMPLETED.
+		bookedDays := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
 		utilization := calculateUtilizationPercent(bookedDays, availableDays)
+		// capacity_label reflects approved man-day utilization only. Pending
+		// requests that merely *risk* exceeding 100% are a conflict to resolve,
+		// not an overbooked allocation, so they no longer override the label.
 		label := classifyCapacity(utilization)
-		if capacity.MaxRiskCapacity > 100 {
-			label = "OVERBOOKED"
-		}
+		invalidOverbook := capacity.MaxApprovedCapacity > 100
+		conflictRisk := capacity.MaxRiskCapacity > 100 && !invalidOverbook
 		items = append(items, BAListItem{
 			BAProfile:          *ba,
 			Timeframe:          map[string]string{"from": toDateKey(startDate), "to": toDateKey(endDate)},
@@ -149,6 +154,8 @@ func (app *App) handleBAList(w http.ResponseWriter, r *http.Request) {
 			AvailableManDays:   availableDays,
 			UtilizationPercent: utilization,
 			CapacityLabel:      label,
+			ConflictRisk:       conflictRisk,
+			InvalidOverbook:    invalidOverbook,
 			CurrentProjects:    summarizeCurrentProjects(bookings),
 		})
 	}
@@ -241,7 +248,8 @@ func (app *App) handleBAUtilization(w http.ResponseWriter, r *http.Request) {
 		capRows = append(capRows, CapacityBooking{ID: booking.ID, BAID: booking.BAID, StartDate: booking.StartDate, EndDate: booking.EndDate, CapacityPercent: booking.CapacityPercent, Status: booking.Status})
 	}
 	workingDays := len(workingDaysInRange(startDate, endDate))
-	bookedDays := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
+	// Includes COMPLETED work so utilization reflects actual workload (e.g. payroll).
+	bookedDays := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ba_id":               ba.ID,
 		"period":              month,

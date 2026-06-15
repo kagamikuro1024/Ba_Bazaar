@@ -161,7 +161,7 @@ export function ReportsPage() {
         </Card>
         <Card>
           <CardContent className="p-3 sm:p-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Overbooked</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">Capacity conflicts</p>
             <p className="mt-1 text-2xl font-bold text-rose-700 sm:text-4xl">{managerSummary.data?.team.overbooked_count ?? 0}</p>
           </CardContent>
         </Card>

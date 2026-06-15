@@ -81,9 +81,9 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 
 	overbookWarning := ""
 	if thisWeek.MaxApprovedCapacity > 100 {
-		overbookWarning = fmt.Sprintf("overbooked this week at %d%%", thisWeek.MaxApprovedCapacity)
+		overbookWarning = fmt.Sprintf("over capacity this week at %d%%", thisWeek.MaxApprovedCapacity)
 	} else if nextWeek.MaxApprovedCapacity > 100 {
-		overbookWarning = fmt.Sprintf("overbooked next week at %d%%", nextWeek.MaxApprovedCapacity)
+		overbookWarning = fmt.Sprintf("over capacity next week at %d%%", nextWeek.MaxApprovedCapacity)
 	} else if thisWeek.MaxRiskCapacity > 100 || nextWeek.MaxRiskCapacity > 100 {
 		overbookWarning = "pending requests could push you over 100% if approved"
 	}
@@ -94,7 +94,7 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 		"upcoming_work":    upcoming,
 		"this_week_load":   map[string]any{"approved_percent": thisWeek.MaxApprovedCapacity, "risk_percent": thisWeek.MaxRiskCapacity},
 		"next_week_load":   map[string]any{"approved_percent": nextWeek.MaxApprovedCapacity, "risk_percent": nextWeek.MaxRiskCapacity},
-		"overbook_warning": overbookWarning,
+		"capacity_warning": overbookWarning,
 	}
 
 	citations := []llmCitation{
@@ -104,7 +104,7 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 		{ID: "C4", Label: "Next week load", Value: fmt.Sprintf("%d%% approved, %d%% with pending", nextWeek.MaxApprovedCapacity, nextWeek.MaxRiskCapacity)},
 	}
 	if overbookWarning != "" {
-		citations = append(citations, llmCitation{ID: "C5", Label: "Overbook warning", Value: overbookWarning})
+		citations = append(citations, llmCitation{ID: "C5", Label: "Capacity warning", Value: overbookWarning})
 	}
 
 	suggested := make([]llmSuggestedAction, 0, 3)
@@ -116,7 +116,7 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 		suggested = append(suggested, llmSuggestedAction{ID: "contact_requester", Label: "Contact the PM/PO"})
 	}
 	if overbookWarning != "" {
-		suggested = append(suggested, llmSuggestedAction{ID: "check_overbook", Label: "Check your overbooked days"})
+		suggested = append(suggested, llmSuggestedAction{ID: "check_overbook", Label: "Check your over-capacity days"})
 	}
 
 	serveLLMSummary(w, llmSummarySpec{
@@ -127,7 +127,7 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 		Context:   "a BA's personal schedule. The reader is the BA planning their own week",
 		Guidance: `- Speak directly to the BA ("you"). Cover: what you are on now (project, capacity, days remaining), what starts next (project, start date, requester), and your week load.
 - If upcoming work exists, remind the BA to prepare and name the PM/PO requester from facts.
-- If overbook_warning is non-empty, state it clearly; if it is empty, say the load has no overbook signal.
+- If capacity_warning is non-empty, state it clearly; if it is empty, say the load has no capacity-conflict signal.
 - MaxBullets 4.`,
 		MaxBullets:       4,
 		SuggestedActions: suggested,

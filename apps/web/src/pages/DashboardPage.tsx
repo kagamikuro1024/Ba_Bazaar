@@ -564,7 +564,7 @@ function ManagerDashboard({
     },
     { value: 'CAPACITY_RISK', label: 'Capacity risk', count: attentionCounts.capacityRisk },
     { value: 'PENDING_REVIEW', label: 'Pending review', count: attentionCounts.pendingReview },
-    { value: 'OVERBOOKED', label: 'Overbooked', count: attentionCounts.overbooked }
+    { value: 'OVERBOOKED', label: 'Invalid overbook', count: attentionCounts.overbooked }
   ];
 
   return (
@@ -598,9 +598,9 @@ function ManagerDashboard({
           onClick={() => setAttentionFilter('CAPACITY_RISK')}
         />
         <StatCard
-          label="Overbooked"
+          label="Invalid overbook"
           value={String(attentionCounts.overbooked)}
-          hint="Timeline risk"
+          hint="Approved over 100%"
           icon={AlertCircle}
           tone="danger"
           active={attentionFilter === 'OVERBOOKED'}
@@ -787,7 +787,7 @@ function ManagerAlertRail({
         <div className="grid gap-2">
           <ManagerAlertLink
             tone="danger"
-            title={`${counts.overbooked} overbooked BA`}
+            title={`${counts.overbooked} BA with invalid overbook`}
             description="Open the timeline to inspect workload conflicts."
             to="/timeline"
           />
@@ -1127,7 +1127,7 @@ function getManagerActionCreatedAt(item: ManagerActionItem) {
 
 function formatManagerFlag(flag: ManagerActionItem['flag']) {
   if (flag === 'CAPACITY_RISK') return 'Cap. risk';
-  if (flag === 'OVERBOOKED') return 'Overbooked';
+  if (flag === 'OVERBOOKED') return 'Invalid';
   if (flag === 'NEEDS_ASSIGNMENT') return 'Needs assign';
   return 'Review';
 }

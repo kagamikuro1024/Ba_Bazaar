@@ -26,7 +26,7 @@ func buildCapacityRangeExplanation(riskDays []capacityExplanationDay) map[string
 	if len(riskDays) == 0 {
 		return map[string]any{
 			"risk_level": "SAFE",
-			"summary":    "No overbook risk detected for the selected BA and date range.",
+			"summary":    "No capacity conflict detected for the selected BA and date range.",
 			"why_flagged": []string{},
 			"signals_used": []string{
 				"Daily approved capacity",
@@ -114,8 +114,17 @@ func (app *App) handleCapacitySummary(w http.ResponseWriter, r *http.Request) {
 		capacity := getRangeCapacity(capRows, startDate, endDate, "")
 		available := 0
 		if ba.Status == "ACTIVE" { available = len(workingDaysInRange(startDate, endDate)) }
-		booked := round1(calculateBookedWorkingDays(capRows, startDate, endDate))
-		items = append(items, map[string]any{"ba_id": ba.ID, "full_name": ba.FullName, "status": ba.Status, "approved_capacity": capacity.MaxApprovedCapacity, "pending_capacity": capacity.MaxPendingCapacity, "risk_capacity": capacity.MaxRiskCapacity, "has_overbook_risk": capacity.HasOverbookRisk, "booked_man_days": booked, "available_man_days": available, "utilization_percent": calculateUtilizationPercent(booked, available), "capacity_label": classifyCapacity(float64(capacity.MaxRiskCapacity))})
+		// Man-day utilization counts COMPLETED work too (alongside APPROVED and
+		// IN_PROGRESS) so the Timeline % reflects work actually done, e.g. for
+		// payroll. The conflict/approve guard is separate and still ignores COMPLETED.
+		booked := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
+		utilization := calculateUtilizationPercent(booked, available)
+		// capacity_label classifies approved man-day utilization. Pending risk is
+		// surfaced separately as conflict_risk so the timeline can flag a conflict
+		// to resolve without mislabelling the BA as overbooked.
+		invalidOverbook := capacity.MaxApprovedCapacity > 100
+		conflictRisk := capacity.MaxRiskCapacity > 100 && !invalidOverbook
+		items = append(items, map[string]any{"ba_id": ba.ID, "full_name": ba.FullName, "status": ba.Status, "approved_capacity": capacity.MaxApprovedCapacity, "pending_capacity": capacity.MaxPendingCapacity, "risk_capacity": capacity.MaxRiskCapacity, "has_overbook_risk": capacity.HasOverbookRisk, "conflict_risk": conflictRisk, "invalid_overbook": invalidOverbook, "booked_man_days": booked, "available_man_days": available, "utilization_percent": utilization, "capacity_label": classifyCapacity(utilization)})
 	}
 	average := 0.0
 	for _, item := range items { average += float64(item["approved_capacity"].(int)) }

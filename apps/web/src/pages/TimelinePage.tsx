@@ -82,6 +82,19 @@ type CapacityDetail = {
   has_overbook_risk: boolean;
 };
 
+type CapacitySummaryItem = {
+  ba_id: string;
+  approved_capacity: number;
+  pending_capacity: number;
+  risk_capacity: number;
+  utilization_percent: number;
+  booked_man_days?: number;
+  available_man_days?: number;
+  conflict_risk?: boolean;
+  invalid_overbook?: boolean;
+  capacity_label?: string;
+};
+
 type TimelineViewMode = 'week' | 'month' | 'quarter';
 type BASortMode = 'name' | 'capacity_desc' | 'capacity_asc';
 
@@ -343,6 +356,40 @@ function getCurrentAnchorDate(viewMode: TimelineViewMode) {
   return normalizeAnchorDate(viewMode, new Date());
 }
 
+function utilizationPeriodWord(viewMode: TimelineViewMode) {
+  return viewMode === 'week'
+    ? 'this week'
+    : viewMode === 'month'
+      ? 'this month'
+      : 'this quarter';
+}
+
+// Tooltip shown next to the BA utilization %, explaining the man-day basis and
+// any pending conflict / invalid-overbook signal for the current view.
+function utilizationTooltip(
+  viewMode: TimelineViewMode,
+  item: CapacitySummaryItem | undefined
+) {
+  if (!item) {
+    return 'No allocation in this period';
+  }
+
+  const parts = [
+    `Approved utilization ${utilizationPeriodWord(viewMode)}: ${item.utilization_percent ?? 0}%`
+  ];
+  if (item.available_man_days != null && item.booked_man_days != null) {
+    parts.push(
+      `${item.booked_man_days}/${item.available_man_days} man-days allocated (weekends excluded)`
+    );
+  }
+  if (item.invalid_overbook) {
+    parts.push('Invalid overbook: approved load exceeds 100% (data issue)');
+  } else if (item.conflict_risk) {
+    parts.push(`Pending conflict risk: up to ${item.risk_capacity}% if all approved`);
+  }
+  return parts.join(' - ');
+}
+
 function formatBaSortMode(sortMode: BASortMode) {
   if (sortMode === 'capacity_desc') {
     return 'Capacity high to low';
@@ -574,13 +621,7 @@ export function TimelinePage() {
       apiFetch<{
         average_capacity: number;
         counts: Record<string, number>;
-        items: Array<{
-          ba_id: string;
-          approved_capacity: number;
-          pending_capacity: number;
-          risk_capacity: number;
-          capacity_label?: string;
-        }>;
+        items: CapacitySummaryItem[];
       }>(
         `/api/capacity/summary?start_date=${format(timelineStart, 'yyyy-MM-dd')}&end_date=${format(timelineEnd, 'yyyy-MM-dd')}`
       )
@@ -614,8 +655,8 @@ export function TimelinePage() {
     if (baSortMode === 'capacity_desc') {
       return basToSort.sort(
         (left, right) =>
-          (capacityByBaId.get(right.id)?.risk_capacity ?? 0) -
-          (capacityByBaId.get(left.id)?.risk_capacity ?? 0) ||
+          (capacityByBaId.get(right.id)?.utilization_percent ?? 0) -
+          (capacityByBaId.get(left.id)?.utilization_percent ?? 0) ||
           left.full_name.localeCompare(right.full_name)
       );
     }
@@ -623,8 +664,8 @@ export function TimelinePage() {
     if (baSortMode === 'capacity_asc') {
       return basToSort.sort(
         (left, right) =>
-          (capacityByBaId.get(left.id)?.risk_capacity ?? 0) -
-          (capacityByBaId.get(right.id)?.risk_capacity ?? 0) ||
+          (capacityByBaId.get(left.id)?.utilization_percent ?? 0) -
+          (capacityByBaId.get(right.id)?.utilization_percent ?? 0) ||
           left.full_name.localeCompare(right.full_name)
       );
     }
@@ -954,7 +995,7 @@ export function TimelinePage() {
                   <span className="flex h-4 w-9 items-center justify-center rounded bg-rose-600 text-white">
                     <AlertTriangle className="h-3 w-3" />
                   </span>{' '}
-                  Overbooked BA
+                  Capacity conflict
                 </div>
               </div>
             ) : null}
@@ -1150,8 +1191,11 @@ export function TimelinePage() {
                       <MobileBAIdentity
                         ba={ba}
                         compact={effectiveCompactMobileInfo}
-                        riskCapacity={capacity?.risk_capacity ?? 0}
-                        hasOverbookRisk={(capacity?.risk_capacity ?? 0) > 100}
+                        utilization={capacity?.utilization_percent ?? 0}
+                        flagged={Boolean(
+                          capacity?.conflict_risk || capacity?.invalid_overbook
+                        )}
+                        tooltip={utilizationTooltip(viewMode, capacity)}
                         onWheel={handleMobileIdentityWheel}
                       />
                     </div>
@@ -1187,13 +1231,17 @@ export function TimelinePage() {
               {rowData.map(({ ba, desktopRowMinHeight }, index) => {
                 const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
                 const isAlternateRow = index % 2 === 1;
+                const utilization = capacity?.utilization_percent ?? 0;
+                const invalidOverbook = Boolean(capacity?.invalid_overbook);
+                const conflictRisk = Boolean(capacity?.conflict_risk);
+                const flagged = invalidOverbook || conflictRisk;
 
                 return (
                   <div
                     key={ba.id}
                     className={cn(
                       'pointer-events-auto flex w-[260px] items-center justify-between border-b border-r p-2 lg:p-3',
-                      (capacity?.risk_capacity ?? 0) > 100
+                      flagged
                         ? 'bg-rose-50 ring-1 ring-inset ring-rose-300'
                         : isAlternateRow
                           ? 'bg-sky-50'
@@ -1204,21 +1252,20 @@ export function TimelinePage() {
                     onPointerDown={(event) => event.stopPropagation()}
                   >
                     <BAIdentity ba={ba} />
-                    {(capacity?.risk_capacity ?? 0) > 100 ? (
-                      <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-900 bg-rose-700 px-2 text-[11px] font-bold text-white shadow-sm shadow-rose-200">
-                        <AlertTriangle className="h-3 w-3" />
-                        {capacity?.risk_capacity ?? 0}%
+                    <span
+                      className="flex shrink-0 items-center gap-1.5"
+                      title={utilizationTooltip(viewMode, capacity)}
+                    >
+                      {flagged ? (
+                        <span className="inline-flex h-6 items-center gap-1 rounded-lg border border-rose-900 bg-rose-700 px-1.5 text-[10px] font-bold uppercase text-white shadow-sm shadow-rose-200">
+                          <AlertTriangle className="h-3 w-3" />
+                          {invalidOverbook ? 'Invalid' : 'Conflict'}
+                        </span>
+                      ) : null}
+                      <span className={cn('text-sm font-bold', capacityColor(utilization))}>
+                        {utilization}%
                       </span>
-                    ) : (
-                      <span
-                        className={cn(
-                          'text-sm font-bold',
-                          capacityColor(capacity?.risk_capacity ?? 0)
-                        )}
-                      >
-                        {capacity?.risk_capacity ?? 0}%
-                      </span>
-                    )}
+                    </span>
                   </div>
                 );
               })}
@@ -1380,7 +1427,7 @@ function TimelineRow({
                     {viewMode === 'week' ? (
                       <>
                         {booking.project.name} - {booking.capacity_percent}%
-                        {hasOverbookRisk ? ' - Overbooked' : ''}
+                        {hasOverbookRisk ? ' - Conflict' : ''}
                       </>
                     ) : (
                       `${booking.project.name} - ${booking.capacity_percent}%`
@@ -1493,14 +1540,16 @@ function MobileTimelineRow({
 function MobileBAIdentity({
   ba,
   compact,
-  riskCapacity: _riskCapacity,
-  hasOverbookRisk: _hasOverbookRisk,
+  utilization,
+  flagged,
+  tooltip,
   onWheel
 }: {
   ba: BAProfile;
   compact: boolean;
-  riskCapacity: number;
-  hasOverbookRisk: boolean;
+  utilization: number;
+  flagged: boolean;
+  tooltip: string;
   onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
 }) {
   const initials = ba.full_name
@@ -1513,6 +1562,7 @@ function MobileBAIdentity({
     <button
       type="button"
       data-allow-scroll-drag="true"
+      title={tooltip}
       className="pointer-events-auto flex min-w-0 items-center gap-2 text-xs"
       onClick={(event) => event.stopPropagation()}
       onWheel={onWheel}
@@ -1540,8 +1590,14 @@ function MobileBAIdentity({
       >
         - {ba.level}
       </span>
-      <span className={cn('shrink-0 font-bold', capacityColor(_riskCapacity))}>
-        {_riskCapacity}%
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center gap-0.5 font-bold',
+          capacityColor(utilization)
+        )}
+      >
+        {flagged ? <AlertTriangle className="h-3 w-3 text-rose-600" /> : null}
+        {utilization}%
       </span>
     </button>
   );
@@ -2004,8 +2060,14 @@ function BookingDetailModal({
   if (!booking) return null;
 
   const maxRiskCapacity = capacityDetail.data?.max_risk_capacity ?? 0;
-  const isOverbooked = maxRiskCapacity > 100;
-  const firstOverbookDay = capacityDetail.data?.daily.find(
+  const maxApprovedCapacity = capacityDetail.data?.max_approved_capacity ?? 0;
+  // Conflict = pending could push past 100% if approved. Invalid overbook =
+  // already-approved load exceeds 100% (a data issue). Approving past 100% is
+  // blocked by the API, so the panel guides the manager toward a resolution.
+  const invalidOverbook = maxApprovedCapacity > 100;
+  const hasConflict = maxRiskCapacity > 100;
+  const suggestedMaxApprove = Math.max(0, 100 - maxApprovedCapacity);
+  const firstConflictDay = capacityDetail.data?.daily.find(
     (day) => day.risk_capacity > 100
   );
 
@@ -2033,14 +2095,21 @@ function BookingDetailModal({
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
-        {isOverbooked ? (
+        {hasConflict ? (
           <div className="grid gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold">Overbooked capacity</p>
+                <p className="font-semibold">
+                  {invalidOverbook ? 'Invalid overbook' : 'Capacity conflict'}
+                </p>
                 <p className="mt-1 text-xs text-rose-700">
-                  Max risk capacity {maxRiskCapacity}%
-                  {firstOverbookDay ? ` on ${formatDate(firstOverbookDay.date)}` : ''}.
+                  {invalidOverbook
+                    ? `Approved load reaches ${maxApprovedCapacity}% (over 100%)`
+                    : `Approved + pending reaches ${maxRiskCapacity}% if all approved`}
+                  {firstConflictDay ? ` on ${formatDate(firstConflictDay.date)}` : ''}.
+                </p>
+                <p className="mt-1 text-xs font-semibold text-rose-800">
+                  Max capacity you can approve for this BA: {suggestedMaxApprove}%
                 </p>
               </div>
               <AlertTriangle className="h-5 w-5 shrink-0 text-rose-700" />
@@ -2064,10 +2133,10 @@ function BookingDetailModal({
                 ))}
               </div>
               <div className="grid gap-1 text-xs text-rose-700 sm:grid-cols-2">
-                <span>Suggested: view available BA</span>
-                <span>Suggested: move part of effort</span>
-                <span>Suggested: reject pending request</span>
-                <span>Suggested: assign different BA</span>
+                <span>Resolve: reduce capacity to {suggestedMaxApprove}% or less</span>
+                <span>Resolve: split work across multiple BA</span>
+                <span>Resolve: assign another BA</span>
+                <span>Resolve: reject this request</span>
               </div>
             </div>
           </div>

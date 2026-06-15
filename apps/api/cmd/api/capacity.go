@@ -104,6 +104,31 @@ func canApproveCapacity(bookings []CapacityBooking, startDate, endDate time.Time
 	return blockingDay == "", blockingDay, maxAfter
 }
 
+// approveConflictDetail returns, for an approval that would exceed 100%, the
+// most-constraining day, the approved capacity already committed on that day,
+// and the maximum capacity this booking could take without exceeding 100%.
+// When no day conflicts it returns ("", 0, 100-... clamped) — callers should
+// only use it on the blocked path.
+func approveConflictDetail(bookings []CapacityBooking, startDate, endDate time.Time, capacityPercent int, excludeBookingID string) (blockingDay string, existingApproved int, suggestedMax int) {
+	rc := getRangeCapacity(bookings, startDate, endDate, excludeBookingID)
+	worstApproved := -1
+	for _, day := range rc.Daily {
+		if day.ApprovedCapacity+capacityPercent > 100 && day.ApprovedCapacity > worstApproved {
+			worstApproved = day.ApprovedCapacity
+			blockingDay = day.Date
+		}
+	}
+	if worstApproved < 0 {
+		worstApproved = 0
+	}
+	existingApproved = worstApproved
+	suggestedMax = 100 - worstApproved
+	if suggestedMax < 0 {
+		suggestedMax = 0
+	}
+	return blockingDay, existingApproved, suggestedMax
+}
+
 func calculateBookedWorkingDays(bookings []CapacityBooking, startDate, endDate time.Time) float64 {
 	return calculateBookedWorkingDaysByStatus(bookings, startDate, endDate, isCurrentUtilizationStatus)
 }

@@ -194,8 +194,10 @@ func (app *App) managerSummaryPayloadForRange(ctx context.Context, startDate, en
 		capacity := getRangeCapacity(capRows, startDate, endDate, "")
 		bookedManDays := round1(calculateHistoricalBookedWorkingDays(capRows, startDate, endDate))
 		utilization := calculateUtilizationPercent(bookedManDays, workingDays)
+		// Label reflects approved man-day utilization. Pending risk (a capacity
+		// conflict to resolve) is tracked via risk_capacity, not by mislabelling
+		// the BA as overbooked.
 		label := classifyCapacity(utilization)
-		if capacity.MaxRiskCapacity > 100 { label = "OVERBOOKED" }
 		baRows = append(baRows, map[string]any{"ba_id": ba.ID, "ba_name": ba.FullName, "level": ba.Level, "booked_man_days": bookedManDays, "available_man_days": workingDays, "utilization_percent": utilization, "approved_capacity": capacity.MaxApprovedCapacity, "pending_capacity": capacity.MaxPendingCapacity, "risk_capacity": capacity.MaxRiskCapacity, "capacity_label": label, "current_projects": summarizeCurrentProjects(bookings)})
 	}
 	totalManDays := 0.0

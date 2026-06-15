@@ -187,9 +187,10 @@ func (app *App) handleBookingsDirect(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "BA is required for direct bookings"})
 		return
 	}
-	allowed, blockingDay, _ := app.approvalCheck(r.Context(), *normalized.BAID, normalized.StartDate, normalized.EndDate, normalized.CapacityPercent, "")
+	allowed, _, _ := app.approvalCheck(r.Context(), *normalized.BAID, normalized.StartDate, normalized.EndDate, normalized.CapacityPercent, "")
 	if !allowed {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Cannot approve booking because capacity exceeds 100%% on %s", blockingDay)})
+		blockingDay, existing, suggestedMax := app.approvalConflictInfo(r.Context(), *normalized.BAID, normalized.StartDate, normalized.EndDate, normalized.CapacityPercent, "")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": capacityConflictMessage("create this direct booking", blockingDay, existing, normalized.CapacityPercent, suggestedMax)})
 		return
 	}
 	booking, err := app.insertBooking(r.Context(), normalized, user.ID, &user.ID, "APPROVED", input.ManagerComment)
@@ -217,9 +218,10 @@ func (app *App) handleBookingsApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if booking.BAID != nil {
-		allowed, blockingDay, _ := app.approvalCheck(r.Context(), *booking.BAID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
+		allowed, _, _ := app.approvalCheck(r.Context(), *booking.BAID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
 		if !allowed {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Cannot approve booking because capacity exceeds 100%% on %s", blockingDay)})
+			blockingDay, existing, suggestedMax := app.approvalConflictInfo(r.Context(), *booking.BAID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": capacityConflictMessage("approve this booking", blockingDay, existing, booking.CapacityPercent, suggestedMax)})
 			return
 		}
 	}
@@ -288,9 +290,10 @@ func (app *App) handleBookingsAssign(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "Booking not found"})
 		return
 	}
-	allowed, blockingDay, _ := app.approvalCheck(r.Context(), ba.ID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
+	allowed, _, _ := app.approvalCheck(r.Context(), ba.ID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
 	if !allowed {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Cannot assign BA because capacity exceeds 100%% on %s", blockingDay)})
+		blockingDay, existing, suggestedMax := app.approvalConflictInfo(r.Context(), ba.ID, booking.StartDate, booking.EndDate, booking.CapacityPercent, booking.ID)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": capacityConflictMessage("assign this BA", blockingDay, existing, booking.CapacityPercent, suggestedMax)})
 		return
 	}
 	updated, err := app.assignBooking(r.Context(), booking.ID, ba.ID, user.ID)
@@ -573,7 +576,7 @@ func (app *App) submitWarning(ctx context.Context, baID string, startDate, endDa
 	for _, day := range rangeCapacity.Daily {
 		risk := day.ApprovedCapacity + day.PendingCapacity + capacity
 		if risk > 100 {
-			return map[string]any{"type": "OVERBOOK_RISK", "message": "BA has overbook risk in selected date range.", "date": day.Date, "approved_capacity": day.ApprovedCapacity, "pending_capacity": day.PendingCapacity, "requested_capacity": capacity, "risk_capacity": risk}
+			return map[string]any{"type": "OVERBOOK_RISK", "message": "BA has a capacity conflict in selected date range.", "date": day.Date, "approved_capacity": day.ApprovedCapacity, "pending_capacity": day.PendingCapacity, "requested_capacity": capacity, "risk_capacity": risk}
 		}
 	}
 	return nil
@@ -586,6 +589,24 @@ func (app *App) approvalCheck(ctx context.Context, baID string, startDate, endDa
 		capRows = append(capRows, CapacityBooking{ID: booking.ID, BAID: booking.BAID, StartDate: booking.StartDate, EndDate: booking.EndDate, CapacityPercent: booking.CapacityPercent, Status: booking.Status})
 	}
 	return canApproveCapacity(capRows, startDate, endDate, capacity, excludeBookingID)
+}
+
+// approvalConflictInfo returns actionable detail for a blocked approval: the
+// most-constraining day, how much capacity is already approved there, and the
+// maximum capacity this booking could take without pushing the BA past 100%.
+func (app *App) approvalConflictInfo(ctx context.Context, baID string, startDate, endDate time.Time, capacity int, excludeBookingID string) (blockingDay string, existingApproved int, suggestedMax int) {
+	bookings, _ := app.fetchBookingsForBA(ctx, baID, startDate, endDate)
+	capRows := make([]CapacityBooking, 0, len(bookings))
+	for _, booking := range bookings {
+		capRows = append(capRows, CapacityBooking{ID: booking.ID, BAID: booking.BAID, StartDate: booking.StartDate, EndDate: booking.EndDate, CapacityPercent: booking.CapacityPercent, Status: booking.Status})
+	}
+	return approveConflictDetail(capRows, startDate, endDate, capacity, excludeBookingID)
+}
+
+// capacityConflictMessage builds a consistent, actionable error for an approval
+// or assignment that would push a BA's approved capacity past 100%.
+func capacityConflictMessage(action, blockingDay string, existingApproved, requested, suggestedMax int) string {
+	return fmt.Sprintf("Cannot %s because BA capacity would exceed 100%% on %s (already %d%% approved + %d%% requested = %d%%). Reduce this booking to %d%% or less, assign another BA, or split the work.", action, blockingDay, existingApproved, requested, existingApproved+requested, suggestedMax)
 }
 
 func (app *App) insertBooking(ctx context.Context, input *bookingInputNormalized, requesterID string, managerID *string, status string, managerComment *string) (*Booking, error) {

@@ -44,8 +44,9 @@ func (app *App) handleDashboardManagerLLMSummary(w http.ResponseWriter, r *http.
 		Facts:    facts,
 		Citations: citations,
 		Context:  "the BA Manager dashboard. The reader is a BA Manager deciding what to handle first this period",
-		Guidance: `- Lead with the request queue (urgent and unassigned first), then capacity risks (overbooked BAs), then utilization/bench.
-- If watchlist names exist, you may name the overbooked or bench BAs exactly as given.
+		Guidance: `- Lead with the request queue (urgent and unassigned first), then capacity conflicts, then utilization/bench.
+- A "capacity conflict" means a BA's bookings would exceed 100% if all approved; never call this "overbooked".
+- If watchlist names exist, you may name the conflicting or bench BAs exactly as given.
 - Close with what to review first, phrased as a suggestion ("review", "consider"), never as a decision.`,
 		SuggestedActions: dashboardSuggestedActions(actions),
 		Fallback: func() *llmSummary {
@@ -55,9 +56,9 @@ func (app *App) handleDashboardManagerLLMSummary(w http.ResponseWriter, r *http.
 }
 
 // dashboardWatchlist projects the heavy ba_utilization rows down to the few
-// names the summary may mention: overbooked and bench BAs.
+// names the summary may mention: over-capacity and bench BAs.
 func dashboardWatchlist(payload map[string]any) map[string]any {
-	overbooked := make([]map[string]any, 0, 4)
+	overCapacity := make([]map[string]any, 0, 4)
 	bench := make([]map[string]any, 0, 4)
 	rows, _ := payload["ba_utilization"].([]map[string]any)
 	for _, row := range rows {
@@ -69,8 +70,8 @@ func dashboardWatchlist(payload map[string]any) map[string]any {
 		}
 		switch label {
 		case "OVERBOOKED":
-			if len(overbooked) < 4 {
-				overbooked = append(overbooked, entry)
+			if len(overCapacity) < 4 {
+				overCapacity = append(overCapacity, entry)
 			}
 		case "BENCH":
 			if len(bench) < 4 {
@@ -78,7 +79,7 @@ func dashboardWatchlist(payload map[string]any) map[string]any {
 			}
 		}
 	}
-	return map[string]any{"overbooked_bas": overbooked, "bench_bas": bench}
+	return map[string]any{"over_capacity_bas": overCapacity, "bench_bas": bench}
 }
 
 func topProjectEffort(payload map[string]any, limit int) []map[string]any {
@@ -108,7 +109,7 @@ func dashboardSuggestedActions(actions map[string]any) []llmSuggestedAction {
 		out = append(out, llmSuggestedAction{ID: "review_pending", Label: "Review pending requests"})
 	}
 	if anyToInt(actions["overbooked_ba"]) > 0 {
-		out = append(out, llmSuggestedAction{ID: "check_overbooked", Label: "Check overbooked BAs"})
+		out = append(out, llmSuggestedAction{ID: "check_overbooked", Label: "Check capacity conflicts"})
 	}
 	if anyToInt(actions["bench_ba"]) > 0 {
 		out = append(out, llmSuggestedAction{ID: "view_bench", Label: "View bench BAs"})
@@ -140,7 +141,7 @@ func buildDashboardCitations(payload map[string]any) []llmCitation {
 		{ID: "C2", Label: "Team utilization", Value: fmt.Sprintf("%v%% across %v active BA", team["team_utilization_percent"], team["total_ba"])},
 		{ID: "C3", Label: "Booked man-days", Value: fmt.Sprintf("%v booked of %v available man-days", team["total_man_days"], team["total_available_man_days"])},
 		{ID: "C4", Label: "Pending requests", Value: fmt.Sprintf("%v pending, %v unassigned, %v urgent", actions["pending_requests"], actions["unassigned_requests"], actions["urgent_requests"])},
-		{ID: "C5", Label: "Capacity risk", Value: fmt.Sprintf("%v overbooked BA, %v bench BA", actions["overbooked_ba"], actions["bench_ba"])},
+		{ID: "C5", Label: "Capacity risk", Value: fmt.Sprintf("%v capacity conflict, %v bench BA", actions["overbooked_ba"], actions["bench_ba"])},
 	}
 }
 
@@ -153,7 +154,7 @@ func buildGroundedDashboardFallback(payload map[string]any) *llmSummary {
 		Citations: citations,
 		Bullets: []llmSummaryBullet{
 			{Text: fmt.Sprintf("There are %v pending requests, including %v unassigned and %v urgent.", actions["pending_requests"], actions["unassigned_requests"], actions["urgent_requests"]), Citations: []string{"C4"}},
-			{Text: fmt.Sprintf("Capacity watchlist shows %v overbooked BA and %v bench BA.", actions["overbooked_ba"], actions["bench_ba"]), Citations: []string{"C5"}},
+			{Text: fmt.Sprintf("Capacity watchlist shows %v capacity conflict and %v bench BA.", actions["overbooked_ba"], actions["bench_ba"]), Citations: []string{"C5"}},
 			{Text: fmt.Sprintf("Team utilization is %v%% across %v active BA.", team["team_utilization_percent"], team["total_ba"]), Citations: []string{"C2"}},
 			{Text: fmt.Sprintf("The selected period has %v booked man-days out of %v available man-days.", team["total_man_days"], team["total_available_man_days"]), Citations: []string{"C3"}},
 		},

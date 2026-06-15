@@ -440,7 +440,7 @@ export function ManagerInboxPage() {
       { value: 'PENDING', label: 'Pending', count: counts.PENDING, tone: 'warning' },
       {
         value: 'OVERBOOK_RISK',
-        label: 'Overbook risk',
+        label: 'Capacity conflict',
         count: counts.OVERBOOK_RISK,
         tone: 'danger'
       }
@@ -522,7 +522,7 @@ export function ManagerInboxPage() {
   if (filters.overbookRisk) {
     activeFilterChips.push({
       id: 'overbookRisk',
-      label: 'Overbook risk',
+      label: 'Capacity conflict',
       onRemove: () => setFilter({ overbookRisk: false })
     });
   }
@@ -1367,7 +1367,7 @@ export function ManagerInboxPage() {
                   tone={
                     flag === 'Normal'
                       ? 'neutral'
-                      : flag === 'Overbook risk' || flag === 'Urgent'
+                      : flag === 'Capacity conflict' || flag === 'Urgent'
                         ? 'danger'
                         : 'warning'
                   }
@@ -1491,7 +1491,7 @@ export function ManagerInboxPage() {
               tone={
                 flag === 'Normal'
                   ? 'neutral'
-                  : flag === 'Overbook risk' || flag === 'Urgent'
+                  : flag === 'Capacity conflict' || flag === 'Urgent'
                     ? 'danger'
                     : 'warning'
               }
@@ -1737,7 +1737,7 @@ export function ManagerInboxPage() {
                     updateFilterDraft({ overbookRisk: event.target.checked })
                   }
                 />
-                Overbook risk
+                Capacity conflict
               </label>
             </div>
           </AdvancedFilterPopover>
@@ -2893,7 +2893,7 @@ function getRequestRiskFlags(booking: Booking, riskCapacity: number) {
   }
 
   if (riskCapacity > 100) {
-    flags.push('Overbook risk');
+    flags.push('Capacity conflict');
   }
 
   if (needsManagerVerification(booking)) {

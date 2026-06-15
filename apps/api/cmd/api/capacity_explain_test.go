@@ -11,7 +11,7 @@ func TestBuildCapacityRangeExplanation_Safe(t *testing.T) {
 	if got["risk_level"] != "SAFE" {
 		t.Fatalf("risk_level = %v, want SAFE", got["risk_level"])
 	}
-	if got["summary"] != "No overbook risk detected for the selected BA and date range." {
+	if got["summary"] != "No capacity conflict detected for the selected BA and date range." {
 		t.Fatalf("unexpected summary: %v", got["summary"])
 	}
 

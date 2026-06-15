@@ -39,8 +39,12 @@ func (app *App) handleBookingUpdate(w http.ResponseWriter, r *http.Request) {
 	if nextEnd.Before(nextStart) { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "end_date must be greater than or equal to start_date"}); return }
 	if (manager && isOfficialCapacityStatus(booking.Status)) || requesterCanPropose {
 		if nextBAID != nil {
-			allowed, blockingDay, _ := app.approvalCheck(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
-			if !allowed { writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Cannot update booking because capacity exceeds 100%% on %s", blockingDay)}); return }
+			allowed, _, _ := app.approvalCheck(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
+			if !allowed {
+				blockingDay, existing, suggestedMax := app.approvalConflictInfo(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": capacityConflictMessage("apply this change", blockingDay, existing, nextCapacity, suggestedMax)})
+				return
+			}
 		}
 	}
 	if requesterCanPropose {
@@ -105,8 +109,12 @@ func (app *App) handleBookingApproveChangesCommon(w http.ResponseWriter, r *http
 	if changes.CapacityPercent != nil { nextCapacity = *changes.CapacityPercent }
 	if nextEnd.Before(nextStart) { writeJSON(w, http.StatusBadRequest, map[string]string{"message": "end_date must be greater than or equal to start_date"}); return }
 	if nextBAID != nil {
-		allowed, blockingDay, _ := app.approvalCheck(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
-		if !allowed { writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Cannot approve booking changes because capacity exceeds 100%% on %s", blockingDay)}); return }
+		allowed, _, _ := app.approvalCheck(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
+		if !allowed {
+			blockingDay, existing, suggestedMax := app.approvalConflictInfo(r.Context(), *nextBAID, nextStart, nextEnd, nextCapacity, booking.ID)
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": capacityConflictMessage("approve these changes", blockingDay, existing, nextCapacity, suggestedMax)})
+			return
+		}
 	}
 	if err := app.applyBookingChanges(r.Context(), booking.ID, changes, booking.Status == "PENDING"); err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
 	remaining := map[string]any{}

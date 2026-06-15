@@ -78,7 +78,7 @@ export function capacityLabelText(label: CapacityClassification) {
     case 'FULL':
       return 'Full';
     case 'OVERBOOKED':
-      return 'Overbooked';
+      return 'Invalid overbook';
     default:
       return label;
   }

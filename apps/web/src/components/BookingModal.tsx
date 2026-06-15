@@ -43,7 +43,7 @@ type SkillExtractionResponse = {
 const RISK_LEVEL_LABELS: Record<RangeCheck['explanation']['risk_level'], string> = {
   SAFE: 'Safe',
   NEAR_LIMIT: 'Near limit',
-  OVERBOOK_RISK: 'Overbook risk'
+  OVERBOOK_RISK: 'Capacity conflict'
 };
 
 const RISK_LEVEL_STYLES: Record<
@@ -529,7 +529,7 @@ export function BookingModal({
                     </p>
                     <p className="text-xs text-slate-600">
                       {riskLevel === 'OVERBOOK_RISK'
-                        ? `${riskDays.length} risk day${riskDays.length === 1 ? '' : 's'} · peak ${capacityCheck.data?.max_risk_capacity_after_request ?? 0}%`
+                        ? `${riskDays.length} conflict day${riskDays.length === 1 ? '' : 's'} · peak ${capacityCheck.data?.max_risk_capacity_after_request ?? 0}%`
                         : 'Get ranked suggestions based on availability, project fit, and capacity headroom.'}
                     </p>
                   </div>
@@ -556,7 +556,7 @@ export function BookingModal({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
                       <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${riskStyles.eyebrow}`}>
-                        {riskLevel === 'OVERBOOK_RISK' ? 'Why this is risky' : 'Capacity status'}
+                        {riskLevel === 'OVERBOOK_RISK' ? 'Why this conflicts' : 'Capacity status'}
                       </p>
                       <p className="text-sm font-medium text-current">
                         {riskLevel === 'OVERBOOK_RISK'
@@ -566,7 +566,7 @@ export function BookingModal({
                       <p className={`text-xs ${riskStyles.muted}`}>
                         {primaryRiskDay
                           ? `First risk day ${primaryRiskDay.date} · approved ${primaryRiskDay.approved_capacity}% · pending ${primaryRiskDay.pending_capacity}% · request ${primaryRiskDay.requested_capacity}%`
-                          : 'No overbook risk detected for the selected BA and date range.'}
+                          : 'No capacity conflict detected for the selected BA and date range.'}
                       </p>
                     </div>
                     <span

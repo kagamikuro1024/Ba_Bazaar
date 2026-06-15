@@ -63,6 +63,11 @@ export type BAProfile = {
   available_man_days?: number;
   utilization_percent?: number;
   capacity_label?: CapacityClassification;
+  /** Pending requests could push this BA past 100% if approved - a conflict to
+   * resolve, not an overbooked state. */
+  conflict_risk?: boolean;
+  /** Already-approved capacity exceeds 100% on some day (data issue). */
+  invalid_overbook?: boolean;
   current_projects?: Array<{
     project_id: string;
     project_name: string;

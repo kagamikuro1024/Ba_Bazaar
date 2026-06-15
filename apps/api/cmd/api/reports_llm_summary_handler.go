@@ -67,9 +67,10 @@ func (app *App) handleReportsLLMSummary(w http.ResponseWriter, r *http.Request) 
 		Facts:     facts,
 		Citations: citations,
 		Context:   "the Reports / Planning page for one month. The reader is a BA Manager doing resource planning",
-		Guidance: `- Cover, in order: monthly team utilization, bench and overbooked BAs, the project consuming the most man-days, then the pending forecast.
+		Guidance: `- Cover, in order: monthly team utilization, bench and over-capacity BAs, the project consuming the most man-days, then the pending forecast.
 - The pending forecast is hypothetical: phrase it as "if all pending requests are approved, utilization is projected to reach X%". Never imply anything has been approved.
-- You may name the top project and overbooked/bench BAs exactly as given in facts.`,
+- Call a BA whose bookings exceed 100% a "capacity conflict", not "overbooked".
+- You may name the top project and conflicting/bench BAs exactly as given in facts.`,
 		SuggestedActions: reportsSuggestedActions(team, forecast),
 		Fallback: func() *llmSummary {
 			return buildReportsFallback(month, team, payload, forecast, citations)
@@ -129,7 +130,7 @@ func (app *App) reportsPendingForecast(ctx context.Context, payload map[string]a
 		"pending_man_days":               round1(pendingManDays),
 		"current_utilization_percent":    team["team_utilization_percent"],
 		"projected_utilization_percent":  projected,
-		"ba_that_would_become_overbooked": wouldOverbook,
+		"ba_that_would_conflict": wouldOverbook,
 	}, nil
 }
 
@@ -154,10 +155,10 @@ func buildReportsCitations(month string, team map[string]any, payload map[string
 	return []llmCitation{
 		{ID: "C1", Label: "Month", Value: month},
 		{ID: "C2", Label: "Team utilization", Value: fmt.Sprintf("%v%% across %v active BA", team["team_utilization_percent"], team["total_ba"])},
-		{ID: "C3", Label: "Bench / overbook", Value: fmt.Sprintf("%v bench BA (%v%% bench rate), %v overbooked BA", team["bench_count"], team["bench_rate_percent"], team["overbooked_count"])},
+		{ID: "C3", Label: "Bench / conflict", Value: fmt.Sprintf("%v bench BA (%v%% bench rate), %v in capacity conflict", team["bench_count"], team["bench_rate_percent"], team["overbooked_count"])},
 		{ID: "C4", Label: "Man-days", Value: fmt.Sprintf("%v booked of %v available man-days", team["total_man_days"], team["total_available_man_days"])},
 		{ID: "C5", Label: "Top project", Value: topProject},
-		{ID: "C6", Label: "Pending forecast", Value: fmt.Sprintf("%v pending requests worth %v man-days; approving all would move utilization from %v%% to %v%% and could overbook %v more BA", forecast["pending_requests"], forecast["pending_man_days"], forecast["current_utilization_percent"], forecast["projected_utilization_percent"], forecast["ba_that_would_become_overbooked"])},
+		{ID: "C6", Label: "Pending forecast", Value: fmt.Sprintf("%v pending requests worth %v man-days; approving all would move utilization from %v%% to %v%% and could put %v more BA in capacity conflict", forecast["pending_requests"], forecast["pending_man_days"], forecast["current_utilization_percent"], forecast["projected_utilization_percent"], forecast["ba_that_would_conflict"])},
 	}
 }
 
@@ -167,7 +168,7 @@ func reportsSuggestedActions(team map[string]any, forecast map[string]any) []llm
 		out = append(out, llmSuggestedAction{ID: "view_bench", Label: "View bench BAs"})
 	}
 	if anyToInt(team["overbooked_count"]) > 0 {
-		out = append(out, llmSuggestedAction{ID: "check_overbooked", Label: "Check overbooked BAs"})
+		out = append(out, llmSuggestedAction{ID: "check_overbooked", Label: "Check capacity conflicts"})
 	}
 	out = append(out, llmSuggestedAction{ID: "view_top_projects", Label: "Review top man-day projects"})
 	if anyToInt(forecast["pending_requests"]) > 0 {
@@ -182,13 +183,13 @@ func buildReportsFallback(month string, team map[string]any, payload map[string]
 		topProject = fmt.Sprintf("%v used %v man-days, the most this month", projects[0]["project_name"], projects[0]["man_days"])
 	}
 	return &llmSummary{
-		Summary:   fmt.Sprintf("In %s the team reached %v%% utilization with %v bench and %v overbooked BA.", month, team["team_utilization_percent"], team["bench_count"], team["overbooked_count"]),
+		Summary:   fmt.Sprintf("In %s the team reached %v%% utilization with %v bench and %v in capacity conflict.", month, team["team_utilization_percent"], team["bench_count"], team["overbooked_count"]),
 		Citations: citations,
 		Bullets: []llmSummaryBullet{
 			{Text: fmt.Sprintf("Team utilization is %v%% across %v active BA (%v of %v man-days booked).", team["team_utilization_percent"], team["total_ba"], team["total_man_days"], team["total_available_man_days"]), Citations: []string{"C2", "C4"}},
-			{Text: fmt.Sprintf("%v BA are on bench (%v%% bench rate) and %v BA are overbooked.", team["bench_count"], team["bench_rate_percent"], team["overbooked_count"]), Citations: []string{"C3"}},
+			{Text: fmt.Sprintf("%v BA are on bench (%v%% bench rate) and %v BA are in capacity conflict.", team["bench_count"], team["bench_rate_percent"], team["overbooked_count"]), Citations: []string{"C3"}},
 			{Text: fmt.Sprintf("Top effort: %s.", topProject), Citations: []string{"C5"}},
-			{Text: fmt.Sprintf("If all %v pending requests are approved, utilization is projected to move from %v%% to %v%% and %v more BA could become overbooked.", forecast["pending_requests"], forecast["current_utilization_percent"], forecast["projected_utilization_percent"], forecast["ba_that_would_become_overbooked"]), Citations: []string{"C6"}},
+			{Text: fmt.Sprintf("If all %v pending requests are approved, utilization is projected to move from %v%% to %v%% and %v more BA could enter a capacity conflict.", forecast["pending_requests"], forecast["current_utilization_percent"], forecast["projected_utilization_percent"], forecast["ba_that_would_conflict"]), Citations: []string{"C6"}},
 		},
 	}
 }

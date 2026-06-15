@@ -248,7 +248,7 @@ function ProductPreview() {
             <p className="mt-1 text-2xl font-bold text-emerald-600">5</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Overbook risk</p>
+            <p className="text-xs font-medium text-slate-500">Capacity conflict</p>
             <p className="mt-1 text-2xl font-bold text-rose-600">1</p>
           </div>
         </div>

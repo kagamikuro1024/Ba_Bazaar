@@ -43,7 +43,15 @@ type BAListItem struct {
 	AvailableManDays   int               `json:"available_man_days"`
 	UtilizationPercent float64           `json:"utilization_percent"`
 	CapacityLabel      string            `json:"capacity_label"`
-	CurrentProjects    []map[string]any  `json:"current_projects"`
+	// ConflictRisk is true when overlapping pending requests could push the BA
+	// past 100% on at least one day IF they were approved. This is a signal for
+	// the manager to resolve before approving — it is NOT an overbooked state.
+	ConflictRisk bool `json:"conflict_risk"`
+	// InvalidOverbook is true only when already-approved capacity exceeds 100%
+	// on some day (a data issue / legacy seed). Approving over 100% is blocked,
+	// so this should never appear for valid data.
+	InvalidOverbook bool             `json:"invalid_overbook"`
+	CurrentProjects []map[string]any `json:"current_projects"`
 }
 
 type Booking struct {
