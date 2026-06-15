@@ -684,8 +684,8 @@ function ManagerDashboard({
               <span className="text-right">Action</span>
             </div>
             <div className="flex flex-1 flex-col divide-y divide-slate-100">
-              {needsAttention.map((item) => (
-                <ManagerActionRow key={item.id} item={item} />
+              {needsAttention.map((item, index) => (
+                <ManagerActionRow key={item.id} item={item} index={index} />
               ))}
               {filteredAttention.length === 0 ? (
                 <div className="flex flex-1 items-center p-5 text-sm text-slate-500">
@@ -872,10 +872,15 @@ function ManagerAlertLink({
   );
 }
 
-function ManagerActionRow({ item }: { item: ManagerActionItem }) {
+function ManagerActionRow({ item, index }: { item: ManagerActionItem; index: number }) {
   return (
     <>
-      <div className="grid gap-4 px-4 py-4 text-sm lg:hidden">
+      <div
+        className={cn(
+          'grid gap-4 px-4 py-4 text-sm lg:hidden',
+          index % 2 === 1 && 'bg-blue-50'
+        )}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -933,7 +938,12 @@ function ManagerActionRow({ item }: { item: ManagerActionItem }) {
           </Link>
         </div>
       </div>
-      <div className="hidden gap-3 px-4 py-4 text-sm lg:grid lg:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] lg:items-center">
+      <div
+        className={cn(
+          'hidden gap-3 px-4 py-4 text-sm lg:grid lg:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] lg:items-center',
+          index % 2 === 1 && 'bg-blue-50'
+        )}
+      >
         <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
         <div className="min-w-0">
           <p className="truncate font-medium text-slate-950">{item.project}</p>
