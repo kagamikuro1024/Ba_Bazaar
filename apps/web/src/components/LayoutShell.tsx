@@ -822,7 +822,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         <button
           type="button"
           onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-4 z-40 hidden h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 sm:flex lg:hidden"
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
           aria-label="Create Booking Request"
         >
           <Plus className="h-6 w-6" strokeWidth={3} />

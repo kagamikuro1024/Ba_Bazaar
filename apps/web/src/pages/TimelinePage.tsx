@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useMemo,
   useRef,
@@ -536,14 +536,32 @@ export function TimelinePage() {
   const [pickerYear, setPickerYear] = useState(() => Number(format(new Date(), 'yyyy')));
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const periodPickerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isStuck, setIsStuck] = useState(false);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
   const prefersCoarsePointer = usePrefersCoarsePointer();
   const allowDragSelection =
     canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
   const currentDate = useMemo(() => new Date(), []);
-  const effectiveCompactMobileInfo =
-    isMobile && (viewMode === 'month' || viewMode === 'quarter' || compactMobileInfo);
+  const effectiveCompactMobileInfo = isMobile && compactMobileInfo;
+
+  useEffect(() => {
+    if (!isMobile) {
+      setIsStuck(false);
+      return;
+    }
+
+    function handleScroll() {
+      if (!cardRef.current) return;
+      const cardTop = cardRef.current.getBoundingClientRect().top;
+      setIsStuck(cardTop < 60);
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobile]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -814,7 +832,7 @@ export function TimelinePage() {
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       {successMessage ? (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
           {successMessage}
@@ -888,70 +906,70 @@ export function TimelinePage() {
           </button>
         </div>
       ) : null}
-      <Card className="overflow-hidden">
-        <CardHeader className="gap-0 p-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 sm:p-6">
-            <div
-              ref={periodPickerRef}
-              className="relative flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start"
-            >
-              <Button variant="secondary" size="icon" onClick={() => move(-1)}>
-                <ChevronLeft className="h-4 w-4" />
+      <Card ref={cardRef} className="overflow-clip">
+        <div className={cn('sticky top-[60px] z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white p-4 sm:p-6 lg:static', !isStuck && 'rounded-t-2xl')}>
+          <div
+            ref={periodPickerRef}
+            className="relative flex w-full flex-none items-center justify-between gap-2 sm:min-w-fit sm:flex-1 sm:justify-start"
+          >
+            <Button variant="secondary" size="icon" onClick={() => move(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
+              <Button
+                variant="secondary"
+                className="min-w-0 flex-1 justify-between px-2.5 text-xs sm:px-3 sm:text-sm"
+                onClick={() => setPeriodPickerOpen((current) => !current)}
+              >
+                <span className="truncate">{periodLabel}</span>
+                <ChevronDown className="h-4 w-4 shrink-0" />
               </Button>
-              <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
-                <Button
-                  variant="secondary"
-                  className="min-w-0 flex-1 justify-between px-2.5 text-xs sm:px-3 sm:text-sm"
-                  onClick={() => setPeriodPickerOpen((current) => !current)}
-                >
-                  <span className="truncate">{periodLabel}</span>
-                  <ChevronDown className="h-4 w-4 shrink-0" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
-                  onClick={() => setAnchorDate(normalizeAnchorDate(viewMode, new Date()))}
-                >
-                  Today
-                </Button>
-              </div>
-              <Button variant="secondary" size="icon" onClick={() => move(1)}>
-                <ChevronRight className="h-4 w-4" />
+              <Button
+                variant="secondary"
+                className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
+                onClick={() => setAnchorDate(normalizeAnchorDate(viewMode, new Date()))}
+              >
+                Today
               </Button>
-              {periodPickerOpen ? (
-                <PeriodPickerPopover
-                  viewMode={viewMode}
-                  pickerYear={pickerYear}
-                  anchorDate={anchorDate}
-                  onYearChange={setPickerYear}
-                  onSelect={handleSelectPeriod}
-                />
-              ) : null}
             </div>
-            <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
-              <span className="hidden sm:inline">View mode</span>
-              <div className="grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
-                {(['week', 'month', 'quarter'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                      setViewMode(mode);
-                      setAnchorDate(getCurrentAnchorDate(mode));
-                    }}
-                    className={cn(
-                      'w-full rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:px-3 sm:text-sm',
-                      viewMode === mode
-                        ? 'bg-white text-slate-950 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-950'
-                    )}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
+            <Button variant="secondary" size="icon" onClick={() => move(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            {periodPickerOpen ? (
+              <PeriodPickerPopover
+                viewMode={viewMode}
+                pickerYear={pickerYear}
+                anchorDate={anchorDate}
+                onYearChange={setPickerYear}
+                onSelect={handleSelectPeriod}
+              />
+            ) : null}
+          </div>
+          <div className="flex w-full flex-none items-center justify-between gap-2 text-sm font-medium text-slate-600 sm:min-w-fit sm:flex-1 sm:justify-end">
+            <span className="hidden lg:inline">View mode</span>
+            <div className="grid w-full grid-cols-3 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto">
+              {(['week', 'month', 'quarter'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setViewMode(mode);
+                    setAnchorDate(getCurrentAnchorDate(mode));
+                  }}
+                  className={cn(
+                    'w-full rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:px-3 sm:text-sm',
+                    viewMode === mode
+                      ? 'bg-white text-slate-950 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-950'
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
             </div>
           </div>
+        </div>
+        <CardHeader className="gap-0 p-0">
           <div className="w-full border-b border-slate-200 bg-slate-50/50 px-6 py-3">
             <button
               type="button"
@@ -967,33 +985,33 @@ export function TimelinePage() {
               />
             </button>
             {!legendCollapsed ? (
-              <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded bg-blue-600" /> Approved/In progress
+              <div className="mt-2 grid gap-1.5 text-xs sm:grid-cols-2 xl:grid-cols-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded bg-blue-600" /> Approved/In progress
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded border border-emerald-200 bg-emerald-100/90" />{' '}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded border border-emerald-200 bg-emerald-100/90" />{' '}
                   Completed
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded border border-dashed border-amber-400 bg-amber-100" />{' '}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded border border-dashed border-amber-400 bg-amber-100" />{' '}
                   Pending
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded border border-gray-300 bg-gray-200" />{' '}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded border border-gray-300 bg-gray-200" />{' '}
                   Rejected
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded border border-rose-200 bg-rose-100/80" />{' '}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded border border-rose-200 bg-rose-100/80" />{' '}
                   Cancelled
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-4 w-9 rounded border border-dashed bg-slate-50" />{' '}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-6 rounded border border-dashed bg-slate-50" />{' '}
                   Available
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="flex h-4 w-9 items-center justify-center rounded bg-rose-600 text-white">
-                    <AlertTriangle className="h-3 w-3" />
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-3 w-6 items-center justify-center rounded bg-rose-600 text-white">
+                    <AlertTriangle className="h-2 w-2" />
                   </span>{' '}
                   Capacity conflict
                 </div>
@@ -1167,7 +1185,7 @@ export function TimelinePage() {
             </div>
           </div>
           {isMobile ? (
-            <div className="pointer-events-none absolute left-2 top-14 z-20">
+            <div className="pointer-events-none absolute left-2 top-14 z-10">
               {(() => {
                 let topOffset = 0;
                 return rowData.map(({ ba, mobileRowMinHeight }) => {
