@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -183,6 +183,9 @@ export function ManagerInboxPage() {
   const [pendingChangeDraftDirty, setPendingChangeDraftDirty] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [changeDrafts, setChangeDrafts] = useState<Record<string, string>>({});
+  const [transientResolvedRows, setTransientResolvedRows] = useState<
+    Record<string, { fading: boolean }>
+  >({});
   const [pendingNavigationAction, setPendingNavigationAction] = useState<
     (() => void) | null
   >(null);
@@ -190,6 +193,7 @@ export function ManagerInboxPage() {
   const [filterDraft, setFilterDraft] = useState<FilterState>(defaultFilters);
   const isMobile = useIsMobile();
   const pageSize = 10;
+  const transientResolvedTimersRef = useRef<Record<string, number[]>>({});
 
   const filters = useMemo<FilterState>(() => {
     const type = searchParams.get('type');
@@ -266,6 +270,111 @@ export function ManagerInboxPage() {
     return Array.isArray(payload) ? payload : payload?.items ?? [];
   }, [bookings.data]);
 
+  function matchesBookingFilters(
+    booking: Booking,
+    riskBaIds: Set<string>
+  ) {
+    const requestType = getRequestType(booking);
+    const requestState = getManagerRequestState(booking);
+    const searchBlob = [
+      booking.title,
+      booking.project.name,
+      booking.requester.full_name,
+      booking.ba?.full_name ?? ''
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    if (filters.search && !searchBlob.includes(filters.search.toLowerCase())) {
+      return false;
+    }
+    if (filters.priority !== 'ALL' && booking.priority !== filters.priority) {
+      return false;
+    }
+    if (filters.status !== 'ALL' && booking.status !== filters.status) {
+      return false;
+    }
+    if (filters.type !== 'ALL' && requestType !== filters.type) {
+      return false;
+    }
+    if (filters.needsVerification && requestState !== 'NEED_VERIFICATION') {
+      return false;
+    }
+    if (filters.overbookRisk && !(booking.ba_id && riskBaIds.has(booking.ba_id))) {
+      return false;
+    }
+    if (filters.startDate && booking.end_date < filters.startDate) {
+      return false;
+    }
+    if (filters.endDate && booking.start_date > filters.endDate) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function sortInboxBookings(
+    left: Booking,
+    right: Booking,
+    capacityByBaId: Map<string, CapacitySummary['items'][number]>
+  ) {
+    if (filters.sort === 'NEWEST') {
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+    }
+
+    if (filters.sort === 'OLDEST') {
+      return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+    }
+
+    if (filters.sort === 'CAPACITY_RISK') {
+      const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
+      const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
+      const leftRisk =
+        leftCapacity &&
+        (leftCapacity.approved_capacity > 100 || leftCapacity.risk_capacity > 100)
+          ? 1
+          : 0;
+      const rightRisk =
+        rightCapacity &&
+        (rightCapacity.approved_capacity > 100 || rightCapacity.risk_capacity > 100)
+          ? 1
+          : 0;
+      if (leftRisk !== rightRisk) {
+        return rightRisk - leftRisk;
+      }
+    }
+
+    const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
+    const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
+    const leftScore = getInboxPriorityScore(left, {
+      hasCapacityRisk: Boolean(
+        leftCapacity &&
+          leftCapacity.approved_capacity <= 100 &&
+          leftCapacity.risk_capacity > 100
+      ),
+      hasOverbooked: Boolean(leftCapacity && leftCapacity.approved_capacity > 100)
+    });
+    const rightScore = getInboxPriorityScore(right, {
+      hasCapacityRisk: Boolean(
+        rightCapacity &&
+          rightCapacity.approved_capacity <= 100 &&
+          rightCapacity.risk_capacity > 100
+      ),
+      hasOverbooked: Boolean(rightCapacity && rightCapacity.approved_capacity > 100)
+    });
+    if (leftScore !== rightScore) {
+      return rightScore - leftScore;
+    }
+
+    const byCreatedAt =
+      new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+    if (byCreatedAt !== 0) {
+      return byCreatedAt;
+    }
+
+    return new Date(left.start_date).getTime() - new Date(right.start_date).getTime();
+  }
+
   const filteredBookings = useMemo(() => {
     const capacityByBaId = new Map(
       (summary.data?.items ?? []).map((item) => [item.ba_id, item])
@@ -277,114 +386,27 @@ export function ManagerInboxPage() {
     );
 
     return bookingItems
-      .filter((booking) => {
-        const requestType = getRequestType(booking);
-        const requestState = getManagerRequestState(booking);
-        const searchBlob = [
-          booking.title,
-          booking.project.name,
-          booking.requester.full_name,
-          booking.ba?.full_name ?? ''
-        ]
-          .join(' ')
-          .toLowerCase();
-
-        if (filters.search && !searchBlob.includes(filters.search.toLowerCase())) {
-          return false;
-        }
-
-        if (filters.priority !== 'ALL' && booking.priority !== filters.priority) {
-          return false;
-        }
-
-        if (filters.status !== 'ALL' && booking.status !== filters.status) {
-          return false;
-        }
-
-        if (filters.type !== 'ALL' && requestType !== filters.type) {
-          return false;
-        }
-
-        if (filters.needsVerification && requestState !== 'NEED_VERIFICATION') {
-          return false;
-        }
-
-        if (filters.overbookRisk && !(booking.ba_id && riskBaIds.has(booking.ba_id))) {
-          return false;
-        }
-
-        if (filters.startDate && booking.end_date < filters.startDate) {
-          return false;
-        }
-
-        if (filters.endDate && booking.start_date > filters.endDate) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((left, right) => {
-        if (filters.sort === 'NEWEST') {
-          return (
-            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-          );
-        }
-
-        if (filters.sort === 'OLDEST') {
-          return (
-            new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
-          );
-        }
-
-        if (filters.sort === 'CAPACITY_RISK') {
-          const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
-          const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
-          const leftRisk =
-            leftCapacity &&
-            (leftCapacity.approved_capacity > 100 || leftCapacity.risk_capacity > 100)
-              ? 1
-              : 0;
-          const rightRisk =
-            rightCapacity &&
-            (rightCapacity.approved_capacity > 100 || rightCapacity.risk_capacity > 100)
-              ? 1
-              : 0;
-          if (leftRisk !== rightRisk) {
-            return rightRisk - leftRisk;
-          }
-        }
-
-        const leftCapacity = left.ba_id ? capacityByBaId.get(left.ba_id) : undefined;
-        const rightCapacity = right.ba_id ? capacityByBaId.get(right.ba_id) : undefined;
-        const leftScore = getInboxPriorityScore(left, {
-          hasCapacityRisk: Boolean(
-            leftCapacity &&
-            leftCapacity.approved_capacity <= 100 &&
-            leftCapacity.risk_capacity > 100
-          ),
-          hasOverbooked: Boolean(leftCapacity && leftCapacity.approved_capacity > 100)
-        });
-        const rightScore = getInboxPriorityScore(right, {
-          hasCapacityRisk: Boolean(
-            rightCapacity &&
-            rightCapacity.approved_capacity <= 100 &&
-            rightCapacity.risk_capacity > 100
-          ),
-          hasOverbooked: Boolean(rightCapacity && rightCapacity.approved_capacity > 100)
-        });
-        if (leftScore !== rightScore) {
-          return rightScore - leftScore;
-        }
-
-        const byCreatedAt =
-          new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
-        if (byCreatedAt !== 0) {
-          return byCreatedAt;
-        }
-
-        return new Date(left.start_date).getTime() - new Date(right.start_date).getTime();
-      });
+      .filter((booking) => matchesBookingFilters(booking, riskBaIds))
+      .sort((left, right) => sortInboxBookings(left, right, capacityByBaId));
   }, [bookingItems, filters, summary.data]);
+
+  const visibleBookings = useMemo(() => {
+    if (Object.keys(transientResolvedRows).length === 0) {
+      return filteredBookings;
+    }
+
+    const capacityByBaId = new Map(
+      (summary.data?.items ?? []).map((item) => [item.ba_id, item])
+    );
+    const includedIds = new Set(filteredBookings.map((booking) => booking.id));
+    const transientExtras = bookingItems.filter(
+      (booking) => transientResolvedRows[booking.id] && !includedIds.has(booking.id)
+    );
+
+    return [...filteredBookings, ...transientExtras].sort((left, right) =>
+      sortInboxBookings(left, right, capacityByBaId)
+    );
+  }, [bookingItems, filteredBookings, summary.data, transientResolvedRows]);
 
   const counts = useMemo(() => {
     const riskBaIds = new Set(
@@ -506,9 +528,9 @@ export function ManagerInboxPage() {
   }
 
   const currentPage = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
-  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedBookings = filteredBookings.slice(
+  const paginatedBookings = visibleBookings.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize
   );
@@ -520,14 +542,15 @@ export function ManagerInboxPage() {
     }
 
     return (
+      visibleBookings.find((booking) => booking.id === selectedRequestId) ??
       filteredBookings.find((booking) => booking.id === selectedRequestId) ??
       bookingItems.find((booking) => booking.id === selectedRequestId) ??
       null
     );
-  }, [bookingItems, filteredBookings, selectedRequestId]);
+  }, [bookingItems, filteredBookings, selectedRequestId, visibleBookings]);
 
   useEffect(() => {
-    if (!filteredBookings.length) {
+    if (!visibleBookings.length) {
       return;
     }
 
@@ -546,7 +569,7 @@ export function ManagerInboxPage() {
       return;
     }
 
-    const bookingIndex = filteredBookings.findIndex(
+    const bookingIndex = visibleBookings.findIndex(
       (booking) => booking.id === selectedRequestId
     );
     if (bookingIndex === -1) {
@@ -566,7 +589,8 @@ export function ManagerInboxPage() {
     safePage,
     searchParams,
     selectedRequestId,
-    setSearchParams
+    setSearchParams,
+    visibleBookings
   ]);
 
   const selectedBaId =
@@ -635,6 +659,15 @@ export function ManagerInboxPage() {
     return () => window.clearTimeout(timeout);
   }, [saveForLaterMessage, successMessage]);
 
+  useEffect(
+    () => () => {
+      Object.values(transientResolvedTimersRef.current).forEach((timerIds) => {
+        timerIds.forEach((timerId) => window.clearTimeout(timerId));
+      });
+    },
+    []
+  );
+
   const approve = useMutation({
     mutationFn: async ({
       id,
@@ -648,7 +681,14 @@ export function ManagerInboxPage() {
       await saveCapacityIfChanged(id, capacityPercent, currentCapacityPercent);
       return apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' });
     },
-    onSuccess: () => handleMutationSuccess('Request approved.')
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<Booking[] | PaginatedResponse<Booking> | undefined>(
+        ['manager-inbox-bookings', inboxRange.from, inboxRange.to],
+        (current) => patchBookingCollection(current, variables.id, { status: 'APPROVED' })
+      );
+      markRowAsResolved(variables.id);
+      handleMutationSuccess('Request approved.', false);
+    }
   });
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
@@ -697,7 +737,18 @@ export function ManagerInboxPage() {
       });
       return apiFetch(`/api/bookings/${id}/approve`, { method: 'POST' });
     },
-    onSuccess: () => handleMutationSuccess('BA assigned and request approved.')
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<Booking[] | PaginatedResponse<Booking> | undefined>(
+        ['manager-inbox-bookings', inboxRange.from, inboxRange.to],
+        (current) =>
+          patchBookingCollection(current, variables.id, {
+            status: 'APPROVED',
+            ba_id: variables.baId
+          })
+      );
+      markRowAsResolved(variables.id);
+      handleMutationSuccess('BA assigned and request approved.', false);
+    }
   });
   const cancel = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
@@ -1028,6 +1079,36 @@ export function ManagerInboxPage() {
     void queryClient.invalidateQueries();
   }
 
+  function markRowAsResolved(id: string) {
+    transientResolvedTimersRef.current[id]?.forEach((timerId) => window.clearTimeout(timerId));
+    setTransientResolvedRows((current) => ({
+      ...current,
+      [id]: { fading: false }
+    }));
+
+    const fadeTimer = window.setTimeout(() => {
+      setTransientResolvedRows((current) =>
+        current[id]
+          ? {
+              ...current,
+              [id]: { fading: true }
+            }
+          : current
+      );
+    }, 4200);
+
+    const removeTimer = window.setTimeout(() => {
+      setTransientResolvedRows((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      delete transientResolvedTimersRef.current[id];
+    }, 5000);
+
+    transientResolvedTimersRef.current[id] = [fadeTimer, removeTimer];
+  }
+
   function runWithCapacityConfirmation(confirmLabel: string, action: () => void) {
     if (!selectedBooking || !selectedBaId || !selectedBookableBa) {
       action();
@@ -1242,7 +1323,7 @@ export function ManagerInboxPage() {
     {
       id: 'priority',
       header: 'Priority',
-      className: 'w-[5.75rem] xl:w-[6.5rem]',
+      className: 'w-[4.75rem] xl:w-[5.25rem]',
       cell: (booking: Booking) => (
         <Badge tone={priorityTone(booking.priority)} className={actionCenterPriorityBadgeClassName}>
           {booking.priority}
@@ -1252,13 +1333,13 @@ export function ManagerInboxPage() {
     {
       id: 'type',
       header: 'Type',
-      className: 'w-[6.5rem] xl:w-[7.5rem]',
+      className: 'w-[5.5rem] xl:w-[6rem]',
       cell: (booking: Booking) => <RequestTypeBadge booking={booking} />
     },
     {
       id: 'project',
       header: 'Project',
-      className: 'w-[16rem] xl:w-[18rem] 2xl:w-[20rem]',
+      className: 'w-[14rem] xl:w-[15.5rem] 2xl:w-[14.5rem]',
       cell: (booking: Booking) => {
         const capacity = summary.data?.items.find(
           (item) => item.ba_id === booking.ba_id
@@ -1266,12 +1347,17 @@ export function ManagerInboxPage() {
         const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
 
         return (
-          <div className="min-w-0 text-left">
-            <p className="truncate font-semibold text-slate-950">
+          <div className="min-w-0 pl-2 text-left">
+            <p className="line-clamp-2 font-semibold text-slate-950" title={booking.project.name}>
               {booking.project.name}
             </p>
-            <p className="mt-1 truncate text-xs text-slate-500">{booking.title}</p>
-            <p className="mt-1 truncate text-xs text-slate-500 xl:hidden">
+            <p className="mt-1 truncate text-xs text-slate-500" title={booking.title}>
+              {booking.title}
+            </p>
+            <p
+              className="mt-1 truncate text-xs text-slate-500 2xl:hidden"
+              title={`Requester: ${booking.requester.full_name}`}
+            >
               Requester: {booking.requester.full_name}
             </p>
             <span className="mt-2 flex flex-wrap gap-1">
@@ -1297,8 +1383,8 @@ export function ManagerInboxPage() {
     {
       id: 'requester',
       header: 'Requester',
-      headerClassName: 'hidden xl:table-cell',
-      className: 'hidden xl:table-cell xl:w-[8.5rem] 2xl:w-[9.5rem]',
+      headerClassName: 'hidden 2xl:table-cell',
+      className: 'hidden 2xl:table-cell 2xl:w-[8.5rem]',
       cell: (booking: Booking) => (
         <span className="block truncate text-slate-600">
           {booking.requester.full_name}
@@ -1308,9 +1394,12 @@ export function ManagerInboxPage() {
     {
       id: 'ba',
       header: 'Requested / Assigned BA',
-      className: 'w-[8.5rem] xl:w-[10rem] 2xl:w-[11rem]',
+      className: 'w-[9rem] xl:w-[10rem] 2xl:w-[10.5rem]',
       cell: (booking: Booking) => (
-        <span className="block truncate text-slate-600">
+        <span
+          className="block truncate text-slate-600"
+          title={booking.ba?.full_name ?? 'Unassigned'}
+        >
           {booking.ba?.full_name ?? 'Unassigned'}
         </span>
       )
@@ -1318,7 +1407,7 @@ export function ManagerInboxPage() {
     {
       id: 'dateRange',
       header: 'Date Range',
-      className: 'w-[7.75rem] xl:w-[8.75rem]',
+      className: 'w-[7rem] xl:w-[7.5rem]',
       cell: (booking: Booking) => (
         <span className="text-slate-600">
           {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
@@ -1328,32 +1417,32 @@ export function ManagerInboxPage() {
     {
       id: 'status',
       header: 'Status',
-      className: 'w-[7.75rem] xl:w-[8.75rem]',
+      className: 'w-[6.5rem] xl:w-[6.75rem]',
       cell: (booking: Booking) => <RequestStateBadge booking={booking} />
     },
     {
       id: 'action',
       header: 'Action',
       headerClassName: 'text-right',
-      className: 'w-[6.75rem] xl:w-[7.5rem] text-right',
+      className: 'w-[5.5rem] xl:w-[6rem] pl-6 text-right',
       cell: (booking: Booking) => {
         const actionLabel = getRequestActionLabel(booking, canManageInbox);
 
         return (
-          <Button
-            type="button"
-            size="sm"
-            variant={actionLabel === 'View' ? 'secondary' : 'default'}
-            className="min-w-[5.75rem] xl:min-w-[6.5rem]"
-            onClick={(event) => {
-              event.stopPropagation();
-              openDetail(booking.id);
-            }}
-            aria-label={`${actionLabel} ${booking.title}`}
-          >
-            {actionLabel}
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                openDetail(booking.id);
+              }}
+              aria-label={`${actionLabel} ${booking.title}`}
+              className={getActionCenterDesktopActionClassName(actionLabel)}
+            >
+              {actionLabel}
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         );
       }
     }
@@ -1365,23 +1454,37 @@ export function ManagerInboxPage() {
     );
     const riskFlags = getRequestRiskFlags(booking, capacity?.risk_capacity ?? 0);
     const actionLabel = getRequestActionLabel(booking, canManageInbox);
+    const mobileActionVariant =
+      actionLabel === 'Approve' ? 'default' : 'secondary';
+    const mobileActionClassName =
+      actionLabel === 'Assign'
+        ? 'h-10 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800'
+        : 'h-10 w-full';
 
     return (
       <div className="grid gap-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-950">
+            <p
+              className="line-clamp-2 text-sm font-semibold text-slate-950"
+              title={booking.project.name}
+            >
               {booking.project.name}
             </p>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{booking.title}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-500" title={booking.title}>
+              {booking.title}
+            </p>
           </div>
-          <Badge tone={priorityTone(booking.priority)} className={actionCenterPriorityBadgeClassName}>
+          <Badge
+            tone={priorityTone(booking.priority)}
+            className="w-fit min-w-0 px-2.5 text-center"
+          >
             {booking.priority}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <RequestTypeBadge booking={booking} />
-          <RequestStateBadge booking={booking} />
+          <RequestTypeBadge booking={booking} compact />
+          <RequestStateBadge booking={booking} compact />
           {riskFlags.map((flag) => (
             <Badge
               key={flag}
@@ -1392,12 +1495,19 @@ export function ManagerInboxPage() {
                     ? 'danger'
                     : 'warning'
               }
+              className="w-fit min-w-0 px-2.5"
             >
               {flag}
             </Badge>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+        <div className="grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
+          <div className="rounded-lg bg-slate-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Requester</p>
+            <p className="truncate font-semibold text-slate-900" title={booking.requester.full_name}>
+              {booking.requester.full_name}
+            </p>
+          </div>
           <div className="rounded-lg bg-slate-50 p-2">
             <p className="text-[10px] uppercase tracking-wide text-slate-500">BA</p>
             <p className="truncate font-semibold text-slate-900">
@@ -1414,8 +1524,8 @@ export function ManagerInboxPage() {
         <Button
           type="button"
           size="sm"
-          variant={actionLabel === 'View' ? 'secondary' : 'default'}
-          className="h-10 w-full text-sm"
+          variant={mobileActionVariant}
+          className={mobileActionClassName}
           onClick={(event) => {
             event.stopPropagation();
             openDetail(booking.id);
@@ -1423,7 +1533,7 @@ export function ManagerInboxPage() {
           aria-label={`${actionLabel} ${booking.title}`}
         >
           {actionLabel}
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
     );
@@ -1638,8 +1748,8 @@ export function ManagerInboxPage() {
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-sm font-medium text-slate-500">
-              Showing {filteredBookings.length} request
-              {filteredBookings.length === 1 ? '' : 's'}
+              Showing {visibleBookings.length} request
+              {visibleBookings.length === 1 ? '' : 's'}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-slate-500">Sort by</span>
@@ -1664,9 +1774,18 @@ export function ManagerInboxPage() {
             rowKey={(booking) => booking.id}
             onRowClick={(booking) => openDetail(booking.id)}
             rowClassName={(booking) =>
-              selectedBooking?.id === booking.id
-                ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-300'
-                : undefined
+              [
+                selectedBooking?.id === booking.id
+                  ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-300'
+                  : '',
+                transientResolvedRows[booking.id]?.fading
+                  ? 'opacity-0 transition-all duration-700 ease-out max-h-0 overflow-hidden'
+                  : transientResolvedRows[booking.id]
+                    ? 'bg-emerald-50/60 transition-all duration-700 ease-out'
+                    : ''
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined
             }
             emptyState="No requests match the current filters."
             isLoading={bookings.isLoading || bas.isLoading || summary.isLoading}
@@ -1676,7 +1795,7 @@ export function ManagerInboxPage() {
           <Pagination
             page={safePage}
             pageSize={pageSize}
-            total={filteredBookings.length}
+            total={visibleBookings.length}
             onPageChange={setPage}
             className="rounded-2xl border border-slate-200 bg-white shadow-sm"
           />
@@ -2219,20 +2338,23 @@ export function RequestDetailPanel({
   return (
     <Card className="h-fit">
       <CardHeader className="gap-4 border-b border-slate-200 pb-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle>{booking.title}</CardTitle>
-              <RequestTypeBadge booking={booking} />
-              <RequestStateBadge booking={booking} />
+              <RequestTypeBadge booking={booking} compact />
+              <RequestStateBadge booking={booking} compact />
             </div>
-            <p className="mt-2 text-sm text-slate-500">{booking.project.name}</p>
+            <p className="mt-2 truncate text-sm text-slate-500" title={booking.project.name}>
+              {booking.project.name}
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
             {canManageActions && canApproveDirectly ? (
               <Button
                 onClick={onApprove}
                 disabled={isSubmitting || blocksCapacityDecision}
+                className="w-full lg:w-auto"
               >
                 {capacityChanged ? 'Save + approve' : 'Approve'}
               </Button>
@@ -2240,7 +2362,7 @@ export function RequestDetailPanel({
             {canManageActions && canCancel ? (
               <Button
                 variant="secondary"
-                className={rejectButtonClassName}
+                className={`${rejectButtonClassName} w-full lg:w-auto`}
                 onClick={onCancel}
                 disabled={isSubmitting}
               >
@@ -2250,7 +2372,7 @@ export function RequestDetailPanel({
             {canManageActions && canReject ? (
               <Button
                 variant="secondary"
-                className={rejectButtonClassName}
+                className={`${rejectButtonClassName} w-full lg:w-auto`}
                 onClick={onReject}
                 disabled={isSubmitting}
               >
@@ -2323,25 +2445,6 @@ export function RequestDetailPanel({
           ) : null}
         </section>
 
-        {verificationItems.length > 0 ? (
-          <section className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <p className="text-sm font-semibold text-amber-900">
-                Needs manager verification
-              </p>
-            </div>
-            <div className="grid gap-2 text-sm text-amber-900">
-              {verificationItems.map((item) => (
-                <div key={item} className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         {canEditCapacity ? (
           <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2357,30 +2460,49 @@ export function RequestDetailPanel({
                 <Badge tone="neutral">Current</Badge>
               )}
             </div>
+            {verificationItems.length > 0 ? (
+              <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <p className="font-semibold">Needs manager verification</p>
+                </div>
+                <div className="grid gap-1.5 pl-6">
+                  {verificationItems.map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <div className="grid grid-cols-4 rounded-lg border border-slate-200 bg-slate-100 p-1">
-                {CAPACITY_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => onCapacityChange(option)}
-                    className={[
-                      'h-9 rounded-lg text-sm font-semibold transition-colors',
-                      capacityPercent === option
-                        ? 'bg-white text-slate-950 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-950'
-                    ].join(' ')}
-                    disabled={isSubmitting}
-                  >
-                    {option}%
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:grid-cols-4">
+                {CAPACITY_OPTIONS.map((option) => {
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onCapacityChange(option)}
+                      className={[
+                        'h-9 rounded-md text-sm font-semibold transition-colors',
+                        capacityPercent === option
+                          ? 'bg-white text-slate-950 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-950'
+                      ].join(' ')}
+                      disabled={isSubmitting}
+                    >
+                      {option}%
+                    </button>
+                  );
+                })}
               </div>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={onSaveCapacity}
                 disabled={!capacityChanged || isSubmitting}
+                className="h-10 w-full sm:w-auto"
               >
                 Save capacity
               </Button>
@@ -2552,7 +2674,7 @@ export function RequestDetailPanel({
           </section>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
           {canManageActions && canAssign ? (
             <>
               <Button
@@ -2564,6 +2686,7 @@ export function RequestDetailPanel({
                   blocksCapacityDecision ||
                   !hasAssignmentAction
                 }
+                className="w-full"
               >
                 {capacityChanged || assignChanged ? 'Save + assign' : 'Assign BA'}
               </Button>
@@ -2575,6 +2698,7 @@ export function RequestDetailPanel({
                   blocksCapacityDecision ||
                   !hasApprovalAction
                 }
+                className="w-full"
               >
                 {capacityChanged || assignChanged
                   ? 'Save + assign + approve'
@@ -2584,6 +2708,7 @@ export function RequestDetailPanel({
                 variant="secondary"
                 onClick={onSaveForLater}
                 disabled={isSubmitting}
+                className="w-full"
               >
                 Save for later
               </Button>
@@ -2592,6 +2717,7 @@ export function RequestDetailPanel({
                 className={rejectButtonClassName}
                 onClick={onReject}
                 disabled={isSubmitting}
+                size="sm"
               >
                 Reject
               </Button>
@@ -2680,27 +2806,55 @@ function RequestSummaryItem({
   );
 }
 
+function getActionCenterDesktopActionClassName(actionLabel: string) {
+  if (actionLabel === 'Approve') {
+    return 'inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800';
+  }
+
+  if (actionLabel === 'Assign') {
+    return 'inline-flex items-center gap-1 text-xs font-semibold text-amber-700 underline underline-offset-4 transition-colors hover:text-amber-800';
+  }
+
+  return 'inline-flex items-center gap-1 text-xs font-medium text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-800';
+}
+
 const actionCenterBadgeClassName =
-  'inline-flex w-full min-w-[104px] justify-center text-center xl:min-w-[128px]';
-
-const actionCenterPriorityBadgeClassName =
-  'inline-flex w-full min-w-[84px] justify-center text-center xl:min-w-[96px]';
-
-const actionCenterTypeBadgeClassName =
   'inline-flex w-full min-w-[92px] justify-center text-center xl:min-w-[108px]';
 
-function RequestTypeBadge({ booking }: { booking: Booking }) {
+const actionCenterPriorityBadgeClassName =
+  'inline-flex w-full min-w-[68px] justify-center text-center xl:min-w-[76px]';
+
+const actionCenterTypeBadgeClassName =
+  'inline-flex w-full min-w-[82px] justify-center text-center xl:min-w-[92px]';
+
+function RequestTypeBadge({
+  booking,
+  compact = false
+}: {
+  booking: Booking;
+  compact?: boolean;
+}) {
   return (
     <Badge
       tone={getRequestType(booking) === 'SPECIFIC_BA' ? 'info' : 'success'}
-      className={actionCenterTypeBadgeClassName}
+      className={
+        compact
+          ? 'inline-flex w-fit min-w-0 px-2.5 text-center'
+          : actionCenterTypeBadgeClassName
+      }
     >
       {getRequestType(booking) === 'SPECIFIC_BA' ? 'Specific BA' : 'Open Request'}
     </Badge>
   );
 }
 
-function RequestStateBadge({ booking }: { booking: Booking }) {
+function RequestStateBadge({
+  booking,
+  compact = false
+}: {
+  booking: Booking;
+  compact?: boolean;
+}) {
   const state = getManagerRequestState(booking);
   const tone =
     state === 'PENDING'
@@ -2714,7 +2868,14 @@ function RequestStateBadge({ booking }: { booking: Booking }) {
             : 'neutral';
 
   return (
-    <Badge tone={tone} className={actionCenterBadgeClassName}>
+    <Badge
+      tone={tone}
+      className={
+        compact
+          ? 'inline-flex w-fit min-w-0 px-2.5 text-center'
+          : actionCenterBadgeClassName
+      }
+    >
       {stateLabelMap[state]}
     </Badge>
   );
@@ -2797,6 +2958,21 @@ function getRequestActionLabel(booking: Booking, canManageActions = true) {
   }
 
   return 'View';
+}
+
+function patchBookingCollection(
+  current: Booking[] | PaginatedResponse<Booking> | undefined,
+  id: string,
+  patch: Partial<Booking>
+) {
+  if (!current) return current;
+  if (Array.isArray(current)) {
+    return current.map((booking) => (booking.id === id ? { ...booking, ...patch } : booking));
+  }
+  return {
+    ...current,
+    items: current.items.map((booking) => (booking.id === id ? { ...booking, ...patch } : booking))
+  };
 }
 
 const rejectButtonClassName =
