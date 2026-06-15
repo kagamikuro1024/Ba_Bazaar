@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   BarChart3,
   CalendarRange,
@@ -76,30 +77,30 @@ type ManagerAttentionFlag =
 
 type ManagerActionItem =
   | {
-      id: string;
-      kind: 'booking';
-      priority: Booking['priority'];
-      project: string;
-      requester: string;
-      dateRange: string;
-      assignedBa: string;
-      flag: ManagerAttentionFlag;
-      actionLabel: string;
-      actionTo: string;
-      booking: Booking;
-    }
+    id: string;
+    kind: 'booking';
+    priority: Booking['priority'];
+    project: string;
+    requester: string;
+    dateRange: string;
+    assignedBa: string;
+    flag: ManagerAttentionFlag;
+    actionLabel: string;
+    actionTo: string;
+    booking: Booking;
+  }
   | {
-      id: string;
-      kind: 'ba';
-      priority: 'URGENT';
-      project: string;
-      requester: string;
-      dateRange: string;
-      assignedBa: string;
-      flag: Extract<ManagerAttentionFlag, 'OVERBOOKED'>;
-      actionLabel: string;
-      actionTo: string;
-    };
+    id: string;
+    kind: 'ba';
+    priority: 'URGENT';
+    project: string;
+    requester: string;
+    dateRange: string;
+    assignedBa: string;
+    flag: Extract<ManagerAttentionFlag, 'OVERBOOKED'>;
+    actionLabel: string;
+    actionTo: string;
+  };
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -124,27 +125,27 @@ export function DashboardPage() {
 
   const dashboardCopy = isManagerDashboard
     ? {
-        eyebrow: 'Manager workspace',
-        title: 'Manager Dashboard',
-        description: 'See what needs manager action first, then jump into the action list.',
-        loading: 'Loading manager dashboard...',
-        error: 'Could not load manager dashboard. Check API connection and retry.'
-      }
+      eyebrow: 'Manager workspace',
+      title: 'Manager Dashboard',
+      description: 'See what needs manager action first, then jump into the action list.',
+      loading: 'Loading manager dashboard...',
+      error: 'Could not load manager dashboard. Check API connection and retry.'
+    }
     : isBaDashboard
       ? {
-          eyebrow: 'BA workspace',
-          title: 'BA Dashboard',
-          description: 'Track active assignments, upcoming work, and recent schedule changes.',
-          loading: 'Loading your dashboard...',
-          error: 'Could not load your dashboard. Check API connection and retry.'
-        }
+        eyebrow: 'BA workspace',
+        title: 'BA Dashboard',
+        description: 'Track active assignments, upcoming work, and recent schedule changes.',
+        loading: 'Loading your dashboard...',
+        error: 'Could not load your dashboard. Check API connection and retry.'
+      }
       : {
-          eyebrow: 'Requester workspace',
-          title: 'PM/PO Dashboard',
-          description: 'Review your booking requests and follow their approval status.',
-          loading: 'Loading your dashboard...',
-          error: 'Could not load your dashboard. Check API connection and retry.'
-        };
+        eyebrow: 'Requester workspace',
+        title: 'PM/PO Dashboard',
+        description: 'Review your booking requests and follow their approval status.',
+        loading: 'Loading your dashboard...',
+        error: 'Could not load your dashboard. Check API connection and retry.'
+      };
 
   const bookingsEndpoint = isManagerDashboard
     ? '/api/bookings'
@@ -183,13 +184,13 @@ export function DashboardPage() {
     const allBookings = bookings.data ?? [];
     const timeframeBookings = isManagerDashboard
       ? allBookings.filter((booking) =>
-          rangesOverlap(
-            booking.start_date,
-            booking.end_date,
-            managerRange.from,
-            managerRange.to
-          )
+        rangesOverlap(
+          booking.start_date,
+          booking.end_date,
+          managerRange.from,
+          managerRange.to
         )
+      )
       : allBookings;
     const pending = timeframeBookings.filter((booking) => booking.status === 'PENDING');
     const approved = timeframeBookings.filter(
@@ -252,12 +253,12 @@ export function DashboardPage() {
     const upcoming = isBaDashboard
       ? upcomingWork.slice(0, 4)
       : [...timeframeBookings]
-          .sort(
-            (left, right) =>
-              new Date(right.created_at).getTime() -
-              new Date(left.created_at).getTime()
-          )
-          .slice(0, 4);
+        .sort(
+          (left, right) =>
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime()
+        )
+        .slice(0, 4);
     const actionItems = buildManagerActionItems(
       pending,
       managerSummary.data,
@@ -295,51 +296,51 @@ export function DashboardPage() {
     ? []
     : isBaDashboard
       ? [
-          {
-            title: 'Active Assignments',
-            count: dashboardData.currentAssignments.length,
-            description: 'Running today',
-            icon: CalendarRange,
-            to: '/my-schedule?tab=current'
-          },
-          {
-            title: 'Upcoming Work',
-            count: dashboardData.upcomingWork.length,
-            description: 'Future approved work',
-            icon: ClipboardList,
-            to: '/my-schedule?tab=upcoming'
-          },
-          {
-            title: 'Completed',
-            count: dashboardData.completedWork.length,
-            description: 'Finished assignments',
-            icon: Sparkles,
-            to: '/my-schedule?tab=completed'
-          }
-        ]
+        {
+          title: 'Active Assignments',
+          count: dashboardData.currentAssignments.length,
+          description: 'Running today',
+          icon: CalendarRange,
+          to: '/my-schedule?tab=current'
+        },
+        {
+          title: 'Upcoming Work',
+          count: dashboardData.upcomingWork.length,
+          description: 'Future approved work',
+          icon: ClipboardList,
+          to: '/my-schedule?tab=upcoming'
+        },
+        {
+          title: 'Completed',
+          count: dashboardData.completedWork.length,
+          description: 'Finished assignments',
+          icon: Sparkles,
+          to: '/my-schedule?tab=completed'
+        }
+      ]
       : [
-          {
-            title: 'Pending Requests',
-            count: dashboardData.pending.length,
-            description: 'Awaiting manager review',
-            icon: ClipboardList,
-            to: '/my-requests?status=PENDING'
-          },
-          {
-            title: 'Approved Requests',
-            count: dashboardData.approved.length,
-            description: 'Ready or in progress',
-            icon: CalendarRange,
-            to: '/my-requests?status=APPROVED'
-          },
-          {
-            title: 'Rejected / Cancelled',
-            count: dashboardData.rejectedOrCancelled.length,
-            description: 'Closed without approval',
-            icon: AlertCircle,
-            to: '/my-requests'
-          }
-        ];
+        {
+          title: 'Pending Requests',
+          count: dashboardData.pending.length,
+          description: 'Awaiting manager review',
+          icon: ClipboardList,
+          to: '/my-requests?status=PENDING'
+        },
+        {
+          title: 'Approved Requests',
+          count: dashboardData.approved.length,
+          description: 'Ready or in progress',
+          icon: CalendarRange,
+          to: '/my-requests?status=APPROVED'
+        },
+        {
+          title: 'Rejected / Cancelled',
+          count: dashboardData.rejectedOrCancelled.length,
+          description: 'Closed without approval',
+          icon: AlertCircle,
+          to: '/my-requests'
+        }
+      ];
 
   const isLoading =
     bookings.isLoading ||
@@ -353,7 +354,7 @@ export function DashboardPage() {
         eyebrow={dashboardCopy.eyebrow}
         title={dashboardCopy.title}
         description={dashboardCopy.description}
-        actions={
+        meta={
           isManagerDashboard ? (
             <ManagerDashboardHeaderActions
               timeframeMode={timeframeMode}
@@ -430,7 +431,7 @@ export function DashboardPage() {
               ))}
 
               {dashboardData.upcoming.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
                   {isBaDashboard
                     ? 'No upcoming approved work has been assigned yet.'
                     : 'No booking requests found for your account.'}
@@ -460,44 +461,46 @@ function ManagerDashboardHeaderActions({
   onCustomToChange: (value: string) => void;
 }) {
   return (
-    <div className="flex w-full flex-wrap items-center justify-end gap-2">
-      <div className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-auto sm:rounded-md">
-        {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => onTimeframeModeChange(mode)}
-            className={cn(
-              'rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:text-sm',
-              timeframeMode === mode
-                ? 'bg-white text-slate-950 shadow-sm'
-                : 'text-slate-600 hover:text-slate-950'
-            )}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-      {timeframeMode === 'custom' ? (
-        <>
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(event) => onCustomFromChange(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
-          />
-          <input
-            type="date"
-            value={customTo}
-            onChange={(event) => onCustomToChange(event.target.value)}
-            className="h-9 w-full min-w-0 rounded-xl border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-md"
-          />
-        </>
-      ) : null}
-      <Button variant="secondary" asChild className="w-full sm:w-auto">
-        <Link to="/reports">View reports</Link>
-      </Button>
-    </div>
+    <Card className="w-full border-slate-200 shadow-sm">
+      <CardContent className="flex w-full flex-wrap items-center justify-end gap-2 p-3 sm:p-4">
+        <div className="grid w-full grid-cols-4 rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-auto">
+          {(['week', 'month', 'quarter', 'custom'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onTimeframeModeChange(mode)}
+              className={cn(
+                'rounded-md px-2 py-1.5 text-[11px] font-semibold capitalize transition-colors sm:text-sm',
+                timeframeMode === mode
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-950'
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        {timeframeMode === 'custom' ? (
+          <>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(event) => onCustomFromChange(event.target.value)}
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-lg"
+            />
+            <input
+              type="date"
+              value={customTo}
+              onChange={(event) => onCustomToChange(event.target.value)}
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 px-2 text-sm sm:w-auto sm:rounded-lg"
+            />
+          </>
+        ) : null}
+        <Button variant="secondary" asChild className="w-full sm:w-auto">
+          <Link to="/reports">View reports</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -589,7 +592,7 @@ function ManagerDashboard({
           label="Capacity risk"
           value={String(attentionCounts.capacityRisk)}
           hint="Over 100% bookings"
-          icon={AlertCircle}
+          icon={AlertTriangle}
           tone="warning"
           active={attentionFilter === 'CAPACITY_RISK'}
           onClick={() => setAttentionFilter('CAPACITY_RISK')}
@@ -644,7 +647,7 @@ function ManagerDashboard({
                   onChange={(event) =>
                     setAttentionSort(event.target.value as AttentionSort)
                   }
-                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="PRIORITY">Priority</option>
                   <option value="OLDEST">Oldest first</option>
@@ -659,7 +662,7 @@ function ManagerDashboard({
                   type="button"
                   onClick={() => setAttentionFilter(tab.value)}
                   className={cn(
-                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors',
+                    'inline-flex w-fit shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors',
                     attentionFilter === tab.value
                       ? 'border-blue-300 bg-blue-50 text-blue-700'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
@@ -672,18 +675,17 @@ function ManagerDashboard({
                 </button>
               ))}
             </div>
-            <div className="hidden grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 xl:grid">
+            <div className="hidden grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500 lg:grid">
               <span>Priority</span>
               <span>Project</span>
               <span>Requester</span>
               <span>BA</span>
-              <span>Date Range</span>
               <span>Reason</span>
               <span className="text-right">Action</span>
             </div>
             <div className="flex flex-1 flex-col divide-y divide-slate-100">
-              {needsAttention.map((item) => (
-                <ManagerActionRow key={item.id} item={item} />
+              {needsAttention.map((item, index) => (
+                <ManagerActionRow key={item.id} item={item} index={index} />
               ))}
               {filteredAttention.length === 0 ? (
                 <div className="flex flex-1 items-center p-5 text-sm text-slate-500">
@@ -816,7 +818,7 @@ function ManagerAlertRail({
             <Link
               key={row.ba_id}
               to={`/crm/ba/${row.ba_id}`}
-              className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
+              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-blue-200 hover:bg-blue-50/50"
             >
               <span className="min-w-0 truncate font-medium text-slate-800">
                 {row.ba_name}
@@ -827,7 +829,7 @@ function ManagerAlertRail({
             </Link>
           ))}
           {watchlist.length === 0 ? (
-            <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
               No utilization alerts in this timeframe.
             </p>
           ) : null}
@@ -857,7 +859,7 @@ function ManagerAlertLink({
   return (
     <Link
       to={to}
-      className="flex gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
+      className="flex gap-3 rounded-2xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
     >
       <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full', dotClass)} />
       <span className="min-w-0">
@@ -870,34 +872,107 @@ function ManagerAlertLink({
   );
 }
 
-function ManagerActionRow({ item }: { item: ManagerActionItem }) {
+function ManagerActionRow({ item, index }: { item: ManagerActionItem; index: number }) {
   return (
-    <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_124px_108px_156px] xl:items-center">
-      <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
-      <span className="min-w-0 truncate font-medium text-slate-950">{item.project}</span>
-      <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
-      <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
-      <span className="text-slate-600">{item.dateRange}</span>
-      <Badge
-        tone={
-          item.flag === 'OVERBOOKED'
-            ? 'danger'
-            : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
-              ? 'warning'
-              : 'info'
-        }
+    <>
+      <div
+        className={cn(
+          'grid gap-4 px-4 py-4 text-sm lg:hidden',
+          index % 2 === 1 && 'bg-blue-50'
+        )}
       >
-        {formatManagerFlag(item.flag)}
-      </Badge>
-        <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-          <Button size="sm" asChild>
-            <Link to={item.actionTo}>
-              {item.actionLabel}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Project
+            </p>
+            <p className="mt-1 truncate font-medium text-slate-950">{item.project}</p>
+          </div>
+          <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
         </div>
-    </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Requester
+            </p>
+            <p className="mt-1 truncate text-slate-600">{item.requester}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              BA
+            </p>
+            <p className="mt-1 truncate text-slate-600">{item.assignedBa}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Date range
+            </p>
+            <p className="mt-1 text-slate-600">{item.dateRange}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Reason
+            </p>
+            <div className="mt-1">
+              <Badge
+                tone={
+                  item.flag === 'OVERBOOKED'
+                    ? 'danger'
+                    : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
+                      ? 'warning'
+                      : 'info'
+                }
+              >
+                {formatManagerFlag(item.flag)}
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-start">
+          <Link
+            to={item.actionTo}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800"
+          >
+            {item.actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+      <div
+        className={cn(
+          'hidden gap-3 px-4 py-4 text-sm lg:grid lg:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] lg:items-center',
+          index % 2 === 1 && 'bg-blue-50'
+        )}
+      >
+        <Badge tone={priorityTone(item.priority)}>{item.priority}</Badge>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-950">{item.project}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">{item.dateRange}</p>
+        </div>
+        <span className="min-w-0 truncate text-slate-600">{item.requester}</span>
+        <span className="min-w-0 truncate text-slate-600">{item.assignedBa}</span>
+        <Badge
+          tone={
+            item.flag === 'OVERBOOKED'
+              ? 'danger'
+              : item.flag === 'CAPACITY_RISK' || item.flag === 'NEEDS_ASSIGNMENT'
+                ? 'warning'
+                : 'info'
+          }
+        >
+          {formatManagerFlag(item.flag)}
+        </Badge>
+        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+          <Link
+            to={item.actionTo}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800"
+          >
+            {item.actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -909,7 +984,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
 
   return (
     <Link to={target}>
-      <div className="grid gap-4 rounded-lg border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50/40 xl:grid-cols-[minmax(0,1fr)_minmax(180px,180px)_minmax(220px,220px)_auto] xl:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-base font-semibold text-slate-950">
@@ -932,7 +1007,7 @@ function UserBookingRow({ booking, role }: { booking: Booking; role?: string }) 
           label="Date range"
           value={`${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`}
         />
-        <span className="inline-flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 sm:w-auto xl:justify-self-end">
+        <span className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 sm:w-auto xl:justify-self-end">
           View details <ArrowRight className="ml-2 h-4 w-4" />
         </span>
       </div>
@@ -1007,7 +1082,7 @@ function buildManagerActionItems(
       dateRange: `${formatDate(range.from)} - ${formatDate(range.to)}`,
       assignedBa: row.ba_name,
       flag: 'OVERBOOKED',
-      actionLabel: 'View Timeline',
+      actionLabel: 'View timeline',
       actionTo: `/timeline?baId=${row.ba_id}`
     }));
 
@@ -1051,10 +1126,10 @@ function getManagerActionCreatedAt(item: ManagerActionItem) {
 }
 
 function formatManagerFlag(flag: ManagerActionItem['flag']) {
-  if (flag === 'CAPACITY_RISK') return 'Capacity Risk';
+  if (flag === 'CAPACITY_RISK') return 'Cap. risk';
   if (flag === 'OVERBOOKED') return 'Overbooked';
-  if (flag === 'NEEDS_ASSIGNMENT') return 'Needs Assignment';
-  return 'Pending Review';
+  if (flag === 'NEEDS_ASSIGNMENT') return 'Needs assign';
+  return 'Review';
 }
 
 function summarizeProjectNames(

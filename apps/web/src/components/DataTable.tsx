@@ -96,7 +96,7 @@ export function DataTable<T>({
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
-                'rounded-xl border border-slate-200 bg-white p-3 shadow-sm',
+                'rounded-2xl border border-slate-200 bg-white p-3 shadow-sm',
                 onRowClick && 'cursor-pointer hover:border-slate-300',
                 rowClassName?.(row)
               )}
@@ -105,12 +105,12 @@ export function DataTable<T>({
             </div>
           ))}
           {!isLoading && rows.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
               {emptyState ?? 'No results.'}
             </div>
           ) : null}
           {isLoading && rows.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
               {loadingState ?? 'Loading...'}
             </div>
           ) : null}

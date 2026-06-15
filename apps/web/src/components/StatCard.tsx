@@ -52,7 +52,7 @@ export function StatCard({
   const inner = (
     <div
       className={cn(
-        'flex items-center gap-2.5 rounded-xl border bg-white p-3 transition-colors sm:gap-3 sm:p-4',
+        'flex items-center gap-2.5 rounded-2xl border bg-white p-3 transition-colors sm:gap-3 sm:p-4',
         active
           ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200'
           : 'border-slate-200',

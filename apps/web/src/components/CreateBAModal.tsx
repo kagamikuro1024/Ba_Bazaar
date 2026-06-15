@@ -90,7 +90,7 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full name">
             <input
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.full_name}
               onChange={(event) => setForm({ ...form, full_name: event.target.value })}
               required
@@ -100,7 +100,7 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
           <Field label="Email">
             <input
               type="email"
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
               required
@@ -108,14 +108,14 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
           </Field>
           <Field label="Phone">
             <input
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.phone}
               onChange={(event) => setForm({ ...form, phone: event.target.value })}
             />
           </Field>
           <Field label="Level">
             <select
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.level}
               onChange={(event) => setForm({ ...form, level: event.target.value as BALevel })}
             >
@@ -128,7 +128,7 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
           <Field label="Initial password">
             <input
               type="password"
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.password}
               onChange={(event) => setForm({ ...form, password: event.target.value })}
               minLength={8}
@@ -138,7 +138,7 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
           <Field label="Confirm password">
             <input
               type="password"
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.confirmPassword}
               onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
               minLength={8}
@@ -148,7 +148,7 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
           <Field label="Joined date" className="sm:col-span-2">
             <input
               type="date"
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
               value={form.joined_date}
               onChange={(event) => setForm({ ...form, joined_date: event.target.value })}
               required
@@ -157,10 +157,10 @@ export function CreateBAModal({ open, onClose, onCreated }: CreateBAModalProps) 
         </div>
 
         {localError ? (
-          <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{localError}</div>
+          <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{localError}</div>
         ) : null}
         {create.error ? (
-          <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+          <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
             {create.error.message}
           </div>
         ) : null}

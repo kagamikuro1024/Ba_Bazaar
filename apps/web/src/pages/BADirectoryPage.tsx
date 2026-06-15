@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CalendarDays, Plus, Search } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
+import { PageHeader } from '@/components';
 import {
   apiFetch,
   type BAProfile,
@@ -80,16 +81,25 @@ export function BADirectoryPage() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-        {canManageBa ? (
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> Create BA
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        eyebrow="Directory"
+        title="BA Directory"
+        description={
+          isManagerView
+            ? 'Browse BA profiles, availability, levels, and skills before assigning work or creating booking requests.'
+            : 'Browse active BA profiles, availability, levels, and skills before creating booking requests.'
+        }
+        actions={
+          canManageBa ? (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> Create BA
+            </Button>
+          ) : null
+        }
+      />
 
       {successMessage ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
           {successMessage}
         </div>
       ) : null}
@@ -105,7 +115,7 @@ export function BADirectoryPage() {
                 setPage(1);
               }}
               placeholder="Search BA"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
           </div>
           <select
@@ -114,7 +124,7 @@ export function BADirectoryPage() {
               setLevel(event.target.value);
               setPage(1);
             }}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All levels</option>
             {['JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD'].map((item) => (
@@ -129,7 +139,7 @@ export function BADirectoryPage() {
               setStatus(event.target.value);
               setPage(1);
             }}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All status</option>
             {visibleStatuses.map((item) => (
@@ -144,7 +154,7 @@ export function BADirectoryPage() {
               setTag(event.target.value);
               setPage(1);
             }}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">All tags</option>
             {(tags.data ?? []).map((item) => (
@@ -272,7 +282,7 @@ function BAAvailabilityCard({
           </div>
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-slate-500">Current capacity</span>
             <span className="font-bold text-slate-950">{capacityPercent}%</span>
@@ -314,7 +324,7 @@ function BAAvailabilityCard({
               {projects.slice(0, 3).map((project) => (
                 <div
                   key={project.project_id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 >
                   <span className="min-w-0 truncate font-medium text-slate-800">
                     {project.project_name}
@@ -326,7 +336,7 @@ function BAAvailabilityCard({
               ))}
             </div>
           ) : (
-            <p className="rounded-md border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+            <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
               Bench for the selected period
             </p>
           )}
@@ -341,7 +351,7 @@ function BAAvailabilityCard({
         </div>
 
         {ba.status !== 'ACTIVE' ? (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {ba.status === 'ON_LEAVE' ? 'On Leave' : 'Resigned'}
             {ba.status_reason ? `: ${ba.status_reason}` : ''}
           </p>
@@ -477,7 +487,7 @@ function CreateBAModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full name">
             <input
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.full_name}
               onChange={(event) => setForm({ ...form, full_name: event.target.value })}
               required
@@ -486,7 +496,7 @@ function CreateBAModal({
           <Field label="Email">
             <input
               type="email"
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
               required
@@ -498,7 +508,7 @@ function CreateBAModal({
           <Field label="Initial password">
             <input
               type="password"
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.password}
               onChange={(event) => setForm({ ...form, password: event.target.value })}
               minLength={8}
@@ -508,7 +518,7 @@ function CreateBAModal({
           <Field label="Confirm password">
             <input
               type="password"
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.confirmPassword}
               onChange={(event) =>
                 setForm({ ...form, confirmPassword: event.target.value })
@@ -522,7 +532,7 @@ function CreateBAModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Level">
             <select
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.level}
               onChange={(event) =>
                 setForm({ ...form, level: event.target.value as BALevel })
@@ -536,7 +546,7 @@ function CreateBAModal({
           </Field>
           <Field label="Status">
             <select
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.status}
               onChange={(event) =>
                 setForm({ ...form, status: event.target.value as BAStatus })
@@ -552,7 +562,7 @@ function CreateBAModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Phone optional">
             <input
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.phone}
               onChange={(event) => setForm({ ...form, phone: event.target.value })}
             />
@@ -560,7 +570,7 @@ function CreateBAModal({
           <Field label="Joined date optional">
             <input
               type="date"
-              className="h-10 rounded-md border px-3"
+              className="h-10 rounded-lg border px-3"
               value={form.joined_date}
               onChange={(event) => setForm({ ...form, joined_date: event.target.value })}
             />
@@ -569,7 +579,7 @@ function CreateBAModal({
 
         <Field label="Avatar optional">
           <input
-            className="h-10 rounded-md border px-3"
+            className="h-10 rounded-lg border px-3"
             value={form.avatar_url}
             onChange={(event) => setForm({ ...form, avatar_url: event.target.value })}
             placeholder="https://..."
@@ -578,7 +588,7 @@ function CreateBAModal({
 
         <div className="grid gap-2">
           <p className="text-sm font-semibold text-slate-700">Skill / domain tags</p>
-          <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 p-2">
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2">
             {tags.length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 {tags.map((tag) => {
@@ -586,7 +596,7 @@ function CreateBAModal({
                   return (
                     <label
                       key={tag.id}
-                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-slate-50"
+                      className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50"
                     >
                       <input
                         type="checkbox"
@@ -614,7 +624,7 @@ function CreateBAModal({
 
         {localError ? <p className="text-sm text-rose-600">{localError}</p> : null}
         {create.error ? (
-          <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+          <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
             {create.error.message}
           </p>
         ) : null}

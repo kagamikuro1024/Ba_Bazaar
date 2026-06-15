@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
+import { PageHeader } from '@/components';
 import { apiFetch, type NotificationItem, type PaginatedResponse } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -80,6 +81,11 @@ export function NotificationsPage() {
 
   return (
     <div className="grid gap-5">
+      <PageHeader
+        eyebrow="Inbox"
+        title="Notifications"
+        description="Review booking decisions, assignment updates, and workflow alerts in one place."
+      />
       {notifications.isLoading ? (
         <LoadingScreen message="Loading notifications" />
       ) : null}

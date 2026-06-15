@@ -4,6 +4,7 @@ import { Download, Search, X } from 'lucide-react';
 import { apiFetch, downloadCsv, type ManagerDashboardSummary } from '@/lib/api';
 import { AISummaryCard } from '@/components/AISummaryCard';
 import { useAISummary } from '@/lib/aiSummary';
+import { PageHeader } from '@/components';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/ui/loading-screen';
@@ -91,23 +92,29 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-4 sm:gap-5">
-      <div className="grid gap-2 sm:gap-3 md:flex md:items-center md:justify-between">
-        <div className="hidden md:block" />
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex">
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => {
-              setMonth(event.target.value);
-              setPage(1);
-            }}
-            className="h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          />
-          <Button onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}>
-            <Download className="h-4 w-4" /> CSV
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Insights"
+        title="Reports"
+        description="Analyze monthly utilization, staffing pressure, and project effort across the BA team."
+        actions={
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex">
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => {
+                setMonth(event.target.value);
+                setPage(1);
+              }}
+              className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            />
+            <Button
+              onClick={() => void downloadCsv(`/api/reports/utilization.csv?month=${month}`)}
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+          </div>
+        }
+      />
       {report.isLoading || managerSummary.isLoading ? (
         <LoadingScreen message="Loading report" />
       ) : null}
@@ -220,7 +227,7 @@ export function ReportsPage() {
                     value={search}
                     onChange={(event) => handleSearchChange(event.target.value)}
                     placeholder="Search BA, status, utilization..."
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:h-10 md:rounded-md"
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:h-10 md:rounded-lg"
                     autoComplete="off"
                   />
                   {search ? (
@@ -243,7 +250,7 @@ export function ReportsPage() {
               <select
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(event.target.value)}
-                className="h-11 w-full self-start rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto md:h-10 md:rounded-md"
+                className="h-11 w-full self-start rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 md:w-auto md:h-10 md:rounded-lg"
                 aria-label="Rows per page"
               >
                 {pageSizeOptions.map((size) => (
@@ -253,7 +260,7 @@ export function ReportsPage() {
             </div>
             <div className="grid gap-3 p-3 md:hidden">
               {paginatedRows.map((row) => (
-                <div key={row.ba_id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div key={row.ba_id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-950">{row.ba_name}</p>
@@ -276,7 +283,7 @@ export function ReportsPage() {
                 </div>
               ))}
               {filteredRows.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   No BA found for "{search.trim()}". Try a name, level, status, utilization, or project count.
                 </div>
               ) : null}

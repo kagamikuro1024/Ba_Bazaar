@@ -69,7 +69,7 @@ function RecommendationRow({
   return (
     <li
       className={[
-        'rounded-lg border bg-white transition-colors',
+        'rounded-2xl border bg-white transition-colors',
         isSelected
           ? 'border-emerald-400 bg-emerald-50/40 ring-1 ring-emerald-200'
           : 'border-slate-200 hover:border-slate-300'
@@ -172,7 +172,7 @@ export function RecommendationPanel({
   onRefresh?: () => void;
 }) {
   return (
-    <section className="grid gap-3 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white p-4">
+    <section className="grid gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white p-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-emerald-600" />
@@ -204,21 +204,21 @@ export function RecommendationPanel({
       </p>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
           Scoring candidates…
         </div>
       ) : null}
 
       {isError ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
           Could not load suggestions. The regular BA list is still available
           below.
         </div>
       ) : null}
 
       {!isLoading && !isError && results.length === 0 ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
           No candidates match the current filters.
         </div>
       ) : null}

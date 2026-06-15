@@ -312,7 +312,7 @@ export function BookingModal({
                     auto_assign: event.target.value === ''
                   })
                 }
-                className="h-10 rounded-md border px-3"
+                className="h-10 rounded-lg border px-3"
               >
                 <option value="">Auto assign</option>
                 {modalBas.map((ba) => (
@@ -332,7 +332,7 @@ export function BookingModal({
                 onChange={(event) =>
                   setForm({ ...form, project_id: '', project_name: event.target.value })
                 }
-                className="h-10 rounded-md border px-3"
+                className="h-10 rounded-lg border px-3"
                 placeholder="Enter project name"
                 required
               />
@@ -345,7 +345,7 @@ export function BookingModal({
                   onChange={(event) =>
                     setForm({ ...form, start_date: event.target.value })
                   }
-                  className="h-10 rounded-md border px-3"
+                  className="h-10 rounded-lg border px-3"
                   required
                 />
               </Field>
@@ -354,7 +354,7 @@ export function BookingModal({
                   type="date"
                   value={form.end_date}
                   onChange={(event) => setForm({ ...form, end_date: event.target.value })}
-                  className="h-10 rounded-md border px-3"
+                  className="h-10 rounded-lg border px-3"
                   required
                 />
               </Field>
@@ -363,7 +363,7 @@ export function BookingModal({
               <input
                 value={form.title}
                 onChange={(event) => setForm({ ...form, title: event.target.value })}
-                className="h-10 rounded-md border px-3"
+                className="h-10 rounded-lg border px-3"
                 required
               />
             </Field>
@@ -373,7 +373,7 @@ export function BookingModal({
                 onChange={(event) =>
                   setForm({ ...form, description: event.target.value })
                 }
-                className="min-h-24 rounded-md border p-3"
+                className="min-h-24 rounded-lg border p-3"
                 required
               />
             </Field>
@@ -381,11 +381,11 @@ export function BookingModal({
               <textarea
                 value={form.notes}
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
-                className="min-h-20 rounded-md border p-3"
+                className="min-h-20 rounded-lg border p-3"
               />
             </Field>
             <Field label="Required skills">
-              <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+              <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                 <div className="grid gap-2">
                   <label className="grid gap-1 text-xs text-slate-600">
                     <span className="font-semibold text-slate-700">Choose skill tags</span>
@@ -402,7 +402,7 @@ export function BookingModal({
                           skill_source: 'manual'
                         }));
                       }}
-                      className="h-10 rounded-md border px-3"
+                      className="h-10 rounded-lg border px-3"
                     >
                       <option value="">Add required skill</option>
                       {(tags.data ?? []).map((tag) => (
@@ -418,7 +418,7 @@ export function BookingModal({
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, prd_text: event.target.value }))
                   }
-                  className="min-h-24 rounded-md border p-3 text-sm"
+                  className="min-h-24 rounded-lg border p-3 text-sm"
                   placeholder="Paste PRD, scope notes, or requirement details so AI can suggest skill tags for this request."
                 />
                 <div className="flex justify-end">
@@ -481,7 +481,7 @@ export function BookingModal({
                   onChange={(event) =>
                     setForm({ ...form, capacity_percent: Number(event.target.value) })
                   }
-                  className="h-10 rounded-md border px-3"
+                  className="h-10 rounded-lg border px-3"
                 >
                   {CAPACITY_OPTIONS.map((capacityPercent) => (
                     <option key={capacityPercent} value={capacityPercent}>
@@ -496,7 +496,7 @@ export function BookingModal({
                   onChange={(event) =>
                     setForm({ ...form, priority: event.target.value as BookingPriority })
                   }
-                  className="h-10 rounded-md border px-3"
+                  className="h-10 rounded-lg border px-3"
                 >
                   <option value="LOW">Low</option>
                   <option value="MEDIUM">Medium</option>
@@ -516,7 +516,7 @@ export function BookingModal({
               </label>
             ) : null}
             {showSuggestBaPanel ? (
-              <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50/80 p-4">
+              <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -551,7 +551,7 @@ export function BookingModal({
               </div>
             ) : null}
             {shouldShowCapacityExplain ? (
-              <details className={`rounded-md border ${riskStyles.panel}`} open={riskLevel === 'OVERBOOK_RISK'}>
+              <details className={`rounded-lg border ${riskStyles.panel}`} open={riskLevel === 'OVERBOOK_RISK'}>
                 <summary className="cursor-pointer list-none px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -591,7 +591,7 @@ export function BookingModal({
                       </p>
                       <div className="grid gap-1 sm:grid-cols-2">
                         {overbookExplanation.suggested_actions.slice(0, 3).map((action) => (
-                          <p key={action} className={`rounded-md px-3 py-2 text-xs ${riskStyles.card}`}>
+                          <p key={action} className={`rounded-lg px-3 py-2 text-xs ${riskStyles.card}`}>
                             {action}
                           </p>
                         ))}
@@ -605,7 +605,7 @@ export function BookingModal({
                       </p>
                       <div className="grid gap-1 sm:grid-cols-2">
                         {riskDays.slice(0, 4).map((day) => (
-                          <p key={day.date} className={`rounded-md px-3 py-2 text-xs ${riskStyles.card}`}>
+                          <p key={day.date} className={`rounded-lg px-3 py-2 text-xs ${riskStyles.card}`}>
                             {day.date} · peak {day.risk_after_request}% · overflow {day.overflow_capacity}%
                           </p>
                         ))}
@@ -616,12 +616,12 @@ export function BookingModal({
               </details>
             ) : null}
             {localError ? (
-              <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+              <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
                 {localError}
               </div>
             ) : null}
             {mutation.error ? (
-              <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
+              <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
                 {mutation.error.message}
               </div>
             ) : null}

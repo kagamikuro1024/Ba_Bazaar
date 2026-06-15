@@ -85,7 +85,7 @@ export function App() {
           path="/reports"
           element={
             <ProtectedPage>
-              <LayoutShell>
+              <LayoutShell suppressPageHeader>
                 <RequireRole roles={['BA_MANAGER', 'ADMIN']}>
                   <ReportsPage />
                 </RequireRole>
@@ -93,7 +93,7 @@ export function App() {
             </ProtectedPage>
           }
         />
-        <Route path="/notifications" element={<ProtectedPage><LayoutShell><NotificationsManagerPage /></LayoutShell></ProtectedPage>} />
+        <Route path="/notifications" element={<ProtectedPage><LayoutShell suppressPageHeader><NotificationsManagerPage /></LayoutShell></ProtectedPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
