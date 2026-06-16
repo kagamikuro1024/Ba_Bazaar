@@ -30,7 +30,8 @@ Do not implement hourly booking fields such as `start_datetime`, `end_datetime`,
 - Monorepo: pnpm workspaces
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui foundation, React
   Router, TanStack Query
-- Backend: NestJS, TypeScript, `@nestjs/config`
+- Backend: Go HTTP API for runtime, with legacy NestJS/Prisma tooling retained
+  for migrations and tests
 - Database: PostgreSQL via Docker Compose
 - Shared package: TypeScript constants/types placeholder
 
@@ -78,6 +79,9 @@ Copy-Item apps/api/.env.example apps/api/.env
 
 `JWT_SECRET` is included for future/internal mock auth use. Real auth is out of
 scope for TIP-001.
+
+AI-assisted dashboard summaries are optional. Set `DEEPSEEK_API_KEY` to enable
+DeepSeek; leave it blank to use deterministic grounded fallbacks.
 
 ## PostgreSQL Local
 
@@ -181,7 +185,7 @@ pnpm --filter @ba-bazaar/shared build
 
 - PostgreSQL uses a persistent named volume.
 - API service has restart policy and `.env` usage.
-- API Dockerfile builds the NestJS package from the monorepo.
+- API Dockerfile builds the Go API binary from the monorepo.
 
 Before production use, create a real `.env`, rotate secrets, restrict database
 network exposure, add reverse proxy/TLS, and add backup monitoring.

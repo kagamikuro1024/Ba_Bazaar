@@ -32,6 +32,7 @@ import { apiFetch, type NotificationItem, type User, type UserRole } from '@/lib
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
+import { ChatFab } from './chat';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
 import {
@@ -175,7 +176,7 @@ function monthRangeForSummary() {
 
 export function LayoutShell({ children, suppressPageHeader = false }: LayoutShellProps) {
   const queryClient = useQueryClient();
-  const { user, logout } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const role = user?.role;
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -461,7 +462,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 }}
               />
               {userMenuOpen ? (
-                <Card className="absolute left-0 top-[3.25rem] z-[70] w-56 shadow-lg">
+                <Card className="absolute right-0 top-[3.25rem] z-[70] w-56 shadow-lg">
                   <CardContent className="p-2">
                     <UserMenuContent
                       fullName={me.data?.user.full_name ?? user?.full_name}
@@ -822,7 +823,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         <button
           type="button"
           onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-4 z-40 hidden h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 sm:flex lg:hidden"
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
           aria-label="Create Booking Request"
         >
           <Plus className="h-6 w-6" strokeWidth={3} />
@@ -835,6 +836,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           onClose={() => setBookingModalOpen(false)}
         />
       )}
+
+      <ChatFab accessToken={accessToken} userRole={role} userId={user?.id} />
 
       <GlobalSearchModal
         open={searchOpen}
