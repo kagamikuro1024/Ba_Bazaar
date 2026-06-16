@@ -38,7 +38,7 @@ func (app *App) handleDashboardManagerLLMSummary(w http.ResponseWriter, r *http.
 
 	citations := buildDashboardCitations(payload)
 
-	serveLLMSummary(w, llmSummarySpec{
+	app.serveLLMSummary(w, r, llmSummarySpec{
 		Scope:    "manager-dashboard",
 		CacheKey: strings.Join([]string{valueString(timeframe, "from"), valueString(timeframe, "to")}, ":"),
 		Facts:    facts,

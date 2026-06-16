@@ -103,20 +103,42 @@ var (
 )
 
 // serveLLMSummary runs the shared pipeline and writes the JSON response.
-func serveLLMSummary(w http.ResponseWriter, spec llmSummarySpec) {
+func (app *App) serveLLMSummary(w http.ResponseWriter, r *http.Request, spec llmSummarySpec) {
 	cacheKey := spec.Scope + ":" + spec.CacheKey
 	fingerprint := llmSummaryFingerprint(spec.Facts)
 
-	if cached := getCachedLLMSummary(cacheKey, fingerprint); cached != nil {
-		writeJSON(w, http.StatusOK, cached)
-		return
+	// Caching is disabled; always fetch a fresh summary.
+
+	var userID *string
+	var role string
+	if user, err := app.currentUser(r); err == nil && user != nil {
+		userID = &user.ID
+		role = user.Role
+	} else {
+		role = "GUEST"
 	}
+
+	feature := "AI_SUMMARY"
+	switch spec.Scope {
+	case "manager-dashboard":
+		feature = "AI_DASHBOARD_SUMMARY"
+	case "reports":
+		feature = "AI_REPORT_SUMMARY"
+	case "action-center":
+		feature = "AI_ACTION_CENTER_SUMMARY"
+	case "ba-schedule":
+		feature = "AI_SCHEDULE_SUMMARY"
+	}
+
+	model := envOr("DEEPSEEK_MODEL", "deepseek-chat")
+	session := app.beginAISession(r.Context(), userID, role, feature, spec.Scope, model, "v1.0.0")
 
 	ctx, cancel := context.WithTimeout(context.Background(), llmSummaryTimeout())
 	defer cancel()
 
-	summary, err := summarizeWithDeepSeek(ctx, spec)
+	summary, tokIn, tokOut, err := app.summarizeWithDeepSeek(ctx, session, spec)
 	if err != nil {
+		session.logError(r.Context(), "LLM_ERROR", "HIGH", err.Error(), err)
 		summary = spec.Fallback()
 		summary.Provider = "fallback"
 		summary.Grounded = true
@@ -124,13 +146,16 @@ func serveLLMSummary(w http.ResponseWriter, spec llmSummarySpec) {
 		if summary.Citations == nil {
 			summary.Citations = spec.Citations
 		}
+		session.finish(r.Context(), "FAILED", nil, tokIn, tokOut)
+	} else {
+		session.finish(r.Context(), "SUCCESS", nil, tokIn, tokOut)
 	}
 	summary.SuggestedActions = spec.SuggestedActions
 	if summary.SuggestedActions == nil {
 		summary.SuggestedActions = []llmSuggestedAction{}
 	}
 
-	rememberLLMSummary(cacheKey, fingerprint, summary)
+	// rememberLLMSummary(cacheKey, fingerprint, summary) -- Caching disabled
 	summary.CacheKey = shortHash(cacheKey)
 	summary.Fingerprint = shortHash(fingerprint)
 	writeJSON(w, http.StatusOK, summary)
@@ -178,7 +203,7 @@ func rememberLLMSummary(cacheKey string, fingerprint string, summary *llmSummary
 	llmSummaryCache.items[cacheKey] = cachedLLMSummary{Fingerprint: fingerprint, Summary: &copy}
 }
 
-func summarizeWithDeepSeek(ctx context.Context, spec llmSummarySpec) (*llmSummary, error) {
+func (app *App) summarizeWithDeepSeek(ctx context.Context, session *aiSession, spec llmSummarySpec) (*llmSummary, int, int, error) {
 	maxBullets := spec.MaxBullets
 	if maxBullets <= 0 {
 		maxBullets = 5
@@ -199,21 +224,27 @@ Rules:
 Facts:
 %s`, spec.Context, maxBullets, strings.TrimSpace(spec.Guidance), string(factsJSON))
 
-	content, err := callDeepSeekJSON(ctx, deepSeekChatRequest{
+	session.logMessage(ctx, "system", "You write short grounded summaries with citation IDs for a resource-management product. Return valid JSON only.")
+	session.logMessage(ctx, "user", prompt)
+
+	content, tokIn, tokOut, err := callDeepSeekJSON(ctx, deepSeekChatRequest{
 		System:      "You write short grounded summaries with citation IDs for a resource-management product. Return valid JSON only.",
 		User:        prompt,
 		Temperature: 0.0,
 		MaxTokens:   700,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
+
+	session.logMessage(ctx, "assistant", content)
 
 	var summary llmSummary
 	if err := json.Unmarshal([]byte(content), &summary); err != nil {
-		return nil, fmt.Errorf("invalid summary JSON: %w", err)
+		return nil, tokIn, tokOut, fmt.Errorf("invalid summary JSON: %w", err)
 	}
-	return validateLLMSummary(summary, spec, maxBullets)
+	validated, err := validateLLMSummary(summary, spec, maxBullets)
+	return validated, tokIn, tokOut, err
 }
 
 func validateLLMSummary(summary llmSummary, spec llmSummarySpec, maxBullets int) (*llmSummary, error) {

@@ -71,6 +71,34 @@ func (app *App) Routes() http.Handler {
 		r.Post("/bookings/{id}/changes/reject-fields", app.handleBookingRejectFields)
 		r.Post("/bookings/{id}/cancel", app.handleBookingCancel)
 		r.Patch("/bookings/{id}/assign", app.handleBookingsAssign)
+		r.Post("/ai/chat/log", app.handleAIChatLog)
+
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(app.requireRole("IT_ADMIN"))
+			r.Get("/overview", app.handleAdminOverview)
+			r.Get("/users", app.handleAdminUsersList)
+			r.Post("/users", app.handleAdminUserCreate)
+			r.Patch("/users/{id}", app.handleAdminUserUpdate)
+			r.Patch("/users/{id}/role", app.handleAdminUserRole)
+			r.Patch("/users/{id}/disable", app.handleAdminUserDisable)
+			r.Patch("/users/{id}/enable", app.handleAdminUserEnable)
+			r.Post("/users/{id}/reset-password", app.handleAdminUserResetPassword)
+			r.Get("/audit-logs", app.handleAdminAuditLogs)
+			r.Get("/audit-logs/{id}", app.handleAdminAuditLogByID)
+
+			// AI Observability endpoints
+			r.Get("/ai/overview", app.handleAdminAIOverview)
+			r.Get("/ai/sessions", app.handleAdminAISessions)
+			r.Get("/ai/sessions/{id}", app.handleAdminAISessionDetail)
+			r.Get("/ai/tool-calls", app.handleAdminAIToolCalls)
+			r.Get("/ai/errors", app.handleAdminAIErrors)
+			r.Patch("/ai/errors/{id}/resolve", app.handleAdminAIErrorResolve)
+			r.Get("/ai/feedback", app.handleAdminAIFeedback)
+			r.Get("/ai/feature-flags", app.handleAdminAIFlags)
+			r.Patch("/ai/feature-flags/{key}", app.handleAdminAIFlagToggle)
+			r.Get("/ai/settings", app.handleAdminAISettings)
+			r.Patch("/ai/settings/{key}", app.handleAdminAISettingUpdate)
+		})
 	})
 
 	return r

@@ -22,6 +22,8 @@ import json
 import logging
 import os
 import uuid
+import time
+import httpx
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -34,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from ba_chat.config import get_settings
 from ba_chat.graph import compile_graph
+from ba_chat.log_context import tool_calls_var
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +64,59 @@ class ChatRequest(BaseModel):
     user_id: str = "web"
 
 
+async def send_chat_log(
+    thread_id: str,
+    feature_name: str,
+    user_message: str,
+    assistant_message: str,
+    status: str,
+    duration_ms: int,
+    tool_calls: list[dict[str, Any]],
+    auth_header: str | None,
+    error_msg: str | None = None,
+) -> None:
+    settings = get_settings()
+    headers = {"Content-Type": "application/json"}
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    # Estimate token counts (1 token ≈ 4 characters)
+    tok_in = len(user_message) // 4
+    tok_out = len(assistant_message) // 4 if assistant_message else 0
+
+    model_name = settings.deepseek_model
+    prompt_version = os.getenv("BA_CHAT_PROMPT_VERSION", "v1.0.0")
+
+    payload = {
+        "session_id": thread_id,
+        "feature_name": feature_name,
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+        "status": status,
+        "duration_ms": duration_ms,
+        "token_input": tok_in,
+        "token_output": tok_out,
+        "model_name": model_name,
+        "prompt_version": prompt_version,
+        "tool_calls": tool_calls,
+        "error": error_msg,
+    }
+
+    url = f"{settings.api_base_url}/api/ai/chat/log"
+    try:
+        timeout = httpx.Timeout(10.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            res = await client.post(url, json=payload, headers=headers)
+            if res.status_code >= 300:
+                log.warning(
+                    "failed to send chat log to Go: %d %s",
+                    res.status_code,
+                    res.text[:200],
+                )
+    except Exception as exc:
+        log.warning("failed to send chat log to Go: %s", exc)
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     settings = get_settings()
@@ -84,6 +140,10 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     }
 
     async def event_stream() -> AsyncIterator[bytes]:
+        # Set the ContextVar inside the generator context where the stream runs
+        tool_calls_token = tool_calls_var.set([])
+        start_time = time.time()
+
         yield _sse("ready", {"thread_id": thread_id})
         final_text = ""
         final_msg: AIMessage | None = None
@@ -115,6 +175,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                                 "state",
                                 {"intent": intent, "analyze_target": target},
                             )
+                            # Give state info a quick yield
                             sent_state = True
                     messages = chunk.get("messages") or []
                     for msg in reversed(messages):
@@ -139,9 +200,57 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 yield _sse("final", final_payload)
             else:
                 yield _sse("final", {"content": final_text, "thread_id": thread_id})
+
+            # Send chat logs to Go API on success
+            duration_ms = int((time.time() - start_time) * 1000)
+            collected_tool_calls = tool_calls_var.get() or []
+            tool_calls_var.reset(tool_calls_token)
+
+            feature_name = (
+                "AI_BAMGR_CHATBOT"
+                if req.user_role in ("BA_MANAGER", "ADMIN")
+                else "AI_PMPO_CHATBOT"
+            )
+            asyncio.create_task(
+                send_chat_log(
+                    thread_id=thread_id,
+                    feature_name=feature_name,
+                    user_message=req.message,
+                    assistant_message=final_text,
+                    status="SUCCESS" if final_text else "FAILED",
+                    duration_ms=duration_ms,
+                    tool_calls=collected_tool_calls,
+                    auth_header=req.auth_header,
+                )
+            )
+
         except Exception as exc:  # pragma: no cover - safety net for streamed errors
             log.exception("chat stream failed")
             yield _sse("error", {"message": str(exc)})
+
+            # Send chat logs to Go API on failure
+            duration_ms = int((time.time() - start_time) * 1000)
+            collected_tool_calls = tool_calls_var.get() or []
+            tool_calls_var.reset(tool_calls_token)
+
+            feature_name = (
+                "AI_BAMGR_CHATBOT"
+                if req.user_role in ("BA_MANAGER", "ADMIN")
+                else "AI_PMPO_CHATBOT"
+            )
+            asyncio.create_task(
+                send_chat_log(
+                    thread_id=thread_id,
+                    feature_name=feature_name,
+                    user_message=req.message,
+                    assistant_message=final_text,
+                    status="FAILED",
+                    duration_ms=duration_ms,
+                    tool_calls=collected_tool_calls,
+                    auth_header=req.auth_header,
+                    error_msg=str(exc),
+                )
+            )
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

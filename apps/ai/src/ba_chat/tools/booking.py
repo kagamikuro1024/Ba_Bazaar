@@ -7,11 +7,14 @@ query params. Each function maps 1:1 to a Go route.
 from __future__ import annotations
 
 import logging
+import time
+import json
 from typing import Any
 
 import httpx
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.log_context import tool_calls_var
 
 log = logging.getLogger(__name__)
 
@@ -44,15 +47,47 @@ async def _request(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("%s %s params=%s body=%s", method, url, params, json_body)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(
-            method, url, params=params, json=json_body, headers=headers
-        )
-    if response.status_code >= 300:
-        raise APIError(response.status_code, response.text[:300])
-    if not response.content:
-        return {}
-    return response.json()
+
+    start_time = time.time()
+    status = "SUCCESS"
+    err_msg = ""
+    res = {}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.request(
+                method, url, params=params, json=json_body, headers=headers
+            )
+        if response.status_code >= 300:
+            raise APIError(response.status_code, response.text[:300])
+        if response.content:
+            res = response.json()
+        return res
+    except Exception as e:
+        status = "FAILED"
+        err_msg = str(e)
+        raise
+    finally:
+        tool_calls = tool_calls_var.get()
+        if tool_calls is not None:
+            latency_ms = int((time.time() - start_time) * 1000)
+            
+            # Combine params and json_body into a single input dict for logging
+            inputs = {}
+            if params:
+                inputs["params"] = params
+            if json_body:
+                inputs["body"] = json_body
+
+            tool_calls.append({
+                "tool_name": f"{method} {path}",
+                "input_json": json.dumps(inputs),
+                "output_json": json.dumps(res) if status == "SUCCESS" else "{}",
+                "status": status,
+                "latency_ms": latency_ms,
+                "error_message": err_msg
+            })
+
 
 
 # ---------------------------------------------------------------------------

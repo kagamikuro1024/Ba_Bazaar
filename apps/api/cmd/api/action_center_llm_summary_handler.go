@@ -48,7 +48,7 @@ func (app *App) handleActionCenterLLMSummary(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	serveLLMSummary(w, llmSummarySpec{
+	app.serveLLMSummary(w, r, llmSummarySpec{
 		Scope:     "action-center",
 		CacheKey:  "queue",
 		Facts:     facts,

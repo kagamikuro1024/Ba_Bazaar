@@ -23,7 +23,10 @@ import {
   Search,
   Users,
   Plus,
-  X
+  X,
+  Cpu,
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -92,6 +95,22 @@ const pageIntros: Record<string, PageIntro> = {
   '/notifications': {
     title: 'Notifications',
     body: 'See booking updates, approval decisions, and workflow alerts in one place.'
+  },
+  '/admin/dashboard': {
+    title: 'IT Admin Dashboard',
+    body: 'Overview of users, system status, and system audit logs.'
+  },
+  '/admin/users': {
+    title: 'User Management',
+    body: 'Enable, disable, or change roles for system users.'
+  },
+  '/admin/audit-logs': {
+    title: 'System Audit Logs',
+    body: 'Review system mutations, background actions, and security logs.'
+  },
+  '/admin/ai/observability': {
+    title: 'AI Observability',
+    body: 'Monitor LLM session traces, tool calls, costs, and token usage.'
   }
 };
 
@@ -127,7 +146,31 @@ const navigation: Array<{
     icon: Users,
     roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']
   },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] }
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
+  {
+    to: '/admin/dashboard',
+    label: 'Admin Dashboard',
+    icon: ShieldCheck,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/users',
+    label: 'User Management',
+    icon: Users,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/audit-logs',
+    label: 'System Audit Logs',
+    icon: FileText,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/ai/observability',
+    label: 'AI Observability',
+    icon: Cpu,
+    roles: ['IT_ADMIN']
+  }
 ];
 
 function getIntroKey(pathname: string) {
@@ -246,6 +289,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const mobileNavigation = useMemo(() => {
     const priority = [
       '/dashboard',
+      '/admin/dashboard',
+      '/admin/users',
+      '/admin/audit-logs',
+      '/admin/ai/observability',
       '/manager/action-center',
       '/timeline',
       '/crm/ba',

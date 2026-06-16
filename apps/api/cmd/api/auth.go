@@ -21,6 +21,7 @@ type User struct {
 	FullName     string     `json:"full_name"`
 	Email        string     `json:"email"`
 	Role         string     `json:"role"`
+	Status       string     `json:"status"`
 	PasswordHash *string    `json:"-"`
 	AvatarURL    *string    `json:"avatar_url"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
@@ -160,48 +161,57 @@ func roleAlias(value string) string {
 
 func (app *App) currentUser(r *http.Request) (*User, error) {
 	ctx := r.Context()
+	var user *User
+	var err error
 	if token := bearerToken(r); token != "" {
 		claims, err := parseAccessToken(token)
 		if err != nil {
 			return nil, err
 		}
-		user, err := app.findUserByID(ctx, claims.Subject)
+		user, err = app.findUserByID(ctx, claims.Subject)
 		if err != nil {
 			return nil, err
 		}
-		return user, nil
-	}
-	// SSE / EventSource fallback: allow the bearer token in the query
-	// string because the browser EventSource API can't set custom
-	// headers. This is safe because the connection is short-lived
-	// and the token still has the same TTL as a header-borne one.
-	if token := r.URL.Query().Get("token"); token != "" {
+	} else if token := r.URL.Query().Get("token"); token != "" {
 		claims, err := parseAccessToken(token)
 		if err != nil {
 			return nil, err
 		}
-		return app.findUserByID(ctx, claims.Subject)
+		user, err = app.findUserByID(ctx, claims.Subject)
+		if err != nil {
+			return nil, err
+		}
+	} else if allowMockAuth() {
+		if userID := strings.TrimSpace(r.Header.Get("X-User-Id")); userID != "" {
+			user, err = app.findUserByID(ctx, userID)
+		} else {
+			role := roleAlias(r.Header.Get("X-Mock-Role"))
+			if role == "" {
+				role = "BA_MANAGER"
+			}
+			user, err = app.findFirstUserByRole(ctx, role)
+		}
 	}
-	if !allowMockAuth() {
+
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
 		return nil, errors.New("authentication required")
 	}
-	if userID := strings.TrimSpace(r.Header.Get("X-User-Id")); userID != "" {
-		return app.findUserByID(ctx, userID)
+	if user.Status == "DISABLED" {
+		return nil, errors.New("user account is disabled")
 	}
-	role := roleAlias(r.Header.Get("X-Mock-Role"))
-	if role == "" {
-		role = "BA_MANAGER"
-	}
-	return app.findFirstUserByRole(ctx, role)
+	return user, nil
 }
 
 func (app *App) findUserByID(ctx context.Context, id string) (*User, error) {
-	const q = `select id, full_name, email, role, password_hash, avatar_url, last_login_at from users where id = $1`
+	const q = `select id, full_name, email, role::text, password_hash, avatar_url, last_login_at, status::text from users where id = $1`
 	var u User
 	var avatar sql.NullString
 	var pass sql.NullString
 	var last sql.NullTime
-	err := app.DB.Pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last)
+	err := app.DB.Pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last, &u.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -219,12 +229,12 @@ func (app *App) findUserByID(ctx context.Context, id string) (*User, error) {
 }
 
 func (app *App) findUserByEmail(ctx context.Context, email string) (*User, error) {
-	const q = `select id, full_name, email, role, password_hash, avatar_url, last_login_at from users where lower(email) = lower($1)`
+	const q = `select id, full_name, email, role::text, password_hash, avatar_url, last_login_at, status::text from users where lower(email) = lower($1)`
 	var u User
 	var avatar sql.NullString
 	var pass sql.NullString
 	var last sql.NullTime
-	err := app.DB.Pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last)
+	err := app.DB.Pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last, &u.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -242,12 +252,12 @@ func (app *App) findUserByEmail(ctx context.Context, email string) (*User, error
 }
 
 func (app *App) findFirstUserByRole(ctx context.Context, role string) (*User, error) {
-	const q = `select id, full_name, email, role, password_hash, avatar_url, last_login_at from users where role = $1 order by created_at asc limit 1`
+	const q = `select id, full_name, email, role::text, password_hash, avatar_url, last_login_at, status::text from users where role = $1 order by created_at asc limit 1`
 	var u User
 	var avatar sql.NullString
 	var pass sql.NullString
 	var last sql.NullTime
-	err := app.DB.Pool.QueryRow(ctx, q, role).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last)
+	err := app.DB.Pool.QueryRow(ctx, q, role).Scan(&u.ID, &u.FullName, &u.Email, &u.Role, &pass, &avatar, &last, &u.Status)
 	if err != nil {
 		return nil, err
 	}

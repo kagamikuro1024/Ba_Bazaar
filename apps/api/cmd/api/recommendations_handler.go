@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,6 +36,13 @@ func (app *App) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Insufficient role"})
 		return
 	}
+	
+	// Server-side gating check
+	if !app.isAIFeatureEnabled(r.Context(), "ai_suggest_ba_enabled") {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Suggest BA is currently disabled by administrator"})
+		return
+	}
+
 	_ = app.syncBookingStatuses(r.Context())
 
 	q := r.URL.Query()
@@ -159,7 +168,31 @@ func (app *App) handleRecommendations(w http.ResponseWriter, r *http.Request) {
 		ExcludeBAIDs:         exclude,
 		Limit:                limit,
 	}
-	results := RankCandidates(scored, rq)
+
+	session := app.beginAISession(r.Context(), &user.ID, user.Role, "AI_SUGGEST_BA", "recommendations", "heuristic", "v1.0.0")
+	qParams, _ := json.Marshal(rq)
+	session.logMessage(r.Context(), "USER", fmt.Sprintf("Query params: %s", qParams))
+
+	var results []RecommendationResult
+	runRanking := func() (any, error) {
+		res := RankCandidates(scored, rq)
+		return res, nil
+	}
+
+	resVal, _ := session.logToolCall(r.Context(), "suggest_ba", map[string]any{"candidate_count": len(scored)}, runRanking)
+	if resVal != nil {
+		results = resVal.([]RecommendationResult)
+	}
+
+	if len(results) == 0 {
+		session.logError(r.Context(), "EMPTY_SUGGESTION", "LOW", "No matching candidates found", nil)
+		session.logMessage(r.Context(), "ASSISTANT", "No candidates matched the criteria.")
+		session.finish(r.Context(), "SUCCESS", nil, 0, 0)
+	} else {
+		session.logExtraction(r.Context(), "BOOKING_INTENT", fmt.Sprintf("Skills wanted: %v", requiredSkillIDs), results, nil, 1.0)
+		session.logMessage(r.Context(), "ASSISTANT", fmt.Sprintf("Suggested %d BAs. Top fit score: %d", len(results), results[0].FitScore))
+		session.finish(r.Context(), "SUCCESS", nil, 0, 0)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"query": map[string]any{
