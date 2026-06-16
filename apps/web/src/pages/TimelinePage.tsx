@@ -1319,7 +1319,6 @@ function TimelineRow({
   allowDragSelection,
   hasOverbookRisk,
   currentDate,
-  riskCapacity: _riskCapacity,
   activeSelection,
   onSelectionStart,
   onSelectionMove,
@@ -1453,7 +1452,6 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
-  viewMode: _viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1461,7 +1459,6 @@ function MobileTimelineRow({
   canCreateBooking,
   hasOverbookRisk,
   currentDate,
-  riskCapacity: _riskCapacity,
   onEmptyClick,
   onBookingClick
 }: {
