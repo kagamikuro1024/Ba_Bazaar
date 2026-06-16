@@ -2125,7 +2125,7 @@ function BookingDetailModal({
             <div className="grid gap-2 text-sm">
               <p>BA: {booking.ba?.full_name ?? 'Unassigned'}</p>
               <p>
-                Selected booking: {booking.project.name} Â· {booking.capacity_percent}% Â·{' '}
+                Selected booking: {booking.project.name} - {booking.capacity_percent}% -{' '}
                 {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
               </p>
               <div className="grid gap-1">
