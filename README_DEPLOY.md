@@ -3,7 +3,7 @@
 ## Hugging Face Docker Space
 
 Use this path when you only have a Hugging Face Space instead of a normal VPS.
-The root `Dockerfile` builds the Vite frontend, builds the Nest API, starts a
+The root `Dockerfile` builds the Vite frontend, builds the Go API, starts a
 PostgreSQL process inside the same container when no external `DATABASE_URL` is
 provided, and exposes one public web server on port `7860`.
 
@@ -42,11 +42,18 @@ Optional variables:
 ```text
 HF_AUTO_SEED=true
 CORS_ORIGIN=https://your-custom-domain.example
+DEEPSEEK_API_KEY=<optional DeepSeek key for AI summaries>
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DASHBOARD_LLM_TIMEOUT_SECONDS=45
 ```
 
 `HF_AUTO_SEED=true` seeds demo data only when the `users` table is empty. The
 embedded database path is `/data/postgres` when persistent storage is attached;
 otherwise it falls back to `/home/user/pgdata`.
+
+If `DEEPSEEK_API_KEY` is omitted, the dashboard AI summary card still works with
+a deterministic grounded fallback.
 
 You usually do not need `CORS_ORIGIN` on the default Hugging Face domain because
 the container derives it from `SPACE_HOST`. Set it manually when using a custom
@@ -172,6 +179,13 @@ Update at least:
 - `JWT_SECRET`
 - `CORS_ORIGIN` (use http://YOUR_VPS_IP first, then https://your-domain)
 - `VITE_API_BASE_URL` (use http://YOUR_VPS_IP/api first, then https://your-domain/api)
+
+Optional AI summary variables:
+
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_MODEL`
+- `DEEPSEEK_BASE_URL`
+- `DASHBOARD_LLM_TIMEOUT_SECONDS`
 
 ## 6) Build + deploy
 

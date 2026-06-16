@@ -1,0 +1,114 @@
+import { type ChatMessage } from './types';
+import { cn } from '@/lib/utils';
+import { Sparkles, User } from 'lucide-react';
+import { ChatActionButtons } from './ChatActionButtons';
+
+// ---------------------------------------------------------------------------
+// ChatBubble — renders a single message in the chat panel.
+// ---------------------------------------------------------------------------
+
+export function ChatBubble({
+  message,
+  onActionPick,
+  disabled
+}: {
+  message: ChatMessage;
+  onActionPick?: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const isUser = message.role === 'user';
+  const showCursor = message.pending && !message.content;
+  return (
+    <div
+      className={cn(
+        'flex w-full items-start gap-2 px-3',
+        isUser ? 'justify-end' : 'justify-start'
+      )}
+    >
+      {!isUser ? (
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+          <Sparkles className="h-4 w-4" />
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm',
+          isUser
+            ? 'rounded-br-sm bg-blue-600 text-white'
+            : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800'
+        )}
+      >
+        {message.content ? (
+          <MarkdownLite text={message.content} />
+        ) : showCursor ? (
+          <span className="inline-flex items-center gap-1 text-slate-400">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+          </span>
+        ) : (
+          <span className="italic text-slate-400">(no response)</span>
+        )}
+        {message.intent && !isUser ? (
+          <div className="mt-1.5 text-[11px] uppercase tracking-wide text-slate-400">
+            {labelForState(message.intent, message.analyzeTarget ?? null)}
+          </div>
+        ) : null}
+        {!isUser && message.actionButtons?.length && onActionPick ? (
+          <ChatActionButtons
+            buttons={message.actionButtons}
+            onPick={onActionPick}
+            disabled={disabled}
+          />
+        ) : null}
+      </div>
+      {isUser ? (
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+          <User className="h-4 w-4" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Tiny Markdown-ish renderer: bullets + bold. Keeps the bundle lean.
+// If the bot emits anything more elaborate, swap to react-markdown.
+function MarkdownLite({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/);
+  return (
+    <div className="grid gap-1">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-1" />;
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex gap-2">
+              <span aria-hidden className="text-blue-500">•</span>
+              <span>{renderInline(trimmed.slice(2))}</span>
+            </div>
+          );
+        }
+        return <div key={idx}>{renderInline(trimmed)}</div>;
+      })}
+    </div>
+  );
+}
+
+function renderInline(text: string) {
+  // Replace **bold** with <strong>. Keep it deterministic; no risky parsing.
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, idx) => {
+    const match = /^\*\*([^*]+)\*\*$/.exec(part);
+    if (match) {
+      return <strong key={idx}>{match[1]}</strong>;
+    }
+    return <span key={idx}>{part}</span>;
+  });
+}
+
+function labelForState(intent: string, target: string | null) {
+  if (intent === 'analyze' && target) {
+    return `analyze · ${target.replace(/_/g, ' ')}`;
+  }
+  return intent;
+}
