@@ -424,7 +424,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             <img
               src="/logo-blue.png"
               alt="BA Bazaar"
-              className="h-10 w-auto shrink-0 object-contain"
+              className="h-12 w-auto shrink-0 object-contain"
             />
           </Link>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -516,7 +516,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   <img
                     src="/logo-blue.png"
                     alt="BA Bazaar"
-                    className="h-12 w-auto object-contain"
+                    className="h-16 w-auto object-contain"
                   />
                 </Link>
               </div>
