@@ -32,6 +32,7 @@ import { apiFetch, type NotificationItem, type User, type UserRole } from '@/lib
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
+import { ChatFab } from './chat';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
 import {
@@ -175,7 +176,7 @@ function monthRangeForSummary() {
 
 export function LayoutShell({ children, suppressPageHeader = false }: LayoutShellProps) {
   const queryClient = useQueryClient();
-  const { user, logout } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const role = user?.role;
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -835,6 +836,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           onClose={() => setBookingModalOpen(false)}
         />
       )}
+
+      <ChatFab accessToken={accessToken} userRole={role} userId={user?.id} />
 
       <GlobalSearchModal
         open={searchOpen}
