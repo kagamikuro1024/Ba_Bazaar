@@ -402,6 +402,18 @@ function formatBaSortMode(sortMode: BASortMode) {
   return 'A to Z';
 }
 
+function formatBaSortModeCompact(sortMode: BASortMode) {
+  if (sortMode === 'capacity_desc') {
+    return 'High-Low';
+  }
+
+  if (sortMode === 'capacity_asc') {
+    return 'Low-High';
+  }
+
+  return 'A-Z';
+}
+
 function buildWeekPickerSections(year: number) {
   return Array.from({ length: 12 }, (_, monthIndex) => {
     const monthStart = new Date(year, monthIndex, 1);
@@ -891,17 +903,13 @@ export function TimelinePage() {
           <button
             type="button"
             onClick={cycleBaSortMode}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase text-slate-600 shadow-sm"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-950"
             title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
           >
             <ArrowUpDown className="h-3.5 w-3.5" />
             <span>Sort BA</span>
-            <span className="text-[9px] normal-case text-slate-400">
-              {baSortMode === 'capacity_desc'
-                ? 'High-Low'
-                : baSortMode === 'capacity_asc'
-                  ? 'Low-High'
-                  : 'A-Z'}
+            <span className="text-[11px] text-slate-400">
+              {formatBaSortModeCompact(baSortMode)}
             </span>
           </button>
         </div>
@@ -1054,18 +1062,14 @@ export function TimelinePage() {
                   <button
                     type="button"
                     onClick={cycleBaSortMode}
-                    className="pointer-events-auto h-14 border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                    className="pointer-events-auto h-14 border-b border-r bg-white p-3 text-left text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                     title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
                   >
                     <span className="flex items-center gap-1">
                       BA
                       <ArrowUpDown className="h-3.5 w-3.5" />
-                      <span className="text-[10px] normal-case text-slate-400">
-                        {baSortMode === 'capacity_desc'
-                          ? 'High-Low'
-                          : baSortMode === 'capacity_asc'
-                            ? 'Low-High'
-                            : 'A-Z'}
+                      <span className="text-[10px] text-slate-400">
+                        {formatBaSortModeCompact(baSortMode)}
                       </span>
                     </span>
                     {baSortMode === 'capacity_desc'
@@ -1226,18 +1230,14 @@ export function TimelinePage() {
               <button
                 type="button"
                 onClick={cycleBaSortMode}
-                className="pointer-events-auto h-14 w-[260px] border-b border-r bg-white p-3 text-left text-xs font-bold uppercase text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                className="pointer-events-auto h-14 w-[260px] border-b border-r bg-white p-3 text-left text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
               >
                 <span className="flex items-center gap-1">
                   BA
                   <ArrowUpDown className="h-3.5 w-3.5" />
-                  <span className="text-[10px] normal-case text-slate-400">
-                    {baSortMode === 'capacity_desc'
-                      ? 'High-Low'
-                      : baSortMode === 'capacity_asc'
-                        ? 'Low-High'
-                        : 'A-Z'}
+                  <span className="text-[10px] text-slate-400">
+                    {formatBaSortModeCompact(baSortMode)}
                   </span>
                 </span>
                 {baSortMode === 'capacity_desc'
