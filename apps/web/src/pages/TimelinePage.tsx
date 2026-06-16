@@ -1065,18 +1065,13 @@ export function TimelinePage() {
                     className="pointer-events-auto h-14 border-b border-r bg-white p-3 text-left text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                     title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
                   >
-                    <span className="flex items-center gap-1">
-                      BA
-                      <ArrowUpDown className="h-3.5 w-3.5" />
-                      <span className="text-[10px] text-slate-400">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>BA</span>
+                      <span className="flex items-center gap-1 text-[10px] text-slate-400">
                         {formatBaSortModeCompact(baSortMode)}
+                        <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                       </span>
                     </span>
-                    {baSortMode === 'capacity_desc'
-                      ? ' ↓'
-                      : baSortMode === 'capacity_asc'
-                        ? ' ↑'
-                        : ''}
                   </button>
                   {columns.map((column) => (
                     <div
@@ -1233,18 +1228,13 @@ export function TimelinePage() {
                 className="pointer-events-auto h-14 w-[260px] border-b border-r bg-white p-3 text-left text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 title={`Sort BA by capacity. Current: ${formatBaSortMode(baSortMode)}`}
               >
-                <span className="flex items-center gap-1">
-                  BA
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  <span className="text-[10px] text-slate-400">
+                <span className="flex items-center justify-between gap-2">
+                  <span>BA</span>
+                  <span className="flex items-center gap-1 text-[10px] text-slate-400">
                     {formatBaSortModeCompact(baSortMode)}
+                    <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                   </span>
                 </span>
-                {baSortMode === 'capacity_desc'
-                  ? ' ↓'
-                  : baSortMode === 'capacity_asc'
-                    ? ' ↑'
-                    : ''}
               </button>
               {rowData.map(({ ba, desktopRowMinHeight }, index) => {
                 const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
