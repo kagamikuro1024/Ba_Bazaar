@@ -24,7 +24,9 @@ type DataTableProps<T> = {
   /** Optional click handler for a row. */
   onRowClick?: (row: T) => void;
   /** Optional per-row className for selected/error/highlight states. */
-  rowClassName?: (row: T) => string | undefined;
+  rowClassName?: (row: T, index: number) => string | undefined;
+  /** Optional per-table-row className, without affecting mobile cards. */
+  tableRowClassName?: (row: T, index: number) => string | undefined;
   /** Show the search input in the table header. */
   search?: {
     value: string;
@@ -64,6 +66,7 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   rowClassName,
+  tableRowClassName,
   search,
   emptyState,
   loadingState,
@@ -91,14 +94,14 @@ export function DataTable<T>({
       )}
       {mobileCard ? (
         <div className="grid gap-3 p-3 md:hidden">
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <div
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
                 'rounded-2xl border border-slate-200 bg-white p-3 shadow-sm',
                 onRowClick && 'cursor-pointer hover:border-slate-300',
-                rowClassName?.(row)
+                rowClassName?.(row, index)
               )}
             >
               {mobileCard(row)}
@@ -137,14 +140,15 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, index) => (
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
                   'border-b border-slate-100 last:border-b-0',
                   onRowClick && 'cursor-pointer hover:bg-slate-50',
-                  rowClassName?.(row)
+                  rowClassName?.(row, index),
+                  tableRowClassName?.(row, index)
                 )}
               >
                 {columns.map((column) => (
