@@ -292,6 +292,13 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
+  const isBaDirectoryPage = location.pathname === '/crm/ba';
+  const isMyRequestsPage = location.pathname === '/my-requests';
+  const isTimelinePage = location.pathname === '/timeline';
+  const showMobileCreateBookingFab =
+    canCreateBooking && (isTimelinePage || isMyRequestsPage);
+  const showMobileCreateBaFab = canCreateBa && isBaDirectoryPage;
+
   const mobileNavigation = useMemo(() => {
     const priority = [
       '/dashboard',
@@ -639,8 +646,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     )}
                     {!sidebarCollapsed &&
-                    item.to === '/manager/action-center' &&
-                    actionCenterPendingCount > 0 ? (
+                      item.to === '/manager/action-center' &&
+                      actionCenterPendingCount > 0 ? (
                       <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold leading-none text-white">
                         {actionCenterPendingCount > 99 ? '99+' : actionCenterPendingCount}
                       </span>
@@ -887,6 +894,37 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </nav>
 
+      {showMobileCreateBookingFab && !showMobileCreateBaFab ? (
+        <button
+          type="button"
+          onClick={() => setBookingModalOpen(true)}
+          className="fixed bottom-24 right-4 z-40 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
+          aria-label="Create Booking Request"
+        >
+          <Plus className="h-6 w-6" strokeWidth={3} />
+          <span className="text-sm font-semibold">
+            {location.pathname === '/timeline'
+              ? 'New booking'
+              : isMyRequestsPage
+                ? 'New booking'
+                : 'Create'}
+          </span>
+        </button>
+      ) : null}
+
+      {showMobileCreateBaFab ? (
+        <button
+          type="button"
+          onClick={() => setCreateBaModalOpen(true)}
+          className="fixed bottom-24 right-4 z-40 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
+          aria-label="Create BA"
+        >
+          <Plus className="h-6 w-6" strokeWidth={3} />
+          <span className="text-sm font-semibold">Create BA</span>
+        </button>
+      ) : null}
+
+
       {canCreateBooking && (
         <BookingModal
           open={bookingModalOpen}
@@ -1089,23 +1127,23 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       ) : null}
       {notificationOpen && notificationPanelPos
         ? createPortal(
-            <Card
-              ref={notificationPanelRef}
-              className="fixed z-[100] w-96 shadow-lg"
-              style={notificationPanelPos}
-            >
-              <CardContent className="p-0">
-                <NotificationPanel
-                  unreadCount={unreadCount}
-                  recentNotifications={recentNotifications}
-                  resolveNotificationPath={resolveNotificationPath}
-                  markRead={(id) => markRead.mutate(id)}
-                  onViewAll={() => setNotificationOpen(false)}
-                />
-              </CardContent>
-            </Card>,
-            document.body
-          )
+          <Card
+            ref={notificationPanelRef}
+            className="fixed z-[100] w-96 shadow-lg"
+            style={notificationPanelPos}
+          >
+            <CardContent className="p-0">
+              <NotificationPanel
+                unreadCount={unreadCount}
+                recentNotifications={recentNotifications}
+                resolveNotificationPath={resolveNotificationPath}
+                markRead={(id) => markRead.mutate(id)}
+                onViewAll={() => setNotificationOpen(false)}
+              />
+            </CardContent>
+          </Card>,
+          document.body
+        )
         : null}
     </div>
   );

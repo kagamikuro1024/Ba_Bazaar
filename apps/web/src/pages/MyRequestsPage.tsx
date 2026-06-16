@@ -128,7 +128,7 @@ export function MyRequestsPage() {
               </option>
             ))}
           </select>
-          <Button onClick={() => setCreateOpen(true)} className="md:w-auto">
+          <Button onClick={() => setCreateOpen(true)} className="hidden lg:inline-flex md:w-auto">
             Create Request
           </Button>
         </div>
