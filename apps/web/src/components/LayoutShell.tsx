@@ -32,6 +32,7 @@ import { apiFetch, type NotificationItem, type User, type UserRole } from '@/lib
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
+import { CreateBAModal } from './CreateBAModal';
 import { ChatFab } from './chat';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
@@ -181,6 +182,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [createBaModalOpen, setCreateBaModalOpen] = useState(false);
   const [pendingNavPath, setPendingNavPath] = useState('');
   const [navActionPending, setNavActionPending] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -240,11 +242,14 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     [role]
   );
   const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
+  const canCreateBa = role === 'BA_MANAGER';
   const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
-  const showMobileCreateFab =
+  const isBaDirectoryPage = location.pathname === '/crm/ba';
+  const showMobileCreateBookingFab =
     canCreateBooking && !['/my-requests', '/manager/action-center'].includes(location.pathname);
+  const showMobileCreateBaFab = canCreateBa && isBaDirectoryPage;
   const mobileNavigation = useMemo(() => {
     const priority = [
       '/dashboard',
@@ -814,7 +819,14 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       ) : null}
                     </div>
                     <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-                      {item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')}
+                      {item.to === '/dashboard' ? (
+                        <>
+                          <span className="sm:hidden">Dash</span>
+                          <span className="hidden sm:inline">Dashboard</span>
+                        </>
+                      ) : (
+                        item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')
+                      )}
                     </span>
                   </div>
                 )}
@@ -824,7 +836,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </nav>
 
-      {showMobileCreateFab ? (
+      {showMobileCreateBookingFab && !showMobileCreateBaFab ? (
         <button
           type="button"
           onClick={() => setBookingModalOpen(true)}
@@ -832,7 +844,21 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           aria-label="Create Booking Request"
         >
           <Plus className="h-6 w-6" strokeWidth={3} />
-          <span className="text-sm font-semibold">Create</span>
+          <span className="text-sm font-semibold">
+            {location.pathname === '/timeline' ? 'New booking' : 'Create'}
+          </span>
+        </button>
+      ) : null}
+
+      {showMobileCreateBaFab ? (
+        <button
+          type="button"
+          onClick={() => setCreateBaModalOpen(true)}
+          className="fixed bottom-24 right-4 z-40 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
+          aria-label="Create BA"
+        >
+          <Plus className="h-6 w-6" strokeWidth={3} />
+          <span className="text-sm font-semibold">Create BA</span>
         </button>
       ) : null}
 
@@ -840,6 +866,13 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         <BookingModal
           open={bookingModalOpen}
           onClose={() => setBookingModalOpen(false)}
+        />
+      )}
+
+      {canCreateBa && (
+        <CreateBAModal
+          open={createBaModalOpen}
+          onClose={() => setCreateBaModalOpen(false)}
         />
       )}
 
