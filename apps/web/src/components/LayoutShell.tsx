@@ -461,7 +461,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 }}
               />
               {userMenuOpen ? (
-                <Card className="absolute left-0 top-[3.25rem] z-[70] w-56 shadow-lg">
+                <Card className="absolute right-0 top-[3.25rem] z-[70] w-56 shadow-lg">
                   <CardContent className="p-2">
                     <UserMenuContent
                       fullName={me.data?.user.full_name ?? user?.full_name}
