@@ -65,3 +65,22 @@
     transform: translateX(220%);
   }
 }
+
+@keyframes chatfab-shimmer {
+  0%,
+  14% {
+    transform: translateX(-180%) rotate(18deg);
+    opacity: 0;
+  }
+  24% {
+    opacity: 0.55;
+  }
+  58% {
+    transform: translateX(180%) rotate(18deg);
+    opacity: 0.14;
+  }
+  100% {
+    transform: translateX(180%) rotate(18deg);
+    opacity: 0;
+  }
+}

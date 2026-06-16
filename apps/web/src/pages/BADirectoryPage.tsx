@@ -91,7 +91,7 @@ export function BADirectoryPage() {
         }
         actions={
           canManageBa ? (
-            <Button onClick={() => setShowCreate(true)}>
+            <Button onClick={() => setShowCreate(true)} className="hidden lg:inline-flex">
               <Plus className="h-4 w-4" /> Create BA
             </Button>
           ) : null

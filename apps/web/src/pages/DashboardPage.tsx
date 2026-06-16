@@ -867,7 +867,7 @@ function ManagerActionRow({ item, index }: { item: ManagerActionItem; index: num
     <>
       <div
         className={cn(
-          'grid gap-4 px-4 py-4 text-sm lg:hidden',
+          'grid gap-4 px-4 py-4 text-sm md:hidden',
           index % 2 === 1 && 'bg-blue-50'
         )}
       >
@@ -919,18 +919,17 @@ function ManagerActionRow({ item, index }: { item: ManagerActionItem; index: num
           </div>
         </div>
         <div className="flex justify-start">
-          <Link
-            to={item.actionTo}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-4 transition-colors hover:text-blue-800"
-          >
-            {item.actionLabel}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <Button asChild size="sm" className="h-10">
+            <Link to={item.actionTo} className="inline-flex items-center gap-1">
+              {item.actionLabel}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </div>
       <div
         className={cn(
-          'hidden gap-3 px-4 py-4 text-sm lg:grid lg:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] lg:items-center',
+          'hidden gap-3 px-4 py-4 text-sm md:grid md:grid-cols-[70px_minmax(0,1.6fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_75px_132px] md:items-center',
           index % 2 === 1 && 'bg-blue-50'
         )}
       >
