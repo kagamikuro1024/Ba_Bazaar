@@ -43,14 +43,16 @@ export function BAIdentity({
     );
   }
   return (
-    <div className="flex min-w-0 items-center gap-3">
+    <div
+      className="flex min-w-0 items-center gap-3"
+      title={showNameTooltip ? ba.full_name : undefined}
+    >
       <Avatar name={ba.full_name} url={ba.avatar_url} />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="truncate text-sm font-semibold text-slate-950" title={showNameTooltip ? ba.full_name : undefined}>
+          <span className="truncate text-sm font-semibold text-slate-950">
             {ba.full_name}
           </span>
-
           {showConflictIcon ? (
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
           ) : null}
