@@ -170,6 +170,17 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.deepseek_model == "deepseek-v4-flash"
 
 
+def test_router_ignores_unknown_analyze_target() -> None:
+    from ba_chat.nodes.router import _RouteDecision
+
+    decision = _RouteDecision.model_validate(
+        {"intent": "analyze", "analyze_target": "network"}
+    )
+
+    assert decision.intent == "analyze"
+    assert decision.analyze_target is None
+
+
 def test_state_payload_serialises_cleanly() -> None:
     """Sanity check that state dicts can survive the LangGraph checkpointer."""
 

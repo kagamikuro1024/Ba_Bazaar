@@ -80,6 +80,13 @@ _EXTRACTION_RETRY = RetryPolicy(
 )
 
 
+def _booking_has_required_slots(state: ChatState) -> bool:
+    slots = state.get("slots") or {}
+    has_project = bool(slots.get("project_id") or slots.get("project_name"))
+    required = ("title", "start_date", "end_date", "capacity_percent")
+    return has_project and all(slots.get(field) not in (None, "") for field in required)
+
+
 def _route_after_router(
     state: ChatState,
 ) -> Literal["retrieve_metrics", "extract_slots", "submit_booking", "respond", "cancelled"]:
@@ -88,8 +95,10 @@ def _route_after_router(
     # immediately re-enter the booking flow.
     if state.get("cancelled"):
         return "respond"
-    # If user just confirmed, go straight to submit (interrupt_before catches it).
-    if state.get("confirmed"):
+    # Only submit when confirmed AND every required slot is present. If the
+    # user says "đúng" while still filling optional/ambiguous details, continue
+    # the booking flow instead of posting an incomplete payload.
+    if state.get("confirmed") and _booking_has_required_slots(state):
         return "submit_booking"
     if intent == "analyze":
         return "retrieve_metrics"
@@ -113,7 +122,7 @@ def _route_after_extract(
         return "side_chat"
     if state.get("cancelled"):
         return "cancelled"
-    if state.get("confirmed"):
+    if state.get("confirmed") and _booking_has_required_slots(state):
         return "submit_booking"
     return "validate_slots"
 

@@ -36,12 +36,28 @@ If `DEEPSEEK_API_KEY` is unset, the bot still works — it returns the determini
 3. Slot-fill + simulate, ending at a confirmation card.
 4. Submit booking, gated by `interrupt_before` so only an explicit "yes" mutates.
 
+## Booking flow skill
+
+The booking assistant follows this slot order:
+
+```
+project_name → title → description → start_date → end_date → capacity_percent
+```
+
+Flow rules:
+
+- Always ask for `description`, but treat `no`, `none`, `nothing`, or `skip` as an intentional empty description and continue.
+- Resolve `today`, `tomorrow`, and other relative dates with `ba_chat.tools.date.get_today()`. The default business timezone is `Asia/Bangkok`; override with `BA_CHAT_TIMEZONE`.
+- When `start_date` is already filled and the assistant asks for `end_date`, duration replies such as `for 5 days` or `for 1 week` are valid answers. Resolve them from `start_date` and move to `capacity_percent`.
+- Do not ask the user to confirm a date that the deterministic date parser has already resolved.
+
 ## Layout
 
 ```
 src/ba_chat/
   state.py        ChatState, BookingSlots, enums (synced with Go schema)
   llm.py          Streaming DeepSeek client + JSON-mode helper
+  tools/date.py   Current-date context for relative booking dates
   tools/read.py   Read-only wrappers for /api/dashboard, /analytics, /reports
   nodes/          router, retrieve_metrics, summarize_metrics, respond
   graph.py        StateGraph wiring + checkpointer

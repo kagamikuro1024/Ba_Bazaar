@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.http import async_client
 from ba_chat.tools.read import APIError, TransientAPIError
 from ba_chat.log_context import tool_calls_var
 
@@ -60,7 +61,7 @@ async def _request(
     res = {}
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with async_client(timeout=timeout) as client:
             response = await client.request(
                 method, url, params=params, json=json_body, headers=headers
             )

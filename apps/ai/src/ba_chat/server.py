@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from ba_chat.config import get_settings
 from ba_chat.graph import compile_graph
 from ba_chat.guardrails import check_input, check_output
+from ba_chat.http import async_client
 from ba_chat.log_context import tool_calls_var
 
 log = logging.getLogger(__name__)
@@ -107,7 +108,7 @@ async def send_chat_log(
     url = f"{settings.api_base_url}/api/ai/chat/log"
     try:
         timeout = httpx.Timeout(10.0, connect=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with async_client(timeout=timeout) as client:
             res = await client.post(url, json=payload, headers=headers)
             if res.status_code >= 300:
                 log.warning(
@@ -186,6 +187,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         await asyncio.sleep(0)
         final_text = ""
         final_msg: AIMessage | None = None
+        action_buttons: list[dict[str, Any]] | None = None
+        action_field: str | None = None
         sent_state = False
         # Word buffer: accumulate sub-word tokens from the LLM and emit
         # complete words for clean word-by-word SSE streaming.
@@ -228,11 +231,11 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                             sent_state = True
                             await asyncio.sleep(0)
                     messages = chunk.get("messages") or []
-                    for msg in reversed(messages):
-                        if isinstance(msg, AIMessage) and isinstance(msg.content, str):
-                            if msg.content.strip():
-                                final_msg = msg
-                                break
+                    latest_msg, latest_buttons, latest_field = _latest_ai_message_metadata(messages)
+                    if latest_msg is not None:
+                        final_msg = latest_msg
+                        action_buttons = latest_buttons
+                        action_field = latest_field
             # Flush any remaining buffered text before the final event
             if word_buffer:
                 yield _sse("token", {"text": word_buffer})
@@ -249,8 +252,6 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                     log.warning("Unsafe content detected in LLM output, blocking")
                     final_text = "I apologize, but I cannot provide that information. Let me help you with business-related questions instead."
                 
-                action_buttons = final_msg.additional_kwargs.get("action_buttons")
-                action_field = final_msg.additional_kwargs.get("action_field")
                 final_payload: dict[str, Any] = {
                     "content": final_text,
                     "thread_id": thread_id,
@@ -265,7 +266,12 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 if not check_output(final_text):
                     log.warning("Unsafe content detected in LLM output, blocking")
                     final_text = "I apologize, but I cannot provide that information. Let me help you with business-related questions instead."
-                yield _sse("final", {"content": final_text, "thread_id": thread_id})
+                final_payload = {"content": final_text, "thread_id": thread_id}
+                if action_buttons:
+                    final_payload["action_buttons"] = action_buttons
+                if action_field:
+                    final_payload["action_field"] = action_field
+                yield _sse("final", final_payload)
 
             # Send chat logs to Go API on success
             duration_ms = int((time.time() - start_time) * 1000)
@@ -335,6 +341,25 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 def _sse(event: str, payload: dict[str, Any]) -> bytes:
     body = json.dumps(payload, ensure_ascii=False)
     return f"event: {event}\ndata: {body}\n\n".encode("utf-8")
+
+
+def _latest_ai_message_metadata(
+    messages: list[Any],
+) -> tuple[AIMessage | None, list[dict[str, Any]] | None, str | None]:
+    for msg in reversed(messages):
+        if not isinstance(msg, AIMessage) or not isinstance(msg.content, str):
+            continue
+        if not msg.content.strip():
+            continue
+
+        buttons = msg.additional_kwargs.get("action_buttons")
+        field = msg.additional_kwargs.get("action_field")
+        return (
+            msg,
+            buttons if isinstance(buttons, list) and buttons else None,
+            str(field) if field else None,
+        )
+    return None, None, None
 
 
 def main() -> None:
