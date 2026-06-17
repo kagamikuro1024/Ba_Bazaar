@@ -189,11 +189,17 @@ function bookingBarTooltip(booking: Booking) {
   ].join(' · ');
 }
 
+function bookingBarWidth(widthPercent: number) {
+  return `max(28px, ${widthPercent}%)`;
+}
+
 type BookingLayout = {
   booking: Booking;
   leftPercent: number;
   widthPercent: number;
   lane: number;
+  clippedLeft: boolean;
+  clippedRight: boolean;
 };
 
 function computeBookingLayouts(
@@ -211,7 +217,13 @@ function computeBookingLayouts(
       const start = rawStart < first ? first : rawStart;
       const end = rawEnd > last ? last : rawEnd;
       if (end < first || start > last) return null;
-      return { booking, start, end };
+      return {
+        booking,
+        start,
+        end,
+        clippedLeft: rawStart < first,
+        clippedRight: rawEnd > last
+      };
     })
     .filter(
       (
@@ -220,6 +232,8 @@ function computeBookingLayouts(
         booking: Booking;
         start: Date;
         end: Date;
+        clippedLeft: boolean;
+        clippedRight: boolean;
       } => item !== null
     )
     .sort((a, b) => {
@@ -247,7 +261,14 @@ function computeBookingLayouts(
       laneEndDays[lane] = endDay;
     }
 
-    layouts.push({ booking: item.booking, leftPercent, widthPercent, lane });
+    layouts.push({
+      booking: item.booking,
+      leftPercent,
+      widthPercent,
+      lane,
+      clippedLeft: item.clippedLeft,
+      clippedRight: item.clippedRight
+    });
   }
 
   return layouts;
@@ -1580,10 +1601,10 @@ function TimelineRow({
         onDrop={(e) => onDrop?.(e, ba.id)}
       >
         <div
-          className="relative"
+          className="relative overflow-hidden"
           style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
         >
-          {layouts.map(({ booking, leftPercent, widthPercent, lane }) => {
+          {layouts.map(({ booking, leftPercent, widthPercent, lane, clippedLeft, clippedRight }) => {
             const isDraggable = isManagerRole && hasOverbookRisk;
             return (
               <button
@@ -1605,11 +1626,13 @@ function TimelineRow({
                 className={cn(
                   'pointer-events-auto absolute h-8 truncate rounded-lg px-2 text-left text-xs font-semibold shadow-sm transition',
                   bookingBarClass(booking.status, hasOverbookRisk),
+                  clippedLeft && 'rounded-l-none',
+                  clippedRight && 'rounded-r-none',
                   isDraggable ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:-translate-y-0.5' : 'hover:-translate-y-0.5'
                 )}
                 style={{
                   left: `${leftPercent}%`,
-                  width: `max(28px, calc(${widthPercent}% - 8px))`,
+                  width: bookingBarWidth(widthPercent),
                   top: `${desktopBarBaseTop + lane * desktopBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
@@ -1698,20 +1721,22 @@ function MobileTimelineRow({
         style={{ gridColumn: `1 / span ${columns.length}` }}
       >
         <div
-          className="relative"
+          className="relative overflow-hidden"
           style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
         >
-          {layouts.map(({ booking, leftPercent, widthPercent, lane }) => {
+          {layouts.map(({ booking, leftPercent, widthPercent, lane, clippedLeft, clippedRight }) => {
             return (
               <button
                 key={booking.id}
                 className={cn(
                   'pointer-events-auto absolute h-9 truncate rounded-lg px-2 text-left text-[11px] font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  bookingBarClass(booking.status, hasOverbookRisk)
+                  bookingBarClass(booking.status, hasOverbookRisk),
+                  clippedLeft && 'rounded-l-none',
+                  clippedRight && 'rounded-r-none'
                 )}
                 style={{
                   left: `${leftPercent}%`,
-                  width: `max(28px, calc(${widthPercent}% - 8px))`,
+                  width: bookingBarWidth(widthPercent),
                   top: `${(viewMode === 'week' ? mobileBarBaseTop : 16) + lane * mobileBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
