@@ -235,10 +235,13 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const [recentSearches, setRecentSearches] = useState<string[]>(() =>
     globalSearchStorage.load()
   );
-  const notificationRef = useRef<HTMLDivElement | null>(null);
+  const collapsedNotificationRef = useRef<HTMLDivElement | null>(null);
+  const desktopNotificationRef = useRef<HTMLDivElement | null>(null);
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const [notificationPanelPos, setNotificationPanelPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
-  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileUserMenuRef = useRef<HTMLDivElement | null>(null);
+  const collapsedUserMenuRef = useRef<HTMLDivElement | null>(null);
+  const desktopUserMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const inboxDirty = useInboxDirty();
@@ -318,23 +321,33 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       .slice(0, 4);
   }, [visibleNavigation]);
 
-  const setNotificationRootRef = useCallback((node: HTMLDivElement | null) => {
-    if (node && node.getClientRects().length > 0) {
-      notificationRef.current = node;
-    }
+  const setCollapsedNotificationRootRef = useCallback((node: HTMLDivElement | null) => {
+    collapsedNotificationRef.current = node;
   }, []);
 
-  const setUserMenuRootRef = useCallback((node: HTMLDivElement | null) => {
-    if (node && node.getClientRects().length > 0) {
-      userMenuRef.current = node;
-    }
+  const setDesktopNotificationRootRef = useCallback((node: HTMLDivElement | null) => {
+    desktopNotificationRef.current = node;
+  }, []);
+
+  const setMobileUserMenuRootRef = useCallback((node: HTMLDivElement | null) => {
+    mobileUserMenuRef.current = node;
+  }, []);
+
+  const setCollapsedUserMenuRootRef = useCallback((node: HTMLDivElement | null) => {
+    collapsedUserMenuRef.current = node;
+  }, []);
+
+  const setDesktopUserMenuRootRef = useCallback((node: HTMLDivElement | null) => {
+    desktopUserMenuRef.current = node;
   }, []);
 
   const toggleNotificationPanel = useCallback(() => {
     setUserMenuOpen(false);
     setNotificationOpen((current) => {
       if (!current) {
-        const rect = notificationRef.current?.getBoundingClientRect();
+        const root =
+          desktopNotificationRef.current ?? collapsedNotificationRef.current;
+        const rect = root?.getBoundingClientRect();
         if (rect) {
           setNotificationPanelPos(
             sidebarCollapsed
@@ -401,11 +414,20 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Node;
+      const insideNotificationRoot = [
+        collapsedNotificationRef.current,
+        desktopNotificationRef.current
+      ].some((node) => node?.contains(target));
+      const insideUserMenuRoot = [
+        mobileUserMenuRef.current,
+        collapsedUserMenuRef.current,
+        desktopUserMenuRef.current
+      ].some((node) => node?.contains(target));
 
       if (
-        notificationRef.current?.contains(target) ||
+        insideNotificationRoot ||
         notificationPanelRef.current?.contains(target) ||
-        userMenuRef.current?.contains(target)
+        insideUserMenuRoot
       ) {
         return;
       }
@@ -517,7 +539,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
               className="mx-0.5 h-5 w-px shrink-0 rounded-full bg-slate-200"
               aria-hidden="true"
             />
-            <div ref={setUserMenuRootRef} className="relative">
+            <div ref={setMobileUserMenuRootRef} className="relative">
               <UserAvatarButton
                 user={user}
                 userMenuOpen={userMenuOpen}
@@ -679,7 +701,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
           <div className="relative border-t border-slate-200 pt-3">
             {sidebarCollapsed ? (
               <div className="grid justify-items-center gap-2">
-                <div ref={setNotificationRootRef} className="relative">
+                <div ref={setCollapsedNotificationRootRef} className="relative">
                   <Button
                     variant="secondary"
                     size="icon"
@@ -695,7 +717,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                     </span>
                   ) : null}
                 </div>
-                <div ref={setUserMenuRootRef} className="relative">
+                <div ref={setCollapsedUserMenuRootRef} className="relative">
                   <UserAvatarButton
                     user={user}
                     userMenuOpen={userMenuOpen}
@@ -723,7 +745,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div ref={setUserMenuRootRef} className="relative min-w-0 flex-1">
+                <div ref={setDesktopUserMenuRootRef} className="relative min-w-0 flex-1">
                   <div
                     className={cn(
                       'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 transition',
@@ -763,7 +785,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       </div>
                     </button>
                     <span className="h-5 w-px shrink-0 rounded-full bg-slate-200" aria-hidden="true" />
-                    <div ref={setNotificationRootRef} className="relative shrink-0">
+                    <div ref={setDesktopNotificationRootRef} className="relative shrink-0">
                       <button
                         type="button"
                         aria-label="Notifications"
