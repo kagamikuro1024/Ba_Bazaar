@@ -167,7 +167,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = get_settings()
     assert settings.api_base_url == "http://localhost:3000"
     assert settings.has_llm is False
-    assert settings.deepseek_model == "deepseek-chat"
+    assert settings.deepseek_model == "deepseek-v4-flash"
 
 
 def test_state_payload_serialises_cleanly() -> None:
