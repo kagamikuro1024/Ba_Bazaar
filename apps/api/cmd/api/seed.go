@@ -37,6 +37,10 @@ func mainSeed() error {
 	if _, err := insertUser(ctx, db, UserSeed{FullName: "Bao Tri Admin", Email: "admin@ba-bazaar.local", Role: "ADMIN", PasswordHash: string(adminPasswordHash), AvatarURL: pravatar(12)}); err != nil {
 		return err
 	}
+	itAdminPasswordHash, _ := bcrypt.GenerateFromPassword([]byte("ItAdmin@123"), 10)
+	if _, err := insertUser(ctx, db, UserSeed{FullName: "Bao Tri IT Admin", Email: "it-admin@ba-bazaar.local", Role: "IT_ADMIN", PasswordHash: string(itAdminPasswordHash), AvatarURL: pravatar(13)}); err != nil {
+		return err
+	}
 
 	pmNames := []string{"Minh Tran", "Hoa Nguyen", "Quang Pham", "Linh Do", "Khanh Vo"}
 	pmIDs := make([]string, 0, len(pmNames))
@@ -140,7 +144,48 @@ func mainSeed() error {
 		return err
 	}
 
-	log.Printf("seeded users=%d ba_profiles=%d projects=%d tags=%d bookings=%d", 21, len(baIDs), len(projectIDs), len(tagIDs), len(createdBookings))
+	// Seed default feature flags
+	flags := []struct {
+		Key, Name, Desc string
+		Enabled         bool
+	}{
+		{"ai_suggest_ba_enabled", "AI Suggest BA", "Gate for Suggest BA feature", true},
+		{"ai_prd_skill_extraction_enabled", "PRD Skill Extraction", "Gate for extracting skills from PRD", true},
+		{"ai_pmpo_chatbot_enabled", "PM/PO Chatbot", "Gate for future PM/PO chatbot", true},
+		{"ai_ba_manager_chatbot_enabled", "BA Manager Chatbot", "Gate for future BA Manager chatbot", true},
+		{"ai_dashboard_summary_enabled", "Dashboard Summary", "Gate for LLM dashboard summary", true},
+		{"ai_report_summary_enabled", "Report Summary", "Gate for LLM report summary", true},
+		{"ai_observability_enabled", "AI Observability logging", "Master switch for logging AI session data", true},
+	}
+	for _, f := range flags {
+		_, err = db.Pool.Exec(ctx, `
+			insert into ai_feature_flags (id, key, name, description, enabled, environment, updated_at)
+			values ($1, $2, $3, $4, $5, 'all', now())
+		`, uuid.NewString(), f.Key, f.Name, f.Desc, f.Enabled)
+		if err != nil {
+			return fmt.Errorf("seed flags: %w", err)
+		}
+	}
+
+	// Seed default settings
+	settings := []struct {
+		Key, Value, Desc string
+	}{
+		{"ai_model_name", "deepseek-chat", "Primary LLM model name used for AI features"},
+		{"ai_temperature", "0.2", "Temperature parameter for AI generation"},
+		{"ai_prompt_version", "v1.0.0", "Active prompt version tag for logging"},
+	}
+	for _, s := range settings {
+		_, err = db.Pool.Exec(ctx, `
+			insert into ai_settings (id, key, value, description, updated_at)
+			values ($1, $2, $3, $4, now())
+		`, uuid.NewString(), s.Key, s.Value, s.Desc)
+		if err != nil {
+			return fmt.Errorf("seed settings: %w", err)
+		}
+	}
+
+	log.Printf("seeded users=%d ba_profiles=%d projects=%d tags=%d bookings=%d", 22, len(baIDs), len(projectIDs), len(tagIDs), len(createdBookings))
 	return nil
 }
 
@@ -159,7 +204,14 @@ func insertUser(ctx context.Context, db *DB, input UserSeed) (string, error) {
 }
 
 func resetDatabase(ctx context.Context, db *DB) error {
-	for _, table := range []string{"audit_logs", "notifications", "private_notes", "bookings", "ba_skill_tags", "skill_tags", "projects", "ba_profiles", "refresh_tokens", "users"} {
+	tables := []string{
+		"ai_settings", "ai_feature_flags", "ai_feedback", "ai_errors",
+		"ai_tool_calls", "ai_extractions", "ai_messages", "ai_sessions",
+		"audit_logs", "notifications", "private_notes", "bookings",
+		"ba_skill_tags", "skill_tags", "projects", "ba_profiles",
+		"refresh_tokens", "users",
+	}
+	for _, table := range tables {
 		if _, err := db.Pool.Exec(ctx, "delete from "+table); err != nil {
 			return err
 		}

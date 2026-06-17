@@ -10,6 +10,7 @@ export API_INTERNAL_URL="${API_INTERNAL_URL:-http://127.0.0.1:${API_PORT}}"
 
 API_PID=""
 WEB_PID=""
+AI_PID=""
 EMBEDDED_DB="${EMBEDDED_DB:-0}"
 
 cleanup() {
@@ -21,6 +22,10 @@ cleanup() {
 
   if [ -n "${API_PID}" ] && kill -0 "${API_PID}" 2>/dev/null; then
     kill "${API_PID}" 2>/dev/null || true
+  fi
+
+  if [ -n "${AI_PID}" ] && kill -0 "${AI_PID}" 2>/dev/null; then
+    kill "${AI_PID}" 2>/dev/null || true
   fi
 
   if [ "${EMBEDDED_DB}" = "1" ] && [ -n "${PGDATA:-}" ] && [ -s "${PGDATA}/postmaster.pid" ]; then
@@ -112,7 +117,11 @@ until node -e "fetch(process.argv[1]).then((r) => process.exit(r.ok ? 0 : 1)).ca
   sleep 1
 done
 
+export BA_API_BASE_URL="${API_INTERNAL_URL}"
+/app/apps/ai/.venv/bin/ba-chat-server &
+AI_PID="$!"
+
 node /app/scripts/hf-web-server.mjs &
 WEB_PID="$!"
 
-wait -n "${API_PID}" "${WEB_PID}"
+wait -n "${API_PID}" "${WEB_PID}" "${AI_PID}"

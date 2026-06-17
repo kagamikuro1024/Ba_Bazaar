@@ -61,7 +61,7 @@ func (app *App) handleReportsLLMSummary(w http.ResponseWriter, r *http.Request) 
 	}
 	citations := buildReportsCitations(month, team, payload, forecast)
 
-	serveLLMSummary(w, llmSummarySpec{
+	app.serveLLMSummary(w, r, llmSummarySpec{
 		Scope:     "reports",
 		CacheKey:  month,
 		Facts:     facts,

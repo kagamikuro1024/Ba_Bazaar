@@ -1,8 +1,9 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CalendarDays, Plus, Search } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Plus, Search, UserPlus } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
+import { useFabAction, useGlobalFab } from '@/context/GlobalFabContext';
 import { PageHeader } from '@/components';
 import {
   apiFetch,
@@ -40,6 +41,28 @@ export function BADirectoryPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [requestBaId, setRequestBaId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  const { setVisible } = useGlobalFab();
+
+  // Hide the FAB when the Create BA drawer is open
+  useEffect(() => {
+    setVisible(!showCreate);
+    return () => {
+      setVisible(true);
+    };
+  }, [showCreate, setVisible]);
+
+  // Register "Create BA" primary action for the Speed Dial
+  useFabAction(
+    canManageBa
+      ? {
+          label: 'Create BA',
+          icon: <UserPlus className="h-5 w-5" />,
+          onPress: () => setShowCreate(true)
+        }
+      : null,
+    [canManageBa]
+  );
   const visibleStatuses = useMemo(
     () => (isManagerView ? ['ACTIVE', 'ON_LEAVE', 'RESIGNED'] : ['ACTIVE']),
     [isManagerView]
@@ -91,7 +114,7 @@ export function BADirectoryPage() {
         }
         actions={
           canManageBa ? (
-            <Button onClick={() => setShowCreate(true)}>
+            <Button onClick={() => setShowCreate(true)} className="hidden lg:inline-flex">
               <Plus className="h-4 w-4" /> Create BA
             </Button>
           ) : null

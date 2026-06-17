@@ -29,7 +29,51 @@ func (app *App) createAuditLog(ctx context.Context, actorID, action, targetType,
 			newJSON = string(encoded)
 		}
 	}
-	_, _ = app.DB.Pool.Exec(ctx, `insert into audit_logs (id, actor_id, action, target_type, target_id, old_value, new_value, result, created_at) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,now())`, newUUID(), actorID, action, targetType, targetID, oldJSON, newJSON, result)
+	var actorRole *string
+	if actorID != "" {
+		var r string
+		if err := app.DB.Pool.QueryRow(ctx, `select role::text from users where id = $1`, actorID).Scan(&r); err == nil {
+			actorRole = &r
+		}
+	}
+	_, _ = app.DB.Pool.Exec(ctx, `
+		insert into audit_logs (id, actor_id, action, target_type, target_id, old_value, new_value, result, created_at, actor_role)
+		values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, now(), $9)
+	`, newUUID(), actorID, action, targetType, targetID, oldJSON, newJSON, result, actorRole)
+}
+
+func (app *App) auditAdmin(r *http.Request, actor *User, action, targetType, targetID, result string, oldValue, newValue any) {
+	var oldJSON any
+	var newJSON any
+	if oldValue != nil {
+		if encoded, err := json.Marshal(oldValue); err == nil {
+			oldJSON = string(encoded)
+		}
+	}
+	if newValue != nil {
+		if encoded, err := json.Marshal(newValue); err == nil {
+			newJSON = string(encoded)
+		}
+	}
+	ip := requestIP(r)
+	ua := r.UserAgent()
+
+	var actorID string
+	var actorRole string
+	if actor != nil {
+		actorID = actor.ID
+		actorRole = actor.Role
+	} else {
+		if u, err := app.currentUser(r); err == nil && u != nil {
+			actorID = u.ID
+			actorRole = u.Role
+		}
+	}
+
+	_, _ = app.DB.Pool.Exec(r.Context(), `
+		insert into audit_logs (id, actor_id, action, target_type, target_id, old_value, new_value, result, created_at, actor_role, ip_address, user_agent)
+		values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, now(), $9, $10, $11)
+	`, newUUID(), actorID, action, targetType, targetID, oldJSON, newJSON, result, actorRole, ip, ua)
 }
 
 func (app *App) handleBACreate(w http.ResponseWriter, r *http.Request) {

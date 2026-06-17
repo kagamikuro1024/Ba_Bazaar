@@ -23,7 +23,10 @@ import {
   Search,
   Users,
   Plus,
-  X
+  X,
+  Cpu,
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,7 +35,10 @@ import { apiFetch, type NotificationItem, type User, type UserRole } from '@/lib
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
-import { ChatFab } from './chat';
+import { CreateBAModal } from './CreateBAModal';
+import { ChatPanel } from './chat/ChatPanel';
+import { GlobalActionDial } from './GlobalActionDial';
+import { useGlobalFab } from '@/context/GlobalFabContext';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
 import {
@@ -92,6 +98,22 @@ const pageIntros: Record<string, PageIntro> = {
   '/notifications': {
     title: 'Notifications',
     body: 'See booking updates, approval decisions, and workflow alerts in one place.'
+  },
+  '/admin/dashboard': {
+    title: 'IT Admin Dashboard',
+    body: 'Overview of users, system status, and system audit logs.'
+  },
+  '/admin/users': {
+    title: 'User Management',
+    body: 'Enable, disable, or change roles for system users.'
+  },
+  '/admin/audit-logs': {
+    title: 'System Audit Logs',
+    body: 'Review system mutations, background actions, and security logs.'
+  },
+  '/admin/ai/observability': {
+    title: 'AI Observability',
+    body: 'Monitor LLM session traces, tool calls, costs, and token usage.'
   }
 };
 
@@ -127,7 +149,31 @@ const navigation: Array<{
     icon: Users,
     roles: ['BA_MANAGER', 'PM_PO', 'BA', 'ADMIN']
   },
-  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] }
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['BA_MANAGER', 'ADMIN'] },
+  {
+    to: '/admin/dashboard',
+    label: 'Admin Dashboard',
+    icon: ShieldCheck,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/users',
+    label: 'User Management',
+    icon: Users,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/audit-logs',
+    label: 'System Audit Logs',
+    icon: FileText,
+    roles: ['IT_ADMIN']
+  },
+  {
+    to: '/admin/ai/observability',
+    label: 'AI Observability',
+    icon: Cpu,
+    roles: ['IT_ADMIN']
+  }
 ];
 
 function getIntroKey(pathname: string) {
@@ -178,9 +224,11 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const queryClient = useQueryClient();
   const { user, accessToken, logout } = useAuth();
   const role = user?.role;
+  const { chatOpen, setChatOpen, setVisible } = useGlobalFab();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [createBaModalOpen, setCreateBaModalOpen] = useState(false);
   const [pendingNavPath, setPendingNavPath] = useState('');
   const [navActionPending, setNavActionPending] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -240,12 +288,17 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     [role]
   );
   const canCreateBooking = role === 'BA_MANAGER' || role === 'PM_PO';
+  const canCreateBa = role === 'BA_MANAGER';
   const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
   const mobileNavigation = useMemo(() => {
     const priority = [
       '/dashboard',
+      '/admin/dashboard',
+      '/admin/users',
+      '/admin/audit-logs',
+      '/admin/ai/observability',
       '/manager/action-center',
       '/timeline',
       '/crm/ba',
@@ -297,6 +350,11 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   useEffect(() => {
     globalSearchStorage.save(recentSearches);
   }, [recentSearches]);
+
+  useEffect(() => {
+    const isAnyModalOpen = bookingModalOpen || createBaModalOpen || searchOpen || notificationOpen;
+    setVisible(!isAnyModalOpen);
+  }, [bookingModalOpen, createBaModalOpen, searchOpen, notificationOpen, setVisible]);
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -424,7 +482,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
             <img
               src="/logo-blue.png"
               alt="BA Bazaar"
-              className="h-10 w-auto shrink-0 object-contain"
+              className="h-12 w-auto shrink-0 object-contain"
             />
           </Link>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -516,7 +574,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                   <img
                     src="/logo-blue.png"
                     alt="BA Bazaar"
-                    className="h-12 w-auto object-contain"
+                    className="h-16 w-auto object-contain"
                   />
                 </Link>
               </div>
@@ -772,7 +830,10 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       </div>
 
       <nav
-        className="fixed inset-x-4 bottom-4 z-40 rounded-[1.25rem] border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden"
+        className={[
+          'fixed bottom-4 left-4 right-4 z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
+          'rounded-full'
+        ].join(' ')}
         aria-label="Mobile navigation"
       >
         <div className="grid grid-cols-4 gap-1.5">
@@ -794,7 +855,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                 {({ isActive }) => (
                   <div
                     className={[
-                      'relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5 py-2 text-center transition-colors',
+                      'relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-2 py-2 text-center transition-colors',
                       isActive
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
@@ -809,7 +870,14 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
                       ) : null}
                     </div>
                     <span className="max-w-full truncate text-[10px] font-semibold leading-tight">
-                      {item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')}
+                      {item.to === '/dashboard' ? (
+                        <>
+                          <span className="sm:hidden">Dash</span>
+                          <span className="hidden sm:inline">Dashboard</span>
+                        </>
+                      ) : (
+                        item.label.replace('Action Center', 'Actions').replace('BA Directory', 'BAs')
+                      )}
                     </span>
                   </div>
                 )}
@@ -819,17 +887,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </nav>
 
-      {canCreateBooking && !['/my-requests', '/manager/action-center'].includes(location.pathname) ? (
-        <button
-          type="button"
-          onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
-          aria-label="Create Booking Request"
-        >
-          <Plus className="h-6 w-6" strokeWidth={3} />
-        </button>
-      ) : null}
-
       {canCreateBooking && (
         <BookingModal
           open={bookingModalOpen}
@@ -837,7 +894,25 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         />
       )}
 
-      <ChatFab accessToken={accessToken} userRole={role} userId={user?.id} />
+      {canCreateBa && (
+        <CreateBAModal
+          open={createBaModalOpen}
+          onClose={() => setCreateBaModalOpen(false)}
+        />
+      )}
+
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        accessToken={accessToken}
+        userRole={role}
+        userId={user?.id}
+      />
+
+      <GlobalActionDial
+        canCreateBooking={canCreateBooking}
+        onTriggerCreateBooking={() => setBookingModalOpen(true)}
+      />
 
       <GlobalSearchModal
         open={searchOpen}

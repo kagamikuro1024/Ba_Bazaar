@@ -1,6 +1,6 @@
 import { clearStoredSession, getStoredRole, getStoredSession, setStoredSession } from '@/auth/storage';
 
-export type UserRole = 'BA_MANAGER' | 'PM_PO' | 'BA' | 'ADMIN';
+export type UserRole = 'BA_MANAGER' | 'PM_PO' | 'BA' | 'ADMIN' | 'IT_ADMIN';
 export type BAStatus = 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED';
 export type PaginatedResponse<T> = {
   items: T[];
@@ -534,4 +534,145 @@ export async function downloadCsv(path: string) {
   anchor.download = 'ba-utilization.csv';
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export type UserStatus = 'ACTIVE' | 'DISABLED';
+
+export interface AdminUser {
+  id: string;
+  full_name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  avatar_url?: string | null;
+  last_login_at?: string | null;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  actor_name: string;
+  actor_email: string;
+  actor_role: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  result: string;
+  ip_address: string | null;
+  user_agent?: string;
+  old_value?: any;
+  new_value?: any;
+  created_at: string;
+}
+
+export interface AdminOverview {
+  users: {
+    total: number;
+    active: number;
+    disabled: number;
+    by_role: Record<string, number>;
+  };
+  recent_audit: AuditLogEntry[];
+  ai: any;
+}
+
+// AI Observability Types
+export interface AiSession {
+  id: string;
+  user_id: string | null;
+  user_name: string;
+  user_role: string;
+  feature_name: string;
+  entry_point: string | null;
+  status: string;
+  model_name: string | null;
+  prompt_version: string | null;
+  created_request_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  error_count: number;
+  token_input: number | null;
+  token_output: number | null;
+  estimated_cost: number | null;
+}
+
+export interface AiMessage {
+  sender: string;
+  content: string;
+  sanitized_content: string | null;
+  created_at: string;
+}
+
+export interface AiToolCall {
+  id: string;
+  session_id: string;
+  tool_name: string;
+  input_json: any;
+  output_json?: any;
+  status: string;
+  latency_ms?: number;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface AiExtraction {
+  id: string;
+  extraction_type: string;
+  raw_input: string;
+  extracted_json: any;
+  missing_fields?: any;
+  confidence?: number;
+  created_at: string;
+}
+
+export interface AiError {
+  id: string;
+  session_id: string | null;
+  feature_name: string;
+  error_type: string;
+  severity: string;
+  message: string;
+  stack_trace?: string;
+  status: string;
+  note?: string;
+  resolved_by?: string;
+  resolved_name: string;
+  resolved_at?: string;
+  created_at: string;
+}
+
+export interface AiFeedback {
+  id: string;
+  session_id: string | null;
+  user_id: string | null;
+  user_name: string;
+  feature_name: string;
+  rating: string;
+  category?: string;
+  comment?: string;
+  created_at: string;
+}
+
+export interface FeatureFlag {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  environment: string;
+  updated_by: string | null;
+  updated_name: string;
+  updated_at: string;
+}
+
+export interface AiSetting {
+  id: string;
+  key: string;
+  value: string;
+  description: string | null;
+  updated_by: string | null;
+  updated_name: string;
+  updated_at: string;
 }

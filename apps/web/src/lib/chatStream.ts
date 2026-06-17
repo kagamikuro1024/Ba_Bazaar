@@ -37,6 +37,9 @@ function resolveChatBaseUrl(): string {
   const explicit = import.meta.env.VITE_CHAT_API_BASE_URL?.replace(/\/$/, '');
   if (explicit) return explicit;
   if (typeof window !== 'undefined') {
+    if (import.meta.env.PROD) {
+      return '';
+    }
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
     return `${protocol}//${window.location.hostname}:8000`;
   }

@@ -11,6 +11,7 @@ enum UserRole {
   PM_PO
   BA
   ADMIN
+  IT_ADMIN
 }
 
 enum BALevel {
@@ -88,6 +89,12 @@ model Vendor {
 enum AuditResult {
   SUCCESS
   DENIED
+  FAILURE
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
 }
 
 model User {
@@ -100,6 +107,7 @@ model User {
   last_login_at        DateTime?
   created_at           DateTime       @default(now())
   updated_at           DateTime       @updatedAt
+  status               UserStatus     @default(ACTIVE)
 
   ba_profile           BAProfile?
   requested_bookings   Booking[]      @relation("BookingRequester")
@@ -288,10 +296,13 @@ model AuditLog {
   actor_id     String       @db.Uuid
   action       String
   target_type  String
-  target_id    String       @db.Uuid
+  target_id    String?
   old_value    Json?
   new_value    Json?
   result       AuditResult
+  actor_role   String?
+  ip_address   String?
+  user_agent   String?
   created_at   DateTime     @default(now())
 
   actor        User         @relation("AuditActor", fields: [actor_id], references: [id], onDelete: Restrict)
@@ -301,4 +312,151 @@ model AuditLog {
   @@index([action])
   @@index([result])
   @@map("audit_logs")
+}
+
+model AiSession {
+  id                String   @id @default(uuid()) @db.Uuid
+  user_id           String?  @db.Uuid
+  user_role         String
+  feature_name      String          // see §3.3 enum-as-string
+  entry_point       String?
+  status            String          // SUCCESS|FAILED|CANCELLED|NEEDS_USER_INPUT|PARTIAL_SUCCESS
+  model_name        String?
+  prompt_version    String?
+  created_request_id String? @db.Uuid
+  started_at        DateTime @default(now())
+  ended_at          DateTime?
+  duration_ms       Int?
+  error_count       Int      @default(0)
+  token_input       Int?            // for cost/usage
+  token_output      Int?
+  estimated_cost    Decimal? @db.Decimal(10,4)
+
+  messages          AiMessage[]
+  extractions       AiExtraction[]
+  tool_calls        AiToolCall[]
+  errors            AiError[]
+  feedback          AiFeedback[]
+
+  @@index([feature_name])
+  @@index([status])
+  @@index([started_at])
+  @@index([user_id])
+  @@map("ai_sessions")
+}
+
+model AiMessage {
+  id                String   @id @default(uuid()) @db.Uuid
+  session_id        String   @db.Uuid
+  sender            String          // USER|ASSISTANT|SYSTEM|TOOL
+  content           String          // raw (mask before store if sensitive)
+  sanitized_content String?         // masked copy actually shown in console
+  created_at        DateTime @default(now())
+
+  session           AiSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@map("ai_messages")
+}
+
+model AiExtraction {
+  id              String   @id @default(uuid()) @db.Uuid
+  session_id      String   @db.Uuid
+  extraction_type String          // BOOKING_INTENT|PRD_TO_SKILL|SUMMARY_CONTEXT
+  raw_input       String
+  extracted_json  Json
+  missing_fields  Json?
+  confidence      Float?
+  created_at      DateTime @default(now())
+
+  session           AiSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@map("ai_extractions")
+}
+
+model AiToolCall {
+  id            String   @id @default(uuid()) @db.Uuid
+  session_id    String   @db.Uuid
+  tool_name     String
+  feature_name  String?
+  input_json    Json
+  output_json   Json?
+  status        String          // SUCCESS|FAILED
+  latency_ms    Int?
+  retry_count   Int      @default(0)
+  error_message String?
+  model_name    String?
+  prompt_version String?
+  created_at    DateTime @default(now())
+
+  session           AiSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@index([tool_name])
+  @@index([status])
+  @@map("ai_tool_calls")
+}
+
+model AiError {
+  id           String   @id @default(uuid()) @db.Uuid
+  session_id   String?  @db.Uuid
+  feature_name String
+  error_type   String          // MODEL_ERROR|PARSING_ERROR|VALIDATION_ERROR|TOOL_CALL_FAILED|CAPACITY_CONFLICT|PERMISSION_DENIED|TIMEOUT|EMPTY_SUGGESTION|PROMPT_GUARDRAIL_TRIGGERED|UNKNOWN
+  severity     String          // LOW|MEDIUM|HIGH|CRITICAL
+  message      String
+  stack_trace  String?
+  status       String   @default("OPEN")  // OPEN|RESOLVED
+  note         String?
+  resolved_by  String?  @db.Uuid
+  resolved_at  DateTime?
+  created_at   DateTime @default(now())
+
+  session           AiSession? @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([feature_name])
+  @@index([severity])
+  @@index([status])
+  @@map("ai_errors")
+}
+
+model AiFeedback {
+  id           String   @id @default(uuid()) @db.Uuid
+  session_id   String?  @db.Uuid
+  user_id      String?  @db.Uuid
+  feature_name String
+  rating       String          // HELPFUL|NOT_HELPFUL
+  category     String?         // WRONG_BA|WRONG_SKILL|WRONG_DATE|WRONG_CAPACITY|TOO_VAGUE|MISSING_DATA|OTHER
+  comment      String?
+  created_at   DateTime @default(now())
+
+  session           AiSession? @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([feature_name])
+  @@index([rating])
+  @@map("ai_feedback")
+}
+
+model AiFeatureFlag {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique     // ai_suggest_ba_enabled, ...
+  name        String
+  description String?
+  enabled     Boolean  @default(true)
+  environment String   @default("all")
+  updated_by  String?  @db.Uuid
+  updated_at  DateTime @updatedAt
+
+  @@map("ai_feature_flags")
+}
+
+model AiSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       String
+  description String?
+  updated_by  String?  @db.Uuid
+  updated_at  DateTime @updatedAt
+
+  @@map("ai_settings")
 }

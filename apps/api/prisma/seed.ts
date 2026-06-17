@@ -31,6 +31,15 @@ function hashPassword(password: string) {
 }
 
 async function resetDatabase() {
+  await prisma.aiSetting.deleteMany();
+  await prisma.aiFeatureFlag.deleteMany();
+  await prisma.aiFeedback.deleteMany();
+  await prisma.aiError.deleteMany();
+  await prisma.aiToolCall.deleteMany();
+  await prisma.aiExtraction.deleteMany();
+  await prisma.aiMessage.deleteMany();
+  await prisma.aiSession.deleteMany();
+
   await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.privateNote.deleteMany();
@@ -67,6 +76,17 @@ async function main() {
       role: UserRole.ADMIN,
       password_hash: adminPasswordHash,
       avatar_url: pravatar(12)
+    }
+  });
+
+  const itAdminPasswordHash = await hashPassword('ItAdmin@123');
+  await prisma.user.create({
+    data: {
+      full_name: 'Bao Tri IT Admin',
+      email: 'it-admin@ba-bazaar.local',
+      role: 'IT_ADMIN' as UserRole,
+      password_hash: itAdminPasswordHash,
+      avatar_url: pravatar(13)
     }
   });
 
@@ -826,15 +846,53 @@ async function main() {
       target_id: manager.id,
       result: 'SUCCESS',
       new_value: {
-        users: 21,
+        users: 22,
         ba_profiles: 15,
         bookings: createdBookings.length
       }
     }
   });
 
+  // Seed default feature flags
+  const flags = [
+    { key: "ai_suggest_ba_enabled", name: "AI Suggest BA", description: "Gate for Suggest BA feature", enabled: true },
+    { key: "ai_prd_skill_extraction_enabled", name: "PRD Skill Extraction", description: "Gate for extracting skills from PRD", enabled: true },
+    { key: "ai_pmpo_chatbot_enabled", name: "PM/PO Chatbot", description: "Gate for future PM/PO chatbot", enabled: true },
+    { key: "ai_ba_manager_chatbot_enabled", name: "BA Manager Chatbot", description: "Gate for future BA Manager chatbot", enabled: true },
+    { key: "ai_dashboard_summary_enabled", name: "Dashboard Summary", description: "Gate for LLM dashboard summary", enabled: true },
+    { key: "ai_report_summary_enabled", name: "Report Summary", description: "Gate for LLM report summary", enabled: true },
+    { key: "ai_observability_enabled", name: "AI Observability logging", description: "Master switch for logging AI session data", enabled: true },
+  ];
+  for (const f of flags) {
+    await prisma.aiFeatureFlag.create({
+      data: {
+        key: f.key,
+        name: f.name,
+        description: f.description,
+        enabled: f.enabled,
+        environment: 'all',
+      }
+    });
+  }
+
+  // Seed default settings
+  const settings = [
+    { key: "ai_model_name", value: "deepseek-chat", description: "Primary LLM model name used for AI features" },
+    { key: "ai_temperature", value: "0.2", description: "Temperature parameter for AI generation" },
+    { key: "ai_prompt_version", value: "v1.0.0", description: "Active prompt version tag for logging" },
+  ];
+  for (const s of settings) {
+    await prisma.aiSetting.create({
+      data: {
+        key: s.key,
+        value: s.value,
+        description: s.description,
+      }
+    });
+  }
+
   console.log('Seed completed', {
-    users: 21,
+    users: 22,
     baProfiles: bas.length,
     pmPoUsers: pmUsers.length,
     projects: projects.length,

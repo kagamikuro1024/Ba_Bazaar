@@ -8,11 +8,14 @@ JSON dict.
 from __future__ import annotations
 
 import logging
+import time
+import json
 from typing import Any
 
 import httpx
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.log_context import tool_calls_var
 
 log = logging.getLogger(__name__)
 
@@ -52,30 +55,51 @@ async def _get(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("GET %s params=%s", url, params)
+
+    start_time = time.time()
+    status = "SUCCESS"
+    err_msg = ""
+    res = {}
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(url, params=params, headers=headers)
     except httpx.TimeoutException as exc:
-        # Go-side LLM summary endpoints can take up to ~45s when DeepSeek is
-        # slow. Raise as TransientAPIError so the graph's RetryPolicy retries
-        # this node before degrading to the no-data path.
         log.warning("GET %s timed out after %ss: %s", url, settings.request_timeout_seconds, exc)
+        status = "FAILED"
+        err_msg = str(exc)
         raise TransientAPIError(
             504, f"upstream timed out after {settings.request_timeout_seconds:.0f}s"
         ) from exc
     except httpx.HTTPError as exc:
-        # Connection refused, DNS, TLS, read errors — all retryable.
         log.warning("GET %s failed: %s", url, exc)
+        status = "FAILED"
+        err_msg = str(exc)
         raise TransientAPIError(502, f"upstream request failed: {exc}") from exc
-    if response.status_code >= 500:
-        # 5xx: upstream is broken, worth retrying.
-        raise TransientAPIError(response.status_code, response.text[:300])
-    if response.status_code >= 300:
-        # 4xx: bad input / auth / not found — retrying won't help.
-        raise APIError(response.status_code, response.text[:300])
-    if not response.content:
-        return {}
-    return response.json()
+    except Exception as exc:
+        status = "FAILED"
+        err_msg = str(exc)
+        raise
+    else:
+        if response.status_code >= 500:
+            raise TransientAPIError(response.status_code, response.text[:300])
+        if response.status_code >= 300:
+            raise APIError(response.status_code, response.text[:300])
+        if response.content:
+            res = response.json()
+        return res
+    finally:
+        tool_calls = tool_calls_var.get()
+        if tool_calls is not None:
+            latency_ms = int((time.time() - start_time) * 1000)
+            tool_calls.append({
+                "tool_name": f"GET {path}",
+                "input_json": json.dumps(params or {}),
+                "output_json": json.dumps(res) if status == "SUCCESS" else "{}",
+                "status": status,
+                "latency_ms": latency_ms,
+                "error_message": err_msg,
+            })
 
 
 # ---------------------------------------------------------------------------

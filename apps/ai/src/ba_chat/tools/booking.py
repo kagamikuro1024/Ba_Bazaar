@@ -7,12 +7,15 @@ query params. Each function maps 1:1 to a Go route.
 from __future__ import annotations
 
 import logging
+import time
+import json
 from typing import Any
 
 import httpx
 
 from ba_chat.config import Settings, get_settings
 from ba_chat.tools.read import APIError, TransientAPIError
+from ba_chat.log_context import tool_calls_var
 
 # Re-export so existing call sites that import APIError from this module keep
 # working. TransientAPIError is exposed for callers that need to differentiate
@@ -50,6 +53,12 @@ async def _request(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("%s %s params=%s body=%s", method, url, params, json_body)
+
+    start_time = time.time()
+    status = "SUCCESS"
+    err_msg = ""
+    res = {}
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
@@ -57,19 +66,45 @@ async def _request(
             )
     except httpx.TimeoutException as exc:
         log.warning("%s %s timed out: %s", method, url, exc)
+        status = "FAILED"
+        err_msg = str(exc)
         raise TransientAPIError(
             504, f"upstream timed out after {settings.request_timeout_seconds:.0f}s"
         ) from exc
     except httpx.HTTPError as exc:
         log.warning("%s %s failed: %s", method, url, exc)
+        status = "FAILED"
+        err_msg = str(exc)
         raise TransientAPIError(502, f"upstream request failed: {exc}") from exc
-    if response.status_code >= 500:
-        raise TransientAPIError(response.status_code, response.text[:300])
-    if response.status_code >= 300:
-        raise APIError(response.status_code, response.text[:300])
-    if not response.content:
-        return {}
-    return response.json()
+    except Exception as exc:
+        status = "FAILED"
+        err_msg = str(exc)
+        raise
+    else:
+        if response.status_code >= 500:
+            raise TransientAPIError(response.status_code, response.text[:300])
+        if response.status_code >= 300:
+            raise APIError(response.status_code, response.text[:300])
+        if response.content:
+            res = response.json()
+        return res
+    finally:
+        tool_calls = tool_calls_var.get()
+        if tool_calls is not None:
+            latency_ms = int((time.time() - start_time) * 1000)
+            inputs = {}
+            if params:
+                inputs["params"] = params
+            if json_body:
+                inputs["body"] = json_body
+            tool_calls.append({
+                "tool_name": f"{method} {path}",
+                "input_json": json.dumps(inputs),
+                "output_json": json.dumps(res) if status == "SUCCESS" else "{}",
+                "status": status,
+                "latency_ms": latency_ms,
+                "error_message": err_msg,
+            })
 
 
 # ---------------------------------------------------------------------------

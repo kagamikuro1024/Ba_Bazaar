@@ -38,7 +38,6 @@ import {
 } from '@/components';
 import { Avatar, BAIdentity } from '@/components/common';
 import { AISummaryCard } from '@/components/AISummaryCard';
-import { useAISummary } from '@/lib/aiSummary';
 import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { type RecommendationQuery } from '@/lib/recommendations';
 import { Badge } from '@/components/ui/badge';
@@ -260,10 +259,6 @@ export function ManagerInboxPage() {
     queryKey: ['manager-inbox-capacity-summary'],
     queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
   });
-  const queueSummary = useAISummary(
-    '/api/bookings/action-center/llm-summary',
-    user?.role === 'BA_MANAGER' || user?.role === 'ADMIN'
-  );
 
   const bookingItems = useMemo(() => {
     const payload = bookings.data;
@@ -1417,14 +1412,14 @@ export function ManagerInboxPage() {
     {
       id: 'status',
       header: 'Status',
-      className: 'w-[6.5rem] xl:w-[6.75rem]',
+      className: 'w-[6rem] pr-2 xl:w-[6.75rem]',
       cell: (booking: Booking) => <RequestStateBadge booking={booking} />
     },
     {
       id: 'action',
       header: 'Action',
       headerClassName: 'text-right',
-      className: 'w-[5.5rem] xl:w-[6rem] pl-6 text-right',
+      className: 'w-[6.25rem] pl-8 text-right xl:w-[6.5rem]',
       cell: (booking: Booking) => {
         const actionLabel = getRequestActionLabel(booking, canManageInbox);
 
@@ -1625,8 +1620,7 @@ export function ManagerInboxPage() {
       ) : null}
 
       <AISummaryCard
-        summary={queueSummary.data}
-        isLoading={queueSummary.isLoading}
+        endpoint="/api/bookings/action-center/llm-summary"
         title="AI Queue Summary"
         loadingTitle="Summarizing the request queue"
         actionRoutes={ACTION_CENTER_ACTION_ROUTES}
@@ -1787,6 +1781,7 @@ export function ManagerInboxPage() {
                 .filter(Boolean)
                 .join(' ') || undefined
             }
+            tableRowClassName={(_booking, index) => (index % 2 === 1 ? 'bg-blue-50' : '')}
             emptyState="No requests match the current filters."
             isLoading={bookings.isLoading || bas.isLoading || summary.isLoading}
             loadingState="Loading requests..."
@@ -2819,7 +2814,7 @@ function getActionCenterDesktopActionClassName(actionLabel: string) {
 }
 
 const actionCenterBadgeClassName =
-  'inline-flex w-full min-w-[92px] justify-center text-center xl:min-w-[108px]';
+  'inline-flex w-full min-w-[84px] justify-center text-center xl:min-w-[108px]';
 
 const actionCenterPriorityBadgeClassName =
   'inline-flex w-full min-w-[68px] justify-center text-center xl:min-w-[76px]';

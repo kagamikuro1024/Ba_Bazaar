@@ -33,7 +33,8 @@ function managerUser(): User {
     avatar_url: null,
     last_login_at: null,
     created_at: new Date(),
-    updated_at: new Date()
+    updated_at: new Date(),
+    status: 'ACTIVE'
   };
 }
 

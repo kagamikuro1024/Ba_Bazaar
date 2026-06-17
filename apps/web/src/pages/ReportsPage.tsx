@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, Search, X } from 'lucide-react';
 import { apiFetch, downloadCsv, type ManagerDashboardSummary } from '@/lib/api';
 import { AISummaryCard } from '@/components/AISummaryCard';
-import { useAISummary } from '@/lib/aiSummary';
 import { PageHeader } from '@/components';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,10 +50,6 @@ export function ReportsPage() {
         `/api/dashboard/manager-summary?from=${monthRange.from}&to=${monthRange.to}`
       )
   });
-  const aiSummary = useAISummary(
-    `/api/reports/summary/llm?month=${month}`,
-    Boolean(report.data)
-  );
   const rows = useMemo(() => report.data?.rows ?? [], [report.data?.rows]);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -122,8 +117,7 @@ export function ReportsPage() {
         <Card><CardContent className="p-5 text-sm text-rose-700">Could not load report. Check API connection and retry.</CardContent></Card>
       ) : null}
       <AISummaryCard
-        summary={aiSummary.data}
-        isLoading={aiSummary.isLoading}
+        endpoint={report.data ? `/api/reports/summary/llm?month=${month}` : null}
         title="AI Planning Summary"
         loadingTitle="Summarizing the monthly report"
         actionRoutes={REPORTS_ACTION_ROUTES}

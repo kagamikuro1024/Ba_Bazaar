@@ -71,6 +71,12 @@ func (app *App) handleTagExtraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Server-side gating check
+	if !app.isAIFeatureEnabled(r.Context(), "ai_prd_skill_extraction_enabled") {
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "PRD skill extraction is currently disabled by administrator"})
+		return
+	}
+
 	var body skillExtractionRequest
 	if err := decodeJSON(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
@@ -95,26 +101,49 @@ func (app *App) handleTagExtraction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cache key covers the PRD text AND the active tag set: if a manager
-	// adds/retires tags, old cached suggestions are not reused.
 	cacheKey := tagExtractionCacheKey(combinedRaw, tags)
 	if cached := getCachedTagExtraction(cacheKey); cached != nil {
 		writeJSON(w, http.StatusOK, cached)
 		return
 	}
 
+	model := app.getAISetting(r.Context(), "ai_model_name", "deepseek-chat")
+	promptVer := app.getAISetting(r.Context(), "ai_prompt_version", "v1.0.0")
+
+	session := app.beginAISession(r.Context(), &user.ID, user.Role, "AI_PRD_SKILL", "tag_extraction", model, promptVer)
+	session.logMessage(r.Context(), "USER", combinedRaw)
+
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
-	if response, err := extractSkillTagsWithDeepSeek(ctx, combinedRaw, tags); err == nil {
+
+	var response *skillExtractionResponse
+	var promptTok, completionTok int
+
+	runDeepseek := func() (any, error) {
+		res, pTok, cTok, err := extractSkillTagsWithDeepSeek(ctx, combinedRaw, tags)
+		promptTok = pTok
+		completionTok = cTok
+		return res, err
+	}
+
+	resVal, err := session.logToolCall(r.Context(), "extract_prd_to_skill", map[string]any{"text_length": len(combinedRaw)}, runDeepseek)
+	if err == nil && resVal != nil {
+		response = resVal.(*skillExtractionResponse)
 		rememberTagExtraction(cacheKey, *response)
+
+		var missing []string
+		session.logExtraction(r.Context(), "PRD_TO_SKILL", combinedRaw, response, missing, 1.0)
+		session.logMessage(r.Context(), "ASSISTANT", fmt.Sprintf("Suggested Tags: %v, Level: %s", response.SuggestedTagIDs, response.SuggestedLevel))
+		session.finish(r.Context(), "SUCCESS", nil, promptTok, completionTok)
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
 
-	// Heuristic results are cheap; cache them too so the response stays
-	// stable, but they will be replaced once the LLM succeeds after a
-	// cache expiry.
-	response := extractSkillTagsHeuristic(combinedRaw, tags)
+	session.logError(r.Context(), "MODEL_ERROR", "HIGH", "DeepSeek extraction failed", err)
+
+	response = extractSkillTagsHeuristic(combinedRaw, tags)
+	session.logMessage(r.Context(), "ASSISTANT", fmt.Sprintf("Heuristic Suggested Tags: %v, Level: %s", response.SuggestedTagIDs, response.SuggestedLevel))
+	session.finish(r.Context(), "PARTIAL_SUCCESS", nil, 0, 0)
 	writeJSON(w, http.StatusOK, response)
 }
 
@@ -193,7 +222,7 @@ func (app *App) fetchActiveSkillTags(r *http.Request) ([]SkillTag, error) {
 	return items, nil
 }
 
-func extractSkillTagsWithDeepSeek(ctx context.Context, text string, tags []SkillTag) (*skillExtractionResponse, error) {
+func extractSkillTagsWithDeepSeek(ctx context.Context, text string, tags []SkillTag) (*skillExtractionResponse, int, int, error) {
 	type tagOption struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
@@ -224,19 +253,19 @@ Available tags:
 PRD text:
 %s`, tagExtractionMaxTags, tagExtractionMaxReasons, string(optionsJSON), text)
 
-	content, err := callDeepSeekJSON(ctx, deepSeekChatRequest{
+	content, pTok, cTok, err := callDeepSeekJSON(ctx, deepSeekChatRequest{
 		System:      "You extract structured skill tags. Return valid JSON only.",
 		User:        prompt,
 		Temperature: 0.1,
 		MaxTokens:   600,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 
 	var parsed skillExtractionResponse
 	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
 	parsed.Provider = "deepseek"
 	parsed.SuggestedTagIDs = sanitizeTagIDs(parsed.SuggestedTagIDs, valid)
@@ -250,7 +279,7 @@ PRD text:
 	if len(parsed.Reasoning) > tagExtractionMaxReasons {
 		parsed.Reasoning = parsed.Reasoning[:tagExtractionMaxReasons]
 	}
-	return &parsed, nil
+	return &parsed, pTok, cTok, nil
 }
 
 func extractSkillTagsHeuristic(text string, tags []SkillTag) *skillExtractionResponse {

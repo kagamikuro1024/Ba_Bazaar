@@ -58,6 +58,36 @@ function proxyToApi(requestFromClient, responseToClient) {
   requestFromClient.pipe(proxyRequest);
 }
 
+const chatTarget = process.env.CHAT_INTERNAL_URL ?? 'http://127.0.0.1:8000';
+
+function proxyToChat(requestFromClient, responseToClient) {
+  const targetUrl = new URL(requestFromClient.url ?? '/', chatTarget);
+  const headers = { ...requestFromClient.headers, host: targetUrl.host };
+
+  const proxyRequest = request(
+    targetUrl,
+    {
+      method: requestFromClient.method,
+      headers
+    },
+    (proxyResponse) => {
+      responseToClient.writeHead(proxyResponse.statusCode ?? 502, proxyResponse.headers);
+      proxyResponse.pipe(responseToClient);
+    }
+  );
+
+  proxyRequest.on('error', (error) => {
+    console.error('Chat proxy failed:', error);
+    if (!responseToClient.headersSent) {
+      sendStatus(responseToClient, 502, 'Chat proxy failed');
+    } else {
+      responseToClient.destroy(error);
+    }
+  });
+
+  requestFromClient.pipe(proxyRequest);
+}
+
 async function resolveStaticFile(urlPath) {
   const pathname = decodeURIComponent(new URL(urlPath, 'http://localhost').pathname);
   const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
@@ -89,6 +119,11 @@ const server = createServer(async (clientRequest, clientResponse) => {
 
   if (url.startsWith('/api/') || url === '/health') {
     proxyToApi(clientRequest, clientResponse);
+    return;
+  }
+
+  if (url.startsWith('/chat')) {
+    proxyToChat(clientRequest, clientResponse);
     return;
   }
 
