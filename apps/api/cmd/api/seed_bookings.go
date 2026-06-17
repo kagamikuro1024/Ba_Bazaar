@@ -144,7 +144,7 @@ func seedNotesNotificationsAudit(ctx context.Context, db *DB, managerID string, 
 		}
 	}
 	payload := fmt.Sprintf(`{"users":21,"ba_profiles":15,"bookings":%d}`, len(bookings))
-	_, err := db.Pool.Exec(ctx, `insert into audit_logs (id, actor_id, action, target_type, target_id, new_value, result, created_at) values ($1,$2,'SEED_DATABASE','Database',$2,$3::jsonb,'SUCCESS',now())`, uuid.NewString(), managerID, payload)
+	_, err := db.Pool.Exec(ctx, `insert into audit_logs (id, actor_id, action, target_type, target_id, new_value, result, created_at) values ($1,$2,'SEED_DATABASE','Database',$3,$4::jsonb,'SUCCESS',now())`, uuid.NewString(), managerID, managerID, payload)
 	return err
 }
 

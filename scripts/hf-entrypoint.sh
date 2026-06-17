@@ -103,7 +103,7 @@ if [ "${HF_AUTO_SEED}" = "true" ]; then
   USER_COUNT="$(psql "${DATABASE_URL}" -tAc 'select count(*) from users;' 2>/dev/null | tr -d '[:space:]' || true)"
 
   if [ -z "${USER_COUNT}" ] || [ "${USER_COUNT}" = "0" ]; then
-    ./node_modules/.bin/tsx prisma/seed.ts
+    /app/ba-bazaar-api seed
   fi
 fi
 

@@ -12,7 +12,7 @@
     "db:validate": "prisma validate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "go run ./cmd/api seed"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
