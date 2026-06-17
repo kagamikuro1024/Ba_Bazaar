@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,7 +45,29 @@ const serverExePath = isWin
   ? resolve(venvPath, 'Scripts', 'ba-chat-server.exe')
   : resolve(venvPath, 'bin', 'ba-chat-server');
 
-if (!existsSync(venvPath) || !pipPath || !existsSync(serverExePath)) {
+const pyprojectPath = resolve(ROOT, 'apps/ai/pyproject.toml');
+const markerPath = resolve(venvPath, '.last-install');
+
+let needsVenvCreate = !existsSync(venvPath) || !pipPath || !existsSync(serverExePath);
+let needsDepsInstall = needsVenvCreate;
+
+if (!needsVenvCreate && existsSync(pyprojectPath)) {
+  if (!existsSync(markerPath)) {
+    needsDepsInstall = true;
+  } else {
+    try {
+      const pyprojectMtime = statSync(pyprojectPath).mtimeMs;
+      const markerMtime = statSync(markerPath).mtimeMs;
+      if (pyprojectMtime > markerMtime) {
+        needsDepsInstall = true;
+      }
+    } catch {
+      needsDepsInstall = true;
+    }
+  }
+}
+
+if (needsVenvCreate) {
   console.log('[bootstrap] Python virtual environment not found or incomplete. Setting up apps/ai/.venv...');
   
   // Find python command
@@ -94,9 +116,10 @@ if (!existsSync(venvPath) || !pipPath || !existsSync(serverExePath)) {
   if (upgradeRes.status !== 0) {
     console.warn('[bootstrap] Warning: Failed to upgrade pip/setuptools/wheel, trying directly...');
   }
+}
 
-  // Install apps/ai in editable mode
-  console.log('[bootstrap] Installing apps/ai package and dependencies in editable mode...');
+if (needsDepsInstall) {
+  console.log('[bootstrap] Installing/updating apps/ai package and dependencies in virtual environment...');
   const installRes = spawnSync(pipPath, ['install', '-e', resolve(ROOT, 'apps/ai')], {
     stdio: 'inherit',
     cwd: ROOT
@@ -105,9 +128,16 @@ if (!existsSync(venvPath) || !pipPath || !existsSync(serverExePath)) {
     console.error('[bootstrap] Error: Failed to install apps/ai dependencies.');
     process.exit(1);
   }
-  console.log('[bootstrap] Python virtual environment setup completed successfully!');
+  
+  // Write the marker file to save installation state
+  try {
+    writeFileSync(markerPath, JSON.stringify({ installedAt: new Date().toISOString() }));
+  } catch (err) {
+    // Ignore marker write error
+  }
+  console.log('[bootstrap] Python dependencies up-to-date!');
 } else {
-  console.log('[bootstrap] Python virtual environment is already set up.');
+  console.log('[bootstrap] Python virtual environment and dependencies are already up-to-date.');
 }
 
 // 3. Clear active development ports
