@@ -36,7 +36,9 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
 import { CreateBAModal } from './CreateBAModal';
-import { ChatFab } from './chat';
+import { ChatPanel } from './chat/ChatPanel';
+import { GlobalActionDial } from './GlobalActionDial';
+import { useGlobalFab } from '@/context/GlobalFabContext';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
 import {
@@ -222,6 +224,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const queryClient = useQueryClient();
   const { user, accessToken, logout } = useAuth();
   const role = user?.role;
+  const { chatOpen, setChatOpen, setVisible } = useGlobalFab();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -289,10 +292,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const actionCenterPendingCount = managerSummary.data?.actions?.pending_requests ?? 0;
   const displayRole = role?.replace('_', ' ') ?? '';
   const pageHeader = getPageHeader(introKey, role);
-  const isBaDirectoryPage = location.pathname === '/crm/ba';
-  const showMobileCreateBookingFab =
-    canCreateBooking && !['/my-requests', '/manager/action-center'].includes(location.pathname);
-  const showMobileCreateBaFab = canCreateBa && isBaDirectoryPage;
   const mobileNavigation = useMemo(() => {
     const priority = [
       '/dashboard',
@@ -351,6 +350,11 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   useEffect(() => {
     globalSearchStorage.save(recentSearches);
   }, [recentSearches]);
+
+  useEffect(() => {
+    const isAnyModalOpen = bookingModalOpen || createBaModalOpen || searchOpen || notificationOpen;
+    setVisible(!isAnyModalOpen);
+  }, [bookingModalOpen, createBaModalOpen, searchOpen, notificationOpen, setVisible]);
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -827,8 +831,8 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
       <nav
         className={[
-          'fixed bottom-4 left-4 z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
-          'right-[5.5rem] rounded-full'
+          'fixed bottom-4 left-4 right-4 z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
+          'rounded-full'
         ].join(' ')}
         aria-label="Mobile navigation"
       >
@@ -883,32 +887,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </nav>
 
-      {showMobileCreateBookingFab && !showMobileCreateBaFab ? (
-        <button
-          type="button"
-          onClick={() => setBookingModalOpen(true)}
-          className="fixed bottom-24 right-4 z-40 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
-          aria-label="Create Booking Request"
-        >
-          <Plus className="h-6 w-6" strokeWidth={3} />
-          <span className="text-sm font-semibold">
-            {location.pathname === '/timeline' ? 'New booking' : 'Create'}
-          </span>
-        </button>
-      ) : null}
-
-      {showMobileCreateBaFab ? (
-        <button
-          type="button"
-          onClick={() => setCreateBaModalOpen(true)}
-          className="fixed bottom-24 right-4 z-40 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-white shadow-lg shadow-blue-600/40 transition-all hover:bg-blue-700 active:scale-95 lg:hidden"
-          aria-label="Create BA"
-        >
-          <Plus className="h-6 w-6" strokeWidth={3} />
-          <span className="text-sm font-semibold">Create BA</span>
-        </button>
-      ) : null}
-
       {canCreateBooking && (
         <BookingModal
           open={bookingModalOpen}
@@ -923,7 +901,18 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         />
       )}
 
-      <ChatFab accessToken={accessToken} userRole={role} userId={user?.id} />
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        accessToken={accessToken}
+        userRole={role}
+        userId={user?.id}
+      />
+
+      <GlobalActionDial
+        canCreateBooking={canCreateBooking}
+        onTriggerCreateBooking={() => setBookingModalOpen(true)}
+      />
 
       <GlobalSearchModal
         open={searchOpen}

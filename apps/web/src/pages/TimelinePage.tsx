@@ -51,6 +51,7 @@ import { Modal } from '@/components/ui/modal';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { capacityColor, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useFabAction, useGlobalFab } from '@/context/GlobalFabContext';
 
 type RequestDraft = {
   ba_id: string;
@@ -138,8 +139,6 @@ function usePrefersCoarsePointer() {
 const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
 const mobileWeekDayMinWidth = 88;
-const mobileMonthColumnMinWidth = 96;
-const mobileQuarterColumnMinWidth = 152;
 const mobileBaCardWidth = 144;
 const mobileBaCardCompactWidth = 84;
 const mobileCompactScrollThreshold = mobileWeekDayMinWidth * 2;
@@ -627,6 +626,30 @@ export function TimelinePage() {
   const [isStuck, setIsStuck] = useState(false);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
+
+  const { setVisible } = useGlobalFab();
+
+  // Hide the FAB when local drawers or detail modals are open
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(draft) || Boolean(selectedBooking);
+    setVisible(!isAnyModalOpen);
+    return () => {
+      setVisible(true);
+    };
+  }, [draft, selectedBooking, setVisible]);
+
+  // Register "New booking" primary action for the Speed Dial
+  useFabAction(
+    canCreateBooking
+      ? {
+          label: 'New booking',
+          icon: <Plus className="h-5 w-5" />,
+          onPress: openCreateBooking
+        }
+      : null,
+    [canCreateBooking, openCreateBooking]
+  );
+
   const prefersCoarsePointer = usePrefersCoarsePointer();
   const allowDragSelection =
     canCreateBooking && !prefersCoarsePointer && viewMode === 'week';
@@ -811,13 +834,13 @@ export function TimelinePage() {
           mobileRowMinHeight: computeRowMinHeight(
             columns,
             baBookings,
-            mobileBarBaseTop,
+            viewMode === 'week' ? mobileBarBaseTop : 16,
             mobileBookingLaneStep,
-            120
+            viewMode === 'week' ? 120 : 72
           )
         };
       }),
-    [columns, sortedVisibleBas, displayBookings]
+    [columns, sortedVisibleBas, displayBookings, viewMode]
   );
 
   function cycleBaSortMode() {
@@ -1125,7 +1148,8 @@ export function TimelinePage() {
             ref={timelineScrollRef}
             data-timeline-scroll="true"
             className={cn(
-              'overflow-x-auto overscroll-x-contain pb-2',
+              isMobile && viewMode !== 'week' ? 'overflow-x-hidden' : 'overflow-x-auto overscroll-x-contain',
+              'pb-2',
               !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
               activeSelection && 'select-none touch-none'
             )}
@@ -1139,14 +1163,13 @@ export function TimelinePage() {
             <div
               className={cn('grid', !isMobile && 'min-w-[980px]')}
               style={{
+                paddingLeft: isMobile && viewMode !== 'week'
+                  ? `${(effectiveCompactMobileInfo ? mobileBaCardCompactWidth : mobileBaCardWidth) + 8}px`
+                  : undefined,
                 gridTemplateColumns: isMobile
-                  ? `repeat(${columns.length}, minmax(${
-                      viewMode === 'quarter'
-                        ? mobileQuarterColumnMinWidth
-                        : viewMode === 'month'
-                          ? mobileMonthColumnMinWidth
-                          : mobileWeekDayMinWidth
-                    }px, 1fr))`
+                  ? viewMode === 'week'
+                    ? `repeat(${columns.length}, minmax(${mobileWeekDayMinWidth}px, 1fr))`
+                    : `repeat(${columns.length}, minmax(0, 1fr))`
                   : `${baInfoColumnWidth}px repeat(${columns.length}, minmax(${viewMode === 'week' ? 92 : 132}px, 1fr))`
               }}
             >
@@ -1612,6 +1635,7 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
+  viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1643,7 +1667,8 @@ function MobileTimelineRow({
         <button
           key={`${ba.id}-${column.id}`}
           className={cn(
-            'group select-none border-b border-r border-slate-200 p-1.5 pt-12 text-left text-[11px] text-slate-400',
+            'group select-none border-b border-r border-slate-200 p-1.5 text-left text-[11px] text-slate-400',
+            viewMode === 'week' ? 'pt-12' : 'pt-1.5',
             dayCellBackground(isAlternateRow),
             hasOverbookRisk && 'bg-rose-50/60',
             isCurrentTimelineColumn(column, currentDate) &&
@@ -1680,7 +1705,7 @@ function MobileTimelineRow({
                 style={{
                   left: `${leftPercent}%`,
                   width: `max(28px, calc(${widthPercent}% - 8px))`,
-                  top: `${mobileBarBaseTop + lane * mobileBookingLaneStep}px`
+                  top: `${(viewMode === 'week' ? mobileBarBaseTop : 16) + lane * mobileBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}

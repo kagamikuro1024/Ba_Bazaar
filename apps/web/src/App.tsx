@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { roleHomePath } from './auth/routes';
 import { LayoutShell } from './components/LayoutShell';
+import { GlobalFabProvider } from './context/GlobalFabContext';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { type UserRole } from './lib/api';
 import { BADirectoryPage } from './pages/BADirectoryPage';
@@ -33,7 +34,8 @@ import { AISettingsPage } from './pages/admin/AISettingsPage';
 export function App() {
   return (
     <AuthProvider>
-      <Routes>
+      <GlobalFabProvider>
+        <Routes>
         <Route
           path="/login"
           element={
@@ -120,7 +122,8 @@ export function App() {
         <Route path="/admin/ai/settings" element={<ProtectedPage><LayoutShell suppressPageHeader><RequireRole roles={['IT_ADMIN']}><AISettingsPage /></RequireRole></LayoutShell></ProtectedPage>} />
         
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </GlobalFabProvider>
     </AuthProvider>
   );
 }
