@@ -67,10 +67,16 @@ async def validate_slots(state: ChatState) -> ChatState:
 
     # Validate capacity_percent enum
     cap = slots.get("capacity_percent")
-    if cap is not None and cap not in _ALLOWED_CAPACITY:
-        slots.pop("capacity_percent", None)
-        if "capacity_percent" not in missing:
-            missing.append("capacity_percent")
+    if cap is not None:
+        try:
+            cap = int(cap)
+            slots["capacity_percent"] = cap
+        except (TypeError, ValueError):
+            cap = None
+        if cap not in _ALLOWED_CAPACITY:
+            slots.pop("capacity_percent", None)
+            if "capacity_percent" not in missing:
+                missing.append("capacity_percent")
 
     # Validate priority enum (default to MEDIUM if missing — it's optional)
     priority = slots.get("priority")

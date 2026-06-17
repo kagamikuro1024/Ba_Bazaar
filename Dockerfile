@@ -68,9 +68,9 @@ COPY --from=api-build --chown=1000:0 /out/ba-bazaar-api /app/ba-bazaar-api
 COPY --chown=1000:0 scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
 COPY --chown=1000:0 scripts/hf-web-server.mjs scripts/hf-web-server.mjs
 
-RUN python3 -m venv /app/apps/ai/.venv \
-  && /app/apps/ai/.venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
-  && /app/apps/ai/.venv/bin/pip install --no-cache-dir -e /app/apps/ai
+RUN pip3 install --no-cache-dir uv --break-system-packages \
+  && uv venv --clear /app/apps/ai/.venv \
+  && uv pip install --python /app/apps/ai/.venv/bin/python --no-cache-dir -e /app/apps/ai
 
 RUN chmod +x /app/scripts/hf-entrypoint.sh \
   && mkdir -p /home/user/pgdata /home/user/postgres-socket \

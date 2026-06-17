@@ -35,6 +35,19 @@ async def submit_booking(state: ChatState) -> ChatState:
         if value is not None:
             payload[key] = value
 
+    # Go requires capacity_percent as an integer (25/50/75/100).
+    # Guard against string values that slipped through (e.g. from button text).
+    if "capacity_percent" in payload:
+        try:
+            payload["capacity_percent"] = int(payload["capacity_percent"])
+        except (TypeError, ValueError):
+            return {
+                "messages": [AIMessage(content="⚠️ Invalid capacity value. Please choose 25%, 50%, 75%, or 100%.")],
+                "error": "invalid capacity_percent",
+                "confirmed": False,
+                "awaiting_user": None,
+            }
+
     try:
         if write_mode == "direct":
             result = await create_booking_direct(payload, auth_header=auth)

@@ -6,11 +6,13 @@ import { useGlobalFab, type FabAction } from '@/context/GlobalFabContext';
 interface GlobalActionDialProps {
   canCreateBooking: boolean;
   onTriggerCreateBooking: () => void;
+  defaultPrimaryLabel?: string;
 }
 
 export function GlobalActionDial({
   canCreateBooking,
-  onTriggerCreateBooking
+  onTriggerCreateBooking,
+  defaultPrimaryLabel = 'Create booking'
 }: GlobalActionDialProps) {
   const { primaryAction, visible, setChatOpen } = useGlobalFab();
   const [open, setOpen] = useState(false);
@@ -109,7 +111,7 @@ export function GlobalActionDial({
     ? primaryAction
     : canCreateBooking
       ? {
-          label: 'Create booking',
+          label: defaultPrimaryLabel,
           icon: <Plus className="h-5 w-5" />,
           onPress: onTriggerCreateBooking
         }
@@ -125,7 +127,7 @@ export function GlobalActionDial({
     <div
       ref={containerRef}
       onKeyDown={handleContainerKeyDown}
-      className="fixed z-50 bottom-[calc(96px+env(safe-area-inset-bottom,0px))] right-[18px] lg:bottom-6 lg:right-6"
+      className="fixed z-50 bottom-[calc(96px+env(safe-area-inset-bottom,0px))] right-[18px] lg:bottom-6 lg:right-[110px]"
     >
       {/* Scrim / Backdrop */}
       <div
@@ -149,26 +151,7 @@ export function GlobalActionDial({
             : 'pointer-events-none'
         )}
       >
-        {/* Item 2: Ask AI (gradient background, fixed) */}
-        <button
-          role="menuitem"
-          type="button"
-          onClick={() => handleActionClick(() => setChatOpen(true))}
-          style={{
-            background: 'linear-gradient(135deg, #FF8A4C 0%, #FF4D8D 46%, #9B4DFF 100%)',
-            boxShadow: '0 8px 22px rgba(180,80,255,.45)'
-          }}
-          className={cn(
-            'flex h-[50px] items-center gap-[9px] rounded-[25px] px-5 text-sm font-semibold text-white transition-all active:scale-[0.94]',
-            'motion-safe:transition-all motion-safe:duration-[180ms] motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]',
-            open
-              ? 'translate-y-0 scale-100 opacity-100'
-              : 'translate-y-4 scale-95 opacity-0 motion-reduce:hidden'
-          )}
-        >
-          <Sparkles className="h-5 w-5" />
-          <span>Ask AI</span>
-        </button>
+
 
         {/* Item 1: Primary Action (per-page, closest to trigger) */}
         {resolvedPrimary && (
