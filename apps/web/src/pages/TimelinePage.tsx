@@ -147,7 +147,7 @@ const mobileCompactScrollThreshold = mobileWeekDayMinWidth * 2;
 const desktopBookingLaneStep = 36;
 const mobileBookingLaneStep = 40;
 const desktopBarBaseTop = 16;
-const mobileBarBaseTop = 58;
+const mobileBarBaseTop = 36;
 const timelineViewModeStorageKey = 'ba-bazaar-timeline-view-mode';
 
 function dayCellBackground(isAlternateRow: boolean) {
@@ -870,9 +870,9 @@ export function TimelinePage() {
           mobileRowMinHeight: computeRowMinHeight(
             columns,
             baBookings,
-            viewMode === 'week' ? mobileBarBaseTop : 16,
+            mobileBarBaseTop,
             mobileBookingLaneStep,
-            viewMode === 'week' ? 120 : 72
+            120
           )
         };
       }),
@@ -1695,8 +1695,7 @@ function MobileTimelineRow({
         <button
           key={`${ba.id}-${column.id}`}
           className={cn(
-            'group select-none border-b border-r border-slate-200 p-1.5 text-left text-[11px] text-slate-400',
-            viewMode === 'week' ? 'pt-12' : 'pt-1.5',
+            'group select-none border-b border-r border-slate-200 p-1.5 pt-9 text-left text-[11px] text-slate-400',
             dayCellBackground(isAlternateRow),
             hasOverbookRisk && 'bg-rose-50/60',
             isCurrentTimelineColumn(column, currentDate) &&
@@ -1735,7 +1734,7 @@ function MobileTimelineRow({
                 style={{
                   left: `${leftPercent}%`,
                   width: bookingBarWidth(widthPercent),
-                  top: `${(viewMode === 'week' ? mobileBarBaseTop : 16) + lane * mobileBookingLaneStep}px`
+                  top: `${mobileBarBaseTop + lane * mobileBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
                 title={bookingBarTooltip(booking)}
