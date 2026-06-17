@@ -1357,9 +1357,7 @@ export function TimelinePage() {
                 const capacity = summary.data?.items.find((item) => item.ba_id === ba.id);
                 const isAlternateRow = index % 2 === 1;
                 const utilization = capacity?.utilization_percent ?? 0;
-                const invalidOverbook = Boolean(capacity?.invalid_overbook);
-                const conflictRisk = Boolean(capacity?.conflict_risk);
-                const flagged = invalidOverbook || conflictRisk;
+                const flagged = Boolean(capacity?.invalid_overbook || capacity?.conflict_risk);
 
                 return (
                   <div
@@ -1376,17 +1374,11 @@ export function TimelinePage() {
                     onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    <BAIdentity ba={ba} />
+                    <BAIdentity ba={ba} showConflictIcon={flagged} />
                     <span
                       className="flex shrink-0 items-center gap-1.5"
                       title={utilizationTooltip(viewMode, capacity)}
                     >
-                      {flagged ? (
-                        <span className="inline-flex h-6 items-center gap-1 rounded-lg border border-rose-900 bg-rose-700 px-1.5 text-[10px] font-bold uppercase text-white shadow-sm shadow-rose-200">
-                          <AlertTriangle className="h-3 w-3" />
-                          {invalidOverbook ? 'Invalid' : 'Conflict'}
-                        </span>
-                      ) : null}
                       <span className={cn('text-sm font-bold', capacityColor(utilization))}>
                         {utilization}%
                       </span>
