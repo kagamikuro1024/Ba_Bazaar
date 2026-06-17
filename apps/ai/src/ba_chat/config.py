@@ -62,12 +62,15 @@ def get_settings() -> Settings:
         api_base_url=os.getenv("BA_API_BASE_URL", "http://localhost:3000").rstrip("/"),
         api_token=_strip_or_none(os.getenv("BA_API_TOKEN")),
         deepseek_api_key=_strip_or_none(os.getenv("DEEPSEEK_API_KEY")),
-        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         deepseek_base_url=os.getenv(
             "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
         ).rstrip("/"),
         deepseek_timeout_seconds=float(os.getenv("DEEPSEEK_TIMEOUT_SECONDS", "45")),
-        request_timeout_seconds=float(os.getenv("BA_API_TIMEOUT_SECONDS", "20")),
+        # Default outlives the Go-side LLM summary timeout (45s) so retrieves
+        # to /llm-summary endpoints don't read-timeout while DeepSeek is still
+        # working. Override via BA_API_TIMEOUT_SECONDS.
+        request_timeout_seconds=float(os.getenv("BA_API_TIMEOUT_SECONDS", "60")),
         max_summary_bullets=int(os.getenv("BA_CHAT_MAX_BULLETS", "5")),
         log_level=os.getenv("BA_CHAT_LOG_LEVEL", "INFO").upper(),
     )

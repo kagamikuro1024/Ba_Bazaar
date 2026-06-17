@@ -12,8 +12,11 @@ mini OpenAI client. We expose two primitives and let the nodes compose them.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
+import random
 from collections.abc import AsyncIterator
 from typing import Any, TypeVar
 
@@ -27,6 +30,31 @@ log = logging.getLogger(__name__)
 
 class LLMUnavailable(RuntimeError):
     """Raised when the LLM cannot be used (no key, network failure, bad JSON)."""
+
+
+# Per-call retry budget for structured extraction nodes. The graph-level
+# RetryPolicy already retries the *node*, but we want a tighter inner loop on
+# the LLM call itself so a single transient DeepSeek hiccup (timeout, 5xx,
+# malformed JSON) doesn't immediately drop us into the deterministic fallback.
+#
+# Tunable via env vars so ops can dial it without redeploying code:
+#   BA_CHAT_LLM_MAX_ATTEMPTS  default 4
+#   BA_CHAT_LLM_BACKOFF_BASE  default 0.5  (seconds)
+#   BA_CHAT_LLM_BACKOFF_MAX   default 6.0  (seconds)
+def _retry_budget() -> tuple[int, float, float]:
+    try:
+        attempts = max(1, int(os.getenv("BA_CHAT_LLM_MAX_ATTEMPTS", "4")))
+    except ValueError:
+        attempts = 4
+    try:
+        base = max(0.0, float(os.getenv("BA_CHAT_LLM_BACKOFF_BASE", "0.5")))
+    except ValueError:
+        base = 0.5
+    try:
+        cap = max(base, float(os.getenv("BA_CHAT_LLM_BACKOFF_MAX", "6.0")))
+    except ValueError:
+        cap = 6.0
+    return attempts, base, cap
 
 
 class ChatMessage(BaseModel):
@@ -147,6 +175,69 @@ async def call_json(
         return schema.model_validate(data)
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as exc:
         raise LLMUnavailable(f"deepseek returned invalid JSON: {exc}") from exc
+
+
+async def call_json_with_retry(
+    *,
+    system: str,
+    user: str,
+    schema: type[T],
+    temperature: float = 0.0,
+    settings: Settings | None = None,
+    node_name: str = "llm",
+) -> T:
+    """Call ``call_json`` with bounded exponential backoff + jitter.
+
+    Use this from extraction nodes that should keep trying to pull info out
+    of a flaky LLM rather than falling through to a deterministic path on
+    the first hiccup. The caller is responsible for the final fallback when
+    this helper exhausts its budget and re-raises ``LLMUnavailable``.
+
+    Skips retry entirely when no key is configured — that's a permanent
+    misconfiguration, not a transient blip, and looping wastes time in
+    offline / CI runs.
+    """
+
+    settings = settings or get_settings()
+    if not settings.has_llm:
+        raise LLMUnavailable("DEEPSEEK_API_KEY is not configured")
+
+    max_attempts, base, cap = _retry_budget()
+    last_exc: LLMUnavailable | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await call_json(
+                system=system,
+                user=user,
+                schema=schema,
+                temperature=temperature,
+                settings=settings,
+            )
+        except LLMUnavailable as exc:
+            last_exc = exc
+            if attempt >= max_attempts:
+                log.warning(
+                    "%s: LLM extraction failed after %d attempt(s): %s",
+                    node_name,
+                    attempt,
+                    exc,
+                )
+                break
+            backoff = min(base * (2 ** (attempt - 1)), cap)
+            # Full jitter — keeps concurrent retries from synchronising.
+            backoff = random.uniform(0, backoff) if backoff > 0 else 0
+            log.info(
+                "%s: LLM attempt %d/%d failed (%s) — retrying in %.2fs",
+                node_name,
+                attempt,
+                max_attempts,
+                exc,
+                backoff,
+            )
+            if backoff > 0:
+                await asyncio.sleep(backoff)
+    assert last_exc is not None
+    raise last_exc
 
 
 def _strip_fence(content: str) -> str:

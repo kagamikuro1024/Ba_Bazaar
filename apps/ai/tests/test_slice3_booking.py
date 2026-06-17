@@ -29,6 +29,39 @@ def test_dates_parse_tomorrow(monkeypatch: pytest.MonkeyPatch) -> None:
     assert end == "2026-06-16"
 
 
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "create booking for tommor",
+        "create booking for tommorrow",
+        "create booking for tomorow",
+        "book for tmrw",
+        "schedule it tmr",
+        "tomo please",
+    ],
+)
+def test_dates_parse_tomorrow_typos(
+    monkeypatch: pytest.MonkeyPatch, phrase: str
+) -> None:
+    """Common typos and abbreviations of 'tomorrow' should still resolve."""
+
+    from ba_chat import dates
+
+    monkeypatch.setattr(dates, "today", lambda: date(2026, 6, 15))
+    start, end = dates.parse_relative(phrase)
+    assert start == "2026-06-16", f"failed to parse start in {phrase!r}"
+    assert end == "2026-06-16", f"failed to parse end in {phrase!r}"
+
+
+def test_dates_parse_day_after_tomorrow_typo(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ba_chat import dates
+
+    monkeypatch.setattr(dates, "today", lambda: date(2026, 6, 15))
+    start, end = dates.parse_relative("day after tommorrow")
+    assert start == "2026-06-17"
+    assert end == "2026-06-17"
+
+
 def test_dates_parse_for_5_days(monkeypatch: pytest.MonkeyPatch) -> None:
     from ba_chat import dates
 
@@ -52,6 +85,97 @@ def test_dates_parse_no_dates() -> None:
     start, end = dates.parse_relative("create a booking please")
     assert start is None
     assert end is None
+
+
+@respx.mock
+async def test_booking_flow_progresses_with_typoed_tomorrow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: 'create booking for tommor' should resolve start/end dates
+    on the very first turn so the bot only needs to ask for the *other*
+    missing fields. Before the fix, the typo caused the date parser to
+    return (None, None) and the assistant kept walking through every field
+    while the user re-typed the same command."""
+
+    from ba_chat import dates
+    from ba_chat.graph import compile_graph
+
+    monkeypatch.setattr(dates, "today", lambda: date(2026, 6, 15))
+
+    graph = compile_graph()
+    config = {"configurable": {"thread_id": "test-bk-typo-1"}}
+
+    result = await graph.ainvoke(
+        {
+            "messages": [HumanMessage(content="create booking for tommor")],
+            "user_id": "tester",
+            "user_role": "BA_MANAGER",
+            "auth_header": "Bearer t",
+        },
+        config=config,
+    )
+
+    assert result["intent"] == "create_booking"
+    slots = result.get("slots") or {}
+    # The typo should have been recognised as 'tomorrow' (2026-06-16).
+    assert slots.get("start_date") == "2026-06-16"
+    assert slots.get("end_date") == "2026-06-16"
+    # And the bot should be asking about a non-date field next.
+    missing = result.get("missing_slots") or []
+    assert "start_date" not in missing
+    assert "end_date" not in missing
+
+
+@respx.mock
+async def test_clarification_ignores_repeated_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: when the user repeats 'create booking for tommor' instead
+    of answering the field we asked about, the offline fallback must NOT
+    store that whole sentence as the project name / title / description."""
+
+    from ba_chat import dates
+    from ba_chat.graph import compile_graph
+
+    monkeypatch.setattr(dates, "today", lambda: date(2026, 6, 15))
+
+    graph = compile_graph()
+    config = {"configurable": {"thread_id": "test-bk-typo-2"}}
+
+    # Turn 1 — user kicks off booking with a typoed date.
+    first = await graph.ainvoke(
+        {
+            "messages": [HumanMessage(content="create booking for tommor")],
+            "user_id": "tester",
+            "user_role": "BA_MANAGER",
+            "auth_header": "Bearer t",
+        },
+        config=config,
+    )
+    assert first["awaiting_user"] == "clarification"
+
+    # Turn 2 — instead of answering, the user just retypes the command.
+    second = await graph.ainvoke(
+        {
+            "messages": [HumanMessage(content="create booking for tommor")],
+            "user_id": "tester",
+            "user_role": "BA_MANAGER",
+            "auth_header": "Bearer t",
+        },
+        config=config,
+    )
+
+    slots = second.get("slots") or {}
+    # The retyped command must not have been smuggled into a text field.
+    for field in ("project_name", "title", "description"):
+        value = slots.get(field)
+        if value is not None:
+            assert "create booking" not in value.lower(), (
+                f"{field} got the restated command stored verbatim: {value!r}"
+            )
+    # Dates should still be present from turn 1 (carried in checkpointer state).
+    assert slots.get("start_date") == "2026-06-16"
+    assert slots.get("end_date") == "2026-06-16"
 
 
 @respx.mock

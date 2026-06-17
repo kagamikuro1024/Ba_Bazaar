@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { chatStream, type ChatStreamEvent } from '@/lib/chatStream';
 import { type ChatMessage, createId } from './types';
 
@@ -115,11 +116,13 @@ function applyEvent(
     return;
   }
   if (event.type === 'token') {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === assistantId ? { ...msg, content: msg.content + event.text } : msg
-      )
-    );
+    flushSync(() => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId ? { ...msg, content: msg.content + event.text } : msg
+        )
+      );
+    });
     return;
   }
   if (event.type === 'final') {

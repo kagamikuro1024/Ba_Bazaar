@@ -45,6 +45,21 @@ _MONTH_DAY = re.compile(
     re.IGNORECASE,
 )
 
+# Common typos / abbreviations users actually type. Order matters — longer
+# patterns first so "tomo" doesn't shadow "tomorrow".
+_TOMORROW_PATTERNS = (
+    r"tomorrow", r"tommorrow", r"tommorow", r"tomorow", r"tommrow",
+    r"tmrw", r"tmr", r"tmrrw", r"tomo", r"tommor", r"tommorw", r"tmw",
+)
+_TODAY_PATTERNS = (r"today", r"tdy", r"tody")
+_TOMORROW_RE = re.compile(
+    r"\b(" + "|".join(_TOMORROW_PATTERNS) + r")\b", re.IGNORECASE
+)
+_TODAY_RE = re.compile(r"\b(" + "|".join(_TODAY_PATTERNS) + r")\b", re.IGNORECASE)
+_DAY_AFTER_TOMORROW_RE = re.compile(
+    r"\bday\s+after\s+(" + "|".join(_TOMORROW_PATTERNS) + r")\b", re.IGNORECASE
+)
+
 
 def today() -> date:
     """Hook so tests can monkeypatch."""
@@ -110,12 +125,12 @@ def _month_match_to_date(match: re.Match, anchor: date) -> date | None:  # type:
 
 
 def _parse_anchor_phrase(lowered: str, anchor: date) -> date | None:
-    if "today" in lowered:
-        return anchor
-    if "tomorrow" in lowered:
-        return anchor + timedelta(days=1)
-    if "day after tomorrow" in lowered:
+    if _DAY_AFTER_TOMORROW_RE.search(lowered):
         return anchor + timedelta(days=2)
+    if _TOMORROW_RE.search(lowered):
+        return anchor + timedelta(days=1)
+    if _TODAY_RE.search(lowered):
+        return anchor
     if "next monday" in lowered or "this monday" in lowered:
         return _next_weekday(anchor, _WEEKDAYS["monday"])
     if "next week" in lowered:

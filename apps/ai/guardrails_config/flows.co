@@ -1,0 +1,53 @@
+# Flow to check for prompt injection attempts
+define flow check prompt injection
+  $injection_detected = execute check_prompt_injection
+
+  if $injection_detected
+    bot refuse injection
+    bot explain why
+  
+  # Continue with normal processing if no injection detected
+
+define bot refuse injection
+  "I can't follow those instructions. I'm here to help with business analysis and team management tasks."
+
+define bot explain why
+  "My role is to assist with Ba_Bazaar operations like analyzing metrics, creating bookings, and answering questions about your team's performance."
+
+# Flow to check for malicious intent
+define flow check malicious intent
+  $malicious_detected = execute check_malicious_intent
+
+  if $malicious_detected
+    bot refuse malicious request
+    bot redirect to safe topics
+
+define bot refuse malicious request
+  "I can't help with that request."
+
+define bot redirect to safe topics
+  "I'm designed to help with business operations, team metrics, and booking management. Would you like to analyze some data or create a booking instead?"
+
+# Flow to check for sensitive data requests
+define flow check sensitive data request
+  $sensitive_detected = execute check_sensitive_request
+
+  if $sensitive_detected
+    bot refuse sensitive access
+    bot explain limitations
+
+define bot refuse sensitive access
+  "I can't share that information."
+
+define bot explain limitations
+  "I'm focused on helping you with business analysis and operational tasks. I don't have access to system credentials or internal configurations."
+
+# Output safety check
+define flow check output safety
+  $output_safe = execute check_output_safety
+
+  if not $output_safe
+    bot provide safe response
+
+define bot provide safe response
+  "I apologize, but I cannot provide that information. Let me help you with business-related questions instead."

@@ -110,6 +110,12 @@ class ChatState(TypedDict, total=False):
     # control flow
     awaiting_user: AwaitingUser
     confirmed: bool
+    cancelled: bool
+    # Set by extract_slots when the LLM detects the user said something off-flow
+    # (asked a question, switched topic) and produced a contextual reply. The
+    # graph short-circuits to side_chat so the assistant can answer without
+    # blindly continuing the slot-fill.
+    side_reply_text: str | None
     error: str | None
 
     # auth context (server-side, never sourced from LLM output)
@@ -134,6 +140,8 @@ def empty_state() -> ChatState:
         "submit_warning": None,
         "awaiting_user": None,
         "confirmed": False,
+        "cancelled": False,
+        "side_reply_text": None,
         "error": None,
         "user_id": "",
         "user_role": "BA_MANAGER",

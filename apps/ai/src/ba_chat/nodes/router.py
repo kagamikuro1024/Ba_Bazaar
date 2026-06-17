@@ -18,7 +18,7 @@ from typing import Literal, get_args
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from ba_chat.llm import LLMUnavailable, call_json
+from ba_chat.llm import LLMUnavailable, call_json_with_retry
 from ba_chat.state import AnalyzeTarget, ChatState, Intent
 
 log = logging.getLogger(__name__)
@@ -94,13 +94,14 @@ async def router(state: ChatState) -> ChatState:
         return {"intent": "create_booking", "analyze_target": None}
 
     try:
-        decision = await call_json(
+        decision = await call_json_with_retry(
             system=_SYSTEM,
             user=_build_prompt(state),
             schema=_RouteDecision,
+            node_name="router",
         )
     except LLMUnavailable as exc:
-        log.info("router falling back to keywords: %s", exc)
+        log.info("router falling back to keywords after retries: %s", exc)
         return _keyword_route(last_human)
 
     intent: Intent = decision.intent  # type: ignore[assignment]

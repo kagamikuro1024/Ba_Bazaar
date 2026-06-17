@@ -6,6 +6,8 @@ shows progressive text even for the canned messages.
 
 from __future__ import annotations
 
+import asyncio
+
 from langchain_core.messages import AIMessage
 from langgraph.config import get_stream_writer
 
@@ -26,11 +28,11 @@ _UNKNOWN_REPLY = (
 async def respond(state: ChatState) -> ChatState:
     intent = state.get("intent", "unknown")
     text = _SMALLTALK_REPLY if intent == "smalltalk" else _UNKNOWN_REPLY
-    _stream_chunks(text)
+    await _stream_chunks(text)
     return {"messages": [AIMessage(content=text)]}
 
 
-def _stream_chunks(text: str, *, chunk_size: int = 8) -> None:
+async def _stream_chunks(text: str, *, chunk_size: int = 8) -> None:
     try:
         writer = get_stream_writer()
     except Exception:
@@ -39,3 +41,6 @@ def _stream_chunks(text: str, *, chunk_size: int = 8) -> None:
         return
     for i in range(0, len(text), chunk_size):
         writer({"type": "token", "text": text[i : i + chunk_size]})
+        # Yield to the event loop so each chunk flushes to the SSE stream
+        # instead of buffering until the generator returns.
+        await asyncio.sleep(0)

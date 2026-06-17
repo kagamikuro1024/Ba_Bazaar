@@ -14,6 +14,7 @@ checkpointer sees the complete reply on the next turn.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -32,7 +33,13 @@ _SYSTEM = (
     "English: 3-5 short bullets, every number quoted exactly from the JSON. "
     "Do not invent BA names, projects, dates, or trends not present in the "
     "facts. Format the reply as Markdown bullets followed by a single closing "
-    "sentence. Never wrap output in code fences."
+    "sentence. Never wrap output in code fences. "
+    "Highlight the key facts the manager should not miss by wrapping them in "
+    "double-equals, e.g. ==75%== or ==12 pending==. Highlight numbers, "
+    "percentages, dates, BA names, project names, and status flags — pick at "
+    "most one or two highlights per bullet so the emphasis stays meaningful. "
+    "Use **bold** only for labels (e.g. **Team utilization**), never combine "
+    "bold and highlight on the same span."
 )
 
 
@@ -40,7 +47,7 @@ async def summarize_metrics(state: ChatState) -> ChatState:
     metrics = state.get("metrics")
     if not metrics:
         text = _no_data_message(state)
-        _emit_simulated_stream(text)
+        await _emit_simulated_stream(text)
         return {"messages": [AIMessage(content=text)]}
 
     settings = get_settings()
@@ -48,7 +55,7 @@ async def summarize_metrics(state: ChatState) -> ChatState:
         text = _deterministic_summary(state, metrics)
         # Even the deterministic path streams: emit the text in small chunks so
         # the UI feels consistent. Words are a good unit for short markdown.
-        _emit_simulated_stream(text)
+        await _emit_simulated_stream(text)
         return {"messages": [AIMessage(content=text)]}
 
     user_prompt = _build_user_prompt(state, metrics)
@@ -66,16 +73,19 @@ async def summarize_metrics(state: ChatState) -> ChatState:
             chunks.append(delta)
             if writer is not None:
                 writer({"type": "token", "text": delta})
+                # Yield to the event loop after each LLM token so the SSE
+                # server can flush it to the client immediately.
+                await asyncio.sleep(0)
     except LLMUnavailable as exc:
         log.info("summarize_metrics falling back: %s", exc)
         text = _deterministic_summary(state, metrics)
-        _emit_simulated_stream(text)
+        await _emit_simulated_stream(text)
         return {"messages": [AIMessage(content=text)]}
 
     text = "".join(chunks).strip()
     if not text:
         text = _deterministic_summary(state, metrics)
-        _emit_simulated_stream(text)
+        await _emit_simulated_stream(text)
     return {"messages": [AIMessage(content=text)]}
 
 
@@ -88,7 +98,7 @@ def _safe_writer():
         return None
 
 
-def _emit_simulated_stream(text: str, *, chunk_size: int = 8) -> None:
+async def _emit_simulated_stream(text: str, *, chunk_size: int = 8) -> None:
     """Slice the deterministic text into chunks so the UI sees streaming.
 
     chunk_size is in characters; we don't bother breaking on word boundaries
@@ -100,6 +110,9 @@ def _emit_simulated_stream(text: str, *, chunk_size: int = 8) -> None:
         return
     for i in range(0, len(text), chunk_size):
         writer({"type": "token", "text": text[i : i + chunk_size]})
+        # Yield to the event loop so each chunk flushes to the SSE stream
+        # instead of buffering until the generator returns.
+        await asyncio.sleep(0)
 
 
 # ---------------------------------------------------------------------------
@@ -147,15 +160,15 @@ def _summarize_manager_dashboard(payload: dict) -> str:
     actions = payload.get("actions", {}) or {}
     timeframe = payload.get("timeframe", {}) or {}
     bullets = [
-        f"- Timeframe: **{timeframe.get('from', '?')} → {timeframe.get('to', '?')}**.",
-        f"- Team utilization: **{team.get('team_utilization_percent', 0)}%** "
+        f"- **Timeframe**: =={timeframe.get('from', '?')} → {timeframe.get('to', '?')}==.",
+        f"- **Team utilization**: =={team.get('team_utilization_percent', 0)}%== "
         f"across **{team.get('total_ba', 0)}** active BA.",
-        f"- Booked man-days: **{team.get('total_man_days', 0)}** of "
+        f"- **Booked man-days**: =={team.get('total_man_days', 0)}== of "
         f"**{team.get('total_available_man_days', 0)}** available.",
-        f"- Pending requests: **{actions.get('pending_requests', 0)}** "
+        f"- **Pending requests**: =={actions.get('pending_requests', 0)}== "
         f"(unassigned **{actions.get('unassigned_requests', 0)}**, "
-        f"urgent **{actions.get('urgent_requests', 0)}**).",
-        f"- Capacity watchlist: **{actions.get('overbooked_ba', 0)}** overbooked, "
+        f"urgent =={actions.get('urgent_requests', 0)}==).",
+        f"- **Capacity watchlist**: =={actions.get('overbooked_ba', 0)} overbooked==, "
         f"**{actions.get('bench_ba', 0)}** on bench.",
     ]
     return "\n".join(bullets)

@@ -43,7 +43,7 @@ async def submit_booking(state: ChatState) -> ChatState:
     except APIError as exc:
         log.warning("submit_booking failed: %s", exc)
         return {
-            "messages": [AIMessage(content=f"Booking failed: {exc.message}")],
+            "messages": [AIMessage(content=f"⚠️ **Booking failed**: =={exc.message}==")],
             "error": exc.message,
             "confirmed": False,
             "awaiting_user": None,
@@ -55,9 +55,11 @@ async def submit_booking(state: ChatState) -> ChatState:
     status = booking.get("status", write_mode.upper())
     warning = result.get("warning")
 
-    lines = [f"✓ **Booking created** (ID: `{booking_id}`, status: {status})"]
+    lines = [
+        f"✓ **Booking created** (ID: `{booking_id}`, status: =={status}==)"
+    ]
     if warning:
-        lines.append(f"⚠️ Note: {_format_warning(warning)}")
+        lines.append(f"⚠️ Note: =={_format_warning(warning)}==")
     lines.append("")
     lines.append("Anything else I can help with?")
 

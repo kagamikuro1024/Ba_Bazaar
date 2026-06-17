@@ -74,14 +74,20 @@ async def confirm(state: ChatState) -> ChatState:
     candidates = state.get("candidates") or []
 
     lines = ["**Ready to submit this booking:**", ""]
-    lines.append(f"- **Project**: {slots.get('project_name') or slots.get('project_id') or '—'}")
+    project = slots.get('project_name') or slots.get('project_id') or '—'
+    lines.append(f"- **Project**: =={project}==")
     if slots.get("ba_id") or slots.get("ba_name"):
-        lines.append(f"- **BA**: {slots.get('ba_name') or slots.get('ba_id')}")
+        ba_label = slots.get('ba_name') or slots.get('ba_id')
+        lines.append(f"- **BA**: =={ba_label}==")
     else:
-        lines.append("- **BA**: Unassigned (manager will assign)")
-    lines.append(f"- **Dates**: {slots.get('start_date')} → {slots.get('end_date')}")
-    lines.append(f"- **Capacity**: {slots.get('capacity_percent')}%")
-    lines.append(f"- **Priority**: {slots.get('priority', 'MEDIUM')}")
+        lines.append("- **BA**: ==Unassigned== (manager will assign)")
+    lines.append(f"- **Dates**: =={slots.get('start_date')} → {slots.get('end_date')}==")
+    lines.append(f"- **Capacity**: =={slots.get('capacity_percent')}%==")
+    priority = slots.get('priority', 'MEDIUM')
+    if priority in ("HIGH", "URGENT"):
+        lines.append(f"- **Priority**: =={priority}==")
+    else:
+        lines.append(f"- **Priority**: {priority}")
     lines.append(f"- **Title**: {slots.get('title')}")
     if slots.get("description"):
         lines.append(f"- **Description**: {slots['description']}")
@@ -92,9 +98,12 @@ async def confirm(state: ChatState) -> ChatState:
         blocking = simulation.get("blocking_day")
         lines.append("")
         if blocking:
-            lines.append(f"⚠️ **Warning**: Capacity exceeds 100% on {blocking} (risk={risk_after}%)")
+            lines.append(
+                f"⚠️ **Warning**: Capacity exceeds 100% on =={blocking}== "
+                f"(risk =={risk_after}%==)"
+            )
         else:
-            lines.append(f"✓ Capacity OK — max risk after: {risk_after}%")
+            lines.append(f"✓ Capacity OK — max risk after: =={risk_after}%==")
 
     if not slots.get("ba_id") and candidates:
         lines.append("")
@@ -102,7 +111,7 @@ async def confirm(state: ChatState) -> ChatState:
         for i, c in enumerate(candidates[:3], 1):
             name = c.get("full_name", c.get("ba_id", "?"))
             score = c.get("fit_score", "?")
-            lines.append(f"  {i}. {name} (fit: {score})")
+            lines.append(f"  {i}. =={name}== (fit: =={score}==)")
 
     lines.append("")
     lines.append("Reply **yes** to submit, or tell me what to change.")

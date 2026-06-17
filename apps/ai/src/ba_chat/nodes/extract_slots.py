@@ -9,21 +9,65 @@ Two-phase:
 
 from __future__ import annotations
 
-import json
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
 from ba_chat.dates import parse_relative
-from ba_chat.llm import LLMUnavailable, call_json
+from ba_chat.llm import LLMUnavailable, call_json_with_retry
 from ba_chat.state import ChatState
 
 log = logging.getLogger(__name__)
 
 _CAPACITY_VALUES = {25, 50, 75, 100}
 
+# Phrases that signal "the user is restating the booking command", not
+# answering the field we just asked about. If we see any of these in a
+# clarification reply we refuse to store it as a verbatim field value —
+# otherwise "create booking for tomorrow" gets saved as the project_name,
+# then as the title, then as the description on subsequent turns.
+_COMMAND_PREFIXES = (
+    "create ", "book ", "schedule ", "make ", "new ", "add ", "open ",
+    "request ", "log ", "raise ", "set up ", "assign ",
+)
+_COMMAND_TOKENS = (
+    "create booking", "new booking", "add booking", "make booking",
+    "request booking", "open booking", "log booking", "raise booking",
+    "schedule booking",
+)
+
 
 class _SlotExtraction(BaseModel):
+    # --- per-turn intent classification ---
+    # The LLM picks ONE label that best describes what the user did this turn.
+    # The graph routes off this — keyword matching is only a fallback when the
+    # LLM is unavailable.
+    turn_intent: str = Field(
+        default="answer",
+        description=(
+            "Classification of what the user did this turn. One of: "
+            "'answer' (they answered the field we just asked about), "
+            "'confirm' (they said yes/agree to a proposal), "
+            "'cancel' (they want to abandon the booking entirely), "
+            "'go_back' (they want to change a previously-given answer), "
+            "'side_question' (they asked a question or said something "
+            "unrelated to the field we asked about — e.g. 'what fields do "
+            "you need?', 'who's available?', 'never mind explain again'), "
+            "'restate_command' (they re-typed the original 'create booking' "
+            "command instead of answering)."
+        ),
+    )
+    side_reply: str | None = Field(
+        default=None,
+        description=(
+            "When turn_intent='side_question', a SHORT, friendly reply that "
+            "answers the user's question or acknowledges their comment. "
+            "Mention that you'll continue the booking flow afterwards. "
+            "Null for all other turn_intents."
+        ),
+    )
+    # --- slot values (only populated when turn_intent='answer') ---
     project_name: str | None = Field(
         default=None,
         description="Project name if mentioned. Use null if not found.",
@@ -48,21 +92,36 @@ class _SlotExtraction(BaseModel):
         default=None,
         description="One of LOW, MEDIUM, HIGH, URGENT. Use null if not mentioned.",
     )
-    is_confirmation: bool = Field(
-        default=False,
-        description="True if the user is saying yes/confirming a previous proposal.",
-    )
-    is_rejection: bool = Field(
-        default=False,
-        description="True if the user is saying no/cancelling a proposed booking.",
-    )
 
 
 _SYSTEM = (
-    "You extract booking slot values from a user message in a BA resource management system. "
-    "Return STRICT JSON. Do NOT invent values not present in the text. "
+    "You are the slot-extraction component of a Ba_Bazaar booking assistant. "
+    "Your job is to figure out what the user just did and, when relevant, "
+    "extract booking field values from their message. Return STRICT JSON. "
+    "\n\n"
+    "Step 1 — classify what the user did this turn into ONE turn_intent label:"
+    "\n"
+    "  * 'answer' — they answered the field we just asked about\n"
+    "  * 'confirm' — they're saying yes/ok/go to a proposal\n"
+    "  * 'cancel' — they want to drop this booking entirely (e.g. 'no', "
+    "'cancel', 'stop', 'never mind', 'forget it', 'I don't want to anymore', "
+    "'changed my mind')\n"
+    "  * 'go_back' — they want to change a previously-given answer (e.g. "
+    "'go back', 'previous', 'wait, change the title', 'actually let me "
+    "redo the dates')\n"
+    "  * 'side_question' — they asked a clarifying question or said something "
+    "unrelated to the current field (e.g. 'what info do you need?', 'who's "
+    "free next week?', 'why are you asking that?'). When you pick this, ALSO "
+    "fill in side_reply with a short helpful answer that ends by inviting "
+    "them to continue the booking.\n"
+    "  * 'restate_command' — they retyped the original 'create booking' "
+    "command instead of answering\n"
+    "\n"
+    "Step 2 — only when turn_intent='answer', extract slot values from the "
+    "message. Otherwise leave all slot fields null. "
+    "Do NOT invent values not present in the text. "
     "capacity_percent MUST be one of 25, 50, 75, 100 or null. "
-    "Never invent BA names or project names not mentioned."
+    "Never invent BA names or project names that weren't mentioned."
 )
 
 
@@ -83,85 +142,184 @@ def _conversation_context(state: ChatState) -> str:
     return "\n".join(lines)
 
 
+# Offline keyword fallbacks. Used ONLY when the LLM is unreachable so the
+# bot still has minimal sanity in CI / offline contexts. The live path is
+# the LLM's turn_intent classification — keywords are not the source of
+# truth.
+_OFFLINE_CANCEL = {
+    "no", "n", "nope", "cancel", "stop", "abort",
+    "nevermind", "never mind", "quit", "exit",
+    "no thanks", "no thank you", "forget it", "drop it",
+}
+_OFFLINE_BACK = {"back", "go back", "previous", "undo", "redo"}
+_OFFLINE_CONFIRM = {
+    "yes", "y", "yep", "yeah", "submit", "go", "go ahead",
+    "confirm", "ok", "okay",
+}
+# Catch re-stated booking commands in the offline path (with or without
+# underscores, spaces, or casing). These shouldn't be stored as field values.
+_OFFLINE_RESTATE = re.compile(
+r"(create[_\s]+book|book[_\s]+(a|the)?|schedule[_\s]+(a|the)?|new[_\s]+book|"
+r"make[_\s]+(a\s+)?book|add[_\s]+(a\s+)?book)",
+re.IGNORECASE,
+)
+
+# Required fields in the order we ask for them. Used by the go_back path to
+# clear the most recently-filled slot.
+_REQUIRED_ORDER = (
+    "project_name", "title", "description",
+    "start_date", "end_date", "capacity_percent",
+)
+
+
+def _normalise(text: str) -> str:
+    return " ".join(text.lower().strip().split())
+
+
+def _go_back_clear_last_slot(slots: dict) -> dict:
+    """Remove the most recently-filled required slot. end_date drags
+    start_date with it so we don't end up with a half-resolved range."""
+
+    for field in reversed(_REQUIRED_ORDER):
+        if slots.get(field) not in (None, ""):
+            slots.pop(field, None)
+            if field == "end_date":
+                slots.pop("start_date", None)
+            break
+    return slots
+
+
+def _cancel_state(text: str = "") -> ChatState:
+    return {
+        "slots": {},
+        "confirmed": False,
+        "cancelled": True,
+        "intent": "unknown",
+        "awaiting_user": None,
+        "missing_slots": [],
+    }
+
+
 async def extract_slots(state: ChatState) -> ChatState:
     text = _last_human_text(state)
     existing: dict = dict(state.get("slots") or {})
     missing_slots = state.get("missing_slots") or []
     awaiting = state.get("awaiting_user")
 
-    # Detect simple yes/no replies up front (works even without LLM).
-    if awaiting == "confirmation":
-        lowered = text.lower().strip()
-        if lowered in ("yes", "y", "yep", "yeah", "submit", "go", "go ahead", "confirm", "ok", "okay"):
-            return {"slots": existing, "confirmed": True}
-        if lowered in ("no", "n", "nope", "cancel", "stop", "abort"):
-            return {
-                "slots": {},
-                "confirmed": False,
-                "intent": "unknown",
-                "awaiting_user": None,
-                "missing_slots": [],
-            }
-
-    # 1. Deterministic date resolution
+    # 1. Deterministic date resolution — applied first because it's pure and
+    #    cheap and helps even when the LLM is offline.
     start, end = parse_relative(text)
     if start and not existing.get("start_date"):
         existing["start_date"] = start
     if end and not existing.get("end_date"):
         existing["end_date"] = end
+    parsed_a_date = bool(start or end)
 
-    # 2. Fallback: when we asked a specific field, treat the reply as the answer
-    #    for that field (works without an LLM).
+    # 2. LLM-first turn classification + slot extraction.
+    user_prompt = (
+        f"Conversation so far:\n{_conversation_context(state)}\n\n"
+        f"Latest user message: {text!r}\n"
+        f"Currently awaiting: {awaiting or 'nothing'}\n"
+        f"Field we last asked about: {missing_slots[0] if missing_slots else 'n/a'}\n\n"
+        "Classify what the user did this turn and (only if it was an answer) "
+        "extract slot values. Return JSON."
+    )
+    extracted: _SlotExtraction | None = None
+    try:
+        extracted = await call_json_with_retry(
+            system=_SYSTEM,
+            user=user_prompt,
+            schema=_SlotExtraction,
+            node_name="extract_slots",
+        )
+    except LLMUnavailable as exc:
+        log.info(
+            "extract_slots: LLM unavailable after retries, using offline path: %s",
+            exc,
+        )
+
+    if extracted is not None:
+        turn_intent = (extracted.turn_intent or "answer").lower().strip()
+
+        if turn_intent == "cancel":
+            return _cancel_state()
+
+        if turn_intent == "confirm":
+            return {"slots": existing, "confirmed": True}
+
+        if turn_intent == "go_back" and awaiting == "clarification":
+            return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
+
+        if turn_intent == "side_question" and extracted.side_reply:
+            # User said something off-flow. Surface the LLM's reply and
+            # short-circuit the rest of the booking pipeline for this turn —
+            # we keep slots intact so they can resume answering next turn.
+            return {
+                "slots": existing,
+                "confirmed": False,
+                "side_reply_text": extracted.side_reply,
+            }
+
+        if turn_intent == "restate_command":
+            # Don't store the restated command as a field value. Slots stay
+            # as-is; the next ask_missing pass re-asks the same field.
+            return {"slots": existing, "confirmed": False}
+
+        # turn_intent == 'answer' (or unknown) — apply slot values.
+        if extracted.project_name and not existing.get("project_id") and not existing.get("project_name"):
+            existing["project_name"] = extracted.project_name
+        if extracted.ba_name and not existing.get("ba_id") and not existing.get("ba_name"):
+            existing["ba_name"] = extracted.ba_name
+        if extracted.title and not existing.get("title"):
+            existing["title"] = extracted.title
+        if extracted.description and not existing.get("description"):
+            existing["description"] = extracted.description
+        if extracted.capacity_percent in _CAPACITY_VALUES and not existing.get("capacity_percent"):
+            existing["capacity_percent"] = extracted.capacity_percent
+        if extracted.priority and not existing.get("priority"):
+            existing["priority"] = extracted.priority
+        return {"slots": existing, "confirmed": False}
+
+    # 3. Offline fallback: minimal keyword detection so the bot still works
+    #    when DeepSeek is unreachable. This is intentionally narrower than
+    #    the LLM path — we only catch the obvious cases.
+    lowered = _normalise(text)
+
+    # Catch re-stated commands BEFORE the clarification fallback so they
+    # never get stored as a field value (e.g. "create_booking" becoming
+    # the project name). This applies regardless of awaiting state.
+    if _OFFLINE_RESTATE.search(text):
+        return {"slots": existing, "confirmed": False}
+
+    if awaiting in ("confirmation", "clarification") and lowered in _OFFLINE_CANCEL:
+        return _cancel_state()
+    if awaiting == "confirmation" and lowered in _OFFLINE_CONFIRM:
+        return {"slots": existing, "confirmed": True}
+    if awaiting == "clarification" and lowered in _OFFLINE_BACK:
+        return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
+
+    # Last-resort: when we asked a specific field, treat the reply as that
+    # field's value (deterministic clarification fallback).
     if awaiting == "clarification" and missing_slots:
         first_missing = missing_slots[0]
         if first_missing not in ("start_date", "end_date") and not existing.get(first_missing):
-            # Only apply the raw reply when it looks like a single-field answer
-            # (short text, no other slots embedded). If the LLM is available it
-            # will override this with a more precise extraction below.
-            if len(text.split(",")) <= 2 and len(text) < 200:
+            if (
+                len(text.split(",")) <= 2
+                and len(text) < 200
+                and not _looks_like_command(text)
+                and not parsed_a_date
+            ):
                 value = _coerce_field_value(first_missing, text)
                 if value is not None:
                     existing[first_missing] = value
 
-    # 3. LLM slot extraction (best-effort)
-    user_prompt = (
-        f"Conversation:\n{_conversation_context(state)}\n\n"
-        f"Latest message: {text!r}\n\n"
-        "Extract slot values. Return JSON."
-    )
-    try:
-        extracted = await call_json(
-            system=_SYSTEM,
-            user=user_prompt,
-            schema=_SlotExtraction,
-        )
-    except LLMUnavailable as exc:
-        log.info("extract_slots: LLM unavailable, using deterministic path: %s", exc)
-        return {"slots": existing, "confirmed": False}
-
-    if extracted.is_confirmation:
-        return {"slots": existing, "confirmed": True}
-    if extracted.is_rejection:
-        return {
-            "slots": {},
-            "confirmed": False,
-            "intent": "unknown",
-            "awaiting_user": None,
-            "missing_slots": [],
-        }
-
-    if extracted.project_name and not existing.get("project_id") and not existing.get("project_name"):
-        existing["project_name"] = extracted.project_name
-    if extracted.ba_name and not existing.get("ba_id") and not existing.get("ba_name"):
-        existing["ba_name"] = extracted.ba_name
-    if extracted.title and not existing.get("title"):
-        existing["title"] = extracted.title
-    if extracted.description and not existing.get("description"):
-        existing["description"] = extracted.description
-    if extracted.capacity_percent in _CAPACITY_VALUES and not existing.get("capacity_percent"):
-        existing["capacity_percent"] = extracted.capacity_percent
-    if extracted.priority and not existing.get("priority"):
-        existing["priority"] = extracted.priority
+    # Offline "new booking" bootstrapper: when the slot bag is completely
+    # empty (initial "create booking" / "book a BA"), we need to seed
+    # missing_slots so the graph enters the ask_missing → ask_missing loop
+    # instead of wandering through pick_write_mode → fetch_recommendations
+    # with nothing to work with.
+    if not awaiting and not existing.get("project_name"):
+        return {"slots": existing, "missing_slots": list(_REQUIRED_ORDER)}
 
     return {"slots": existing, "confirmed": False}
 
@@ -183,3 +341,24 @@ def _coerce_field_value(field: str, text: str) -> str | int | None:
         return value if value in _CAPACITY_VALUES else None
     # For project_name, title, description: take the user's reply verbatim.
     return cleaned
+
+
+def _looks_like_command(text: str) -> bool:
+    """Heuristic: does this reply look like the user restating the original
+    booking command instead of answering the slot question?
+
+    Catches both space-separated ("create booking") and underscore variants
+    ("create_booking"), plus any leading imperative verb.
+    """
+
+    cleaned = text.strip().lower()
+    if not cleaned:
+        return False
+    # Underscore or space-separated command tokens (e.g. "create_booking")
+    if _OFFLINE_RESTATE.search(text):
+        return True
+    if any(token in cleaned for token in _COMMAND_TOKENS):
+        return True
+    if any(cleaned.startswith(prefix) for prefix in _COMMAND_PREFIXES):
+        return True
+    return False

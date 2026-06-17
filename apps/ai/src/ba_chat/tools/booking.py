@@ -12,15 +12,21 @@ from typing import Any
 import httpx
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.tools.read import APIError, TransientAPIError
+
+# Re-export so existing call sites that import APIError from this module keep
+# working. TransientAPIError is exposed for callers that need to differentiate
+# retryable failures.
+__all__ = [
+    "APIError",
+    "TransientAPIError",
+    "create_booking_direct",
+    "create_booking_request",
+    "get_recommendations",
+    "range_check",
+]
 
 log = logging.getLogger(__name__)
-
-
-class APIError(RuntimeError):
-    def __init__(self, status: int, message: str):
-        super().__init__(f"{status}: {message}")
-        self.status = status
-        self.message = message
 
 
 async def _request(
@@ -44,10 +50,21 @@ async def _request(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("%s %s params=%s body=%s", method, url, params, json_body)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.request(
-            method, url, params=params, json=json_body, headers=headers
-        )
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.request(
+                method, url, params=params, json=json_body, headers=headers
+            )
+    except httpx.TimeoutException as exc:
+        log.warning("%s %s timed out: %s", method, url, exc)
+        raise TransientAPIError(
+            504, f"upstream timed out after {settings.request_timeout_seconds:.0f}s"
+        ) from exc
+    except httpx.HTTPError as exc:
+        log.warning("%s %s failed: %s", method, url, exc)
+        raise TransientAPIError(502, f"upstream request failed: {exc}") from exc
+    if response.status_code >= 500:
+        raise TransientAPIError(response.status_code, response.text[:300])
     if response.status_code >= 300:
         raise APIError(response.status_code, response.text[:300])
     if not response.content:

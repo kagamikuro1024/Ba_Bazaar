@@ -48,7 +48,8 @@ export const CHAT_API_BASE_URL = resolveChatBaseUrl();
 export async function* chatStream(req: ChatStreamRequest): AsyncGenerator<ChatStreamEvent> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Accept: 'text/event-stream'
+    Accept: 'text/event-stream',
+    'Accept-Encoding': 'identity'  // Prevent gzip buffering — SSE must stream immediately
   };
   // The chat service is read-only against the Go API but it forwards this
   // bearer token so the Go side enforces RBAC for whatever endpoint it hits.

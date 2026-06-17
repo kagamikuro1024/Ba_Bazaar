@@ -26,6 +26,15 @@ class APIError(RuntimeError):
         self.message = message
 
 
+class TransientAPIError(APIError):
+    """Subclass for retryable failures: network errors, timeouts, 5xx.
+
+    The graph's RetryPolicy is keyed on this type, so 4xx/permanent failures
+    (raised as plain ``APIError``) skip retry and fall through to the node's
+    own error path immediately.
+    """
+
+
 async def _get(
     path: str,
     *,
@@ -43,9 +52,26 @@ async def _get(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("GET %s params=%s", url, params)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(url, params=params, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, params=params, headers=headers)
+    except httpx.TimeoutException as exc:
+        # Go-side LLM summary endpoints can take up to ~45s when DeepSeek is
+        # slow. Raise as TransientAPIError so the graph's RetryPolicy retries
+        # this node before degrading to the no-data path.
+        log.warning("GET %s timed out after %ss: %s", url, settings.request_timeout_seconds, exc)
+        raise TransientAPIError(
+            504, f"upstream timed out after {settings.request_timeout_seconds:.0f}s"
+        ) from exc
+    except httpx.HTTPError as exc:
+        # Connection refused, DNS, TLS, read errors — all retryable.
+        log.warning("GET %s failed: %s", url, exc)
+        raise TransientAPIError(502, f"upstream request failed: {exc}") from exc
+    if response.status_code >= 500:
+        # 5xx: upstream is broken, worth retrying.
+        raise TransientAPIError(response.status_code, response.text[:300])
     if response.status_code >= 300:
+        # 4xx: bad input / auth / not found — retrying won't help.
         raise APIError(response.status_code, response.text[:300])
     if not response.content:
         return {}

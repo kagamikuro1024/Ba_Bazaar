@@ -11,6 +11,7 @@ import logging
 from ba_chat.state import ChatState
 from ba_chat.tools.read import (
     APIError,
+    TransientAPIError,
     get_action_center_llm,
     get_manager_summary,
     get_my_schedule_llm,
@@ -23,6 +24,10 @@ log = logging.getLogger(__name__)
 async def retrieve_metrics(state: ChatState) -> ChatState:
     target = state.get("analyze_target") or "manager_dashboard"
     auth = state.get("auth_header")
+    # Note: TransientAPIError (timeouts, 5xx, network blips) is intentionally
+    # NOT caught here — it propagates up to LangGraph so the node's
+    # retry_policy fires. Only permanent APIError (4xx) drops to the no-data
+    # path on the first attempt.
     try:
         if target == "action_center":
             metrics = await get_action_center_llm(auth_header=auth)
@@ -35,6 +40,9 @@ async def retrieve_metrics(state: ChatState) -> ChatState:
             # downstream by `summarize_metrics`. This keeps the analyze path
             # workable even when the Go-side LLM cache is cold.
             metrics = await get_manager_summary(auth_header=auth)
+    except TransientAPIError:
+        # Bubble up so the graph retries this node with backoff.
+        raise
     except APIError as exc:
         log.warning("retrieve_metrics: api error %s", exc)
         return {"metrics": None, "error": exc.message}

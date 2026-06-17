@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -34,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from ba_chat.config import get_settings
 from ba_chat.graph import compile_graph
+from ba_chat.guardrails import check_input, check_output
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +76,41 @@ async def health() -> dict[str, Any]:
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> StreamingResponse:
+    # Check input against guardrails before processing
+    guard_check = await check_input(req.message)
+    if not guard_check["allowed"]:
+        # Return blocked response immediately
+        blocked_text = guard_check["block_message"]
+        
+        async def blocked_stream() -> AsyncIterator[bytes]:
+            yield _sse("ready", {"thread_id": req.thread_id or str(uuid.uuid4())})
+            await asyncio.sleep(0)
+            yield _sse("state", {"intent": "blocked", "analyze_target": None})
+            await asyncio.sleep(0)
+            
+            # Stream the blocked message word by word
+            word_buffer = ""
+            for word in blocked_text.split():
+                word_buffer += word + " "
+                yield _sse("token", {"text": word + " "})
+                await asyncio.sleep(0)
+            
+            await asyncio.sleep(0)
+            yield _sse("final", {
+                "content": blocked_text,
+                "thread_id": req.thread_id or str(uuid.uuid4()),
+            })
+        
+        return StreamingResponse(
+            blocked_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     inputs = {
@@ -85,9 +122,14 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
     async def event_stream() -> AsyncIterator[bytes]:
         yield _sse("ready", {"thread_id": thread_id})
+        # Yield control to ensure the ready event flushes before processing
+        await asyncio.sleep(0)
         final_text = ""
         final_msg: AIMessage | None = None
         sent_state = False
+        # Word buffer: accumulate sub-word tokens from the LLM and emit
+        # complete words for clean word-by-word SSE streaming.
+        word_buffer = ""
         try:
             async for stream_mode, raw_chunk in _graph.astream(
                 inputs,
@@ -100,11 +142,18 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                         delta = str(chunk.get("text") or "")
                         if delta:
                             final_text += delta
-                            yield _sse("token", {"text": delta})
-                            # Give the browser/React a chance to paint. Without
-                            # this, short static replies can arrive in one TCP
-                            # burst and look like a batch update.
-                            await asyncio.sleep(0.025)
+                            word_buffer += delta
+                            # Emit at word boundaries (space, newline, or
+                            # punctuation followed by whitespace) so the UI
+                            # paints whole words instead of sub-word tokens.
+                            m = re.search(r'\s', word_buffer)
+                            while m:
+                                split_at = m.end()
+                                word_chunk = word_buffer[:split_at]
+                                word_buffer = word_buffer[split_at:]
+                                yield _sse("token", {"text": word_chunk})
+                                await asyncio.sleep(0)
+                                m = re.search(r'\s', word_buffer)
                 elif stream_mode == "values":
                     chunk = raw_chunk if isinstance(raw_chunk, dict) else {}
                     if not sent_state and "intent" in chunk:
@@ -116,16 +165,29 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                                 {"intent": intent, "analyze_target": target},
                             )
                             sent_state = True
+                            await asyncio.sleep(0)
                     messages = chunk.get("messages") or []
                     for msg in reversed(messages):
                         if isinstance(msg, AIMessage) and isinstance(msg.content, str):
                             if msg.content.strip():
                                 final_msg = msg
                                 break
-            # End of stream — flush the final AI message + buttons.
+            # Flush any remaining buffered text before the final event
+            if word_buffer:
+                yield _sse("token", {"text": word_buffer})
+                word_buffer = ""
+                await asyncio.sleep(0)
+            
+            # Check output safety before sending final
             if final_msg is not None:
                 if not final_text.strip():
-                    final_text = final_msg.content
+                    final_text = str(final_msg.content)
+                
+                # Safety check on output
+                if not check_output(final_text):
+                    log.warning("Unsafe content detected in LLM output, blocking")
+                    final_text = "I apologize, but I cannot provide that information. Let me help you with business-related questions instead."
+                
                 action_buttons = final_msg.additional_kwargs.get("action_buttons")
                 action_field = final_msg.additional_kwargs.get("action_field")
                 final_payload: dict[str, Any] = {
@@ -138,12 +200,30 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                     final_payload["action_field"] = action_field
                 yield _sse("final", final_payload)
             else:
+                # Safety check on output
+                if not check_output(final_text):
+                    log.warning("Unsafe content detected in LLM output, blocking")
+                    final_text = "I apologize, but I cannot provide that information. Let me help you with business-related questions instead."
                 yield _sse("final", {"content": final_text, "thread_id": thread_id})
         except Exception as exc:  # pragma: no cover - safety net for streamed errors
             log.exception("chat stream failed")
+            # Flush remaining buffer on error too
+            if word_buffer:
+                yield _sse("token", {"text": word_buffer})
             yield _sse("error", {"message": str(exc)})
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            # Defeat proxy/browser buffering so tokens paint as they arrive.
+            # Without X-Accel-Buffering, nginx (and some dev proxies) hold the
+            # whole response; without no-cache the browser may coalesce frames.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _sse(event: str, payload: dict[str, Any]) -> bytes:

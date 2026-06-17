@@ -49,11 +49,6 @@ export function ChatBubble({
         ) : (
           <span className="italic text-slate-400">(no response)</span>
         )}
-        {message.intent && !isUser ? (
-          <div className="mt-1.5 text-[11px] uppercase tracking-wide text-slate-400">
-            {labelForState(message.intent, message.analyzeTarget ?? null)}
-          </div>
-        ) : null}
         {!isUser && message.actionButtons?.length && onActionPick ? (
           <ChatActionButtons
             buttons={message.actionButtons}
@@ -95,20 +90,27 @@ function MarkdownLite({ text }: { text: string }) {
 }
 
 function renderInline(text: string) {
-  // Replace **bold** with <strong>. Keep it deterministic; no risky parsing.
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Tokenize **bold** and ==highlight==. Both are leaf tokens (no nesting) so
+  // a single split-then-map keeps things deterministic and cheap.
+  const parts = text.split(/(\*\*[^*]+\*\*|==[^=]+==)/g);
   return parts.map((part, idx) => {
-    const match = /^\*\*([^*]+)\*\*$/.exec(part);
-    if (match) {
-      return <strong key={idx}>{match[1]}</strong>;
+    const bold = /^\*\*([^*]+)\*\*$/.exec(part);
+    if (bold) {
+      return <strong key={idx}>{bold[1]}</strong>;
+    }
+    const mark = /^==([^=]+)==$/.exec(part);
+    if (mark) {
+      return (
+        <mark
+          key={idx}
+          className="rounded bg-amber-100 px-1 text-amber-900 ring-1 ring-amber-200/70"
+        >
+          {mark[1]}
+        </mark>
+      );
     }
     return <span key={idx}>{part}</span>;
   });
 }
 
-function labelForState(intent: string, target: string | null) {
-  if (intent === 'analyze' && target) {
-    return `analyze · ${target.replace(/_/g, ' ')}`;
-  }
-  return intent;
-}
+
