@@ -1,5 +1,6 @@
 """Tools package — re-exports keep imports tidy in the nodes."""
 
+from ba_chat.tools.date import get_today, get_today_iso
 from ba_chat.tools.read import (
     APIError,
     get_action_center_llm,
@@ -22,6 +23,8 @@ from ba_chat.tools.booking import (
 
 __all__ = [
     "APIError",
+    "get_today",
+    "get_today_iso",
     "get_action_center_llm",
     "get_manager_summary",
     "get_manager_summary_llm",

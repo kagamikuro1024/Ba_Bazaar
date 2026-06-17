@@ -24,6 +24,7 @@ import httpx
 from pydantic import BaseModel
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.http import async_client
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def stream_chat(
     timeout = httpx.Timeout(settings.deepseek_timeout_seconds, connect=10.0)
     url = f"{settings.deepseek_base_url}/v1/chat/completions"
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with async_client(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers=headers) as response:
                 if response.status_code >= 300:
                     body = await response.aread()
@@ -158,7 +159,7 @@ async def call_json(
     timeout = httpx.Timeout(settings.deepseek_timeout_seconds, connect=10.0)
     url = f"{settings.deepseek_base_url}/v1/chat/completions"
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with async_client(timeout=timeout) as client:
             response = await client.post(url, json=payload, headers=headers)
     except httpx.HTTPError as exc:
         raise LLMUnavailable(f"deepseek request failed: {exc}") from exc

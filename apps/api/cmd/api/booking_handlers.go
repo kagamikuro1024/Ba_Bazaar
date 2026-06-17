@@ -506,8 +506,9 @@ func (app *App) normalizeBookingInput(ctx context.Context, input bookingInput) (
 	if input.Title == nil || strings.TrimSpace(*input.Title) == "" {
 		return nil, nil, fmt.Errorf("title is required")
 	}
-	if input.Description == nil || strings.TrimSpace(*input.Description) == "" {
-		return nil, nil, fmt.Errorf("description is required")
+	description := ""
+	if input.Description != nil {
+		description = strings.TrimSpace(*input.Description)
 	}
 	if input.CapacityPercent == nil || !allowedCapacity(*input.CapacityPercent) {
 		return nil, nil, fmt.Errorf("capacity_percent must be 25, 50, 75, or 100")
@@ -520,7 +521,7 @@ func (app *App) normalizeBookingInput(ctx context.Context, input bookingInput) (
 	if input.RequiredLevel != nil {
 		requiredLevel = sanitizeSuggestedLevel(*input.RequiredLevel)
 	}
-	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: strings.TrimSpace(*input.Description), Notes: trimStringPtr(input.Notes), RequiredSkillIDs: ParseSkillIDsFromSlice(input.RequiredSkillIDs), RequiredLevel: requiredLevel, StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
+	normalized := &bookingInputNormalized{BAID: baID, ProjectID: projectID, Title: strings.TrimSpace(*input.Title), Description: description, Notes: trimStringPtr(input.Notes), RequiredSkillIDs: ParseSkillIDsFromSlice(input.RequiredSkillIDs), RequiredLevel: requiredLevel, StartDate: startDate, EndDate: endDate, CapacityPercent: *input.CapacityPercent, Priority: priority}
 	warning := map[string]any(nil)
 	if baID != nil {
 		warning = app.submitWarning(ctx, *baID, startDate, endDate, *input.CapacityPercent)

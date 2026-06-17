@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 
 from pydantic import BaseModel, Field
 
 from ba_chat.dates import parse_relative
 from ba_chat.llm import LLMUnavailable, call_json_with_retry
 from ba_chat.state import ChatState
+from ba_chat.tools.date import get_today_iso
 
 log = logging.getLogger(__name__)
 
@@ -121,7 +123,12 @@ _SYSTEM = (
     "message. Otherwise leave all slot fields null. "
     "Do NOT invent values not present in the text. "
     "capacity_percent MUST be one of 25, 50, 75, 100 or null. "
-    "Never invent BA names or project names that weren't mentioned."
+    "Never invent BA names or project names that weren't mentioned. "
+    "Booking flow rules: description is asked once, but no/nothing/skip "
+    "means an intentionally empty description. Relative dates are grounded "
+    "to the provided current date. If the current field is end_date and "
+    "start_date is already filled, duration replies such as 'for 5 days' "
+    "are valid answers, not side questions."
 )
 
 
@@ -156,12 +163,50 @@ _OFFLINE_CONFIRM = {
     "yes", "y", "yep", "yeah", "submit", "go", "go ahead",
     "confirm", "ok", "okay",
 }
+_DESCRIPTION_SKIP = {
+    "",
+    "-",
+    ".",
+    "blank",
+    "empty",
+    "n",
+    "n/a",
+    "na",
+    "no",
+    "no description",
+    "no details",
+    "no need",
+    "no scope",
+    "none",
+    "nothing",
+    "nothing to add",
+    "nope",
+    "skip",
+    "skip it",
+    "bo qua",
+    "bỏ qua",
+    "khong",
+    "khong co",
+    "không",
+    "không có",
+    "trong",
+    "trống",
+}
 # Catch re-stated booking commands in the offline path (with or without
 # underscores, spaces, or casing). These shouldn't be stored as field values.
 _OFFLINE_RESTATE = re.compile(
 r"(create[_\s]+book|book[_\s]+(a|the)?|schedule[_\s]+(a|the)?|new[_\s]+book|"
 r"make[_\s]+(a\s+)?book|add[_\s]+(a\s+)?book)",
 re.IGNORECASE,
+)
+_SIDE_QUESTION_RE = re.compile(
+    r"^\s*(what|who|when|where|why|how|can|could|should|do|does|did|"
+    r"is|are|will|would)\b",
+    re.IGNORECASE,
+)
+_CONTROL_REPLY_RE = re.compile(
+    r"^\s*(wait|hold on|go back|back|previous|redo|change|edit)\b",
+    re.IGNORECASE,
 )
 
 # Required fields in the order we ask for them. Used by the go_back path to
@@ -174,6 +219,30 @@ _REQUIRED_ORDER = (
 
 def _normalise(text: str) -> str:
     return " ".join(text.lower().strip().split())
+
+
+def _is_description_skip(text: str) -> bool:
+    return _normalise(text) in _DESCRIPTION_SKIP
+
+
+def _looks_like_side_question(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    return "?" in stripped or bool(_SIDE_QUESTION_RE.search(stripped))
+
+
+def _looks_like_control_reply(text: str) -> bool:
+    return bool(_CONTROL_REPLY_RE.search(text.strip()))
+
+
+def _slot_date(value: object) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
 
 
 def _go_back_clear_last_slot(slots: dict) -> dict:
@@ -205,19 +274,70 @@ async def extract_slots(state: ChatState) -> ChatState:
     existing: dict = dict(state.get("slots") or {})
     missing_slots = state.get("missing_slots") or []
     awaiting = state.get("awaiting_user")
+    asked_field = missing_slots[0] if awaiting == "clarification" and missing_slots else None
+    lowered = _normalise(text)
+
+    if asked_field == "description" and _is_description_skip(text):
+        existing["description"] = ""
+        return {"slots": existing, "confirmed": False}
+
+    if awaiting == "confirmation":
+        if lowered in _OFFLINE_CANCEL:
+            return _cancel_state()
+        if lowered in _OFFLINE_CONFIRM:
+            return {"slots": existing, "confirmed": True}
+
+    if awaiting == "clarification":
+        if asked_field != "description" and lowered in _OFFLINE_CANCEL:
+            return _cancel_state()
+        if lowered in _OFFLINE_BACK:
+            return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
+        if _OFFLINE_RESTATE.search(text):
+            return {"slots": existing, "confirmed": False}
 
     # 1. Deterministic date resolution — applied first because it's pure and
-    #    cheap and helps even when the LLM is offline.
-    start, end = parse_relative(text)
-    if start and not existing.get("start_date"):
-        existing["start_date"] = start
-    if end and not existing.get("end_date"):
-        existing["end_date"] = end
+    #    cheap and helps even when the LLM is offline. When we're answering a
+    #    specific date question, only fill that specific date; a single date
+    #    parser returns (same_start, same_end), and treating that as a range is
+    #    how we accidentally skipped the end-date question.
+    date_anchor = _slot_date(existing.get("start_date")) if asked_field == "end_date" else None
+    start, end = parse_relative(text, anchor=date_anchor)
+    answered_date_field = False
+    if asked_field == "start_date":
+        if start:
+            existing["start_date"] = start
+            if end and end != start and not existing.get("end_date"):
+                existing["end_date"] = end
+            answered_date_field = True
+    elif asked_field == "end_date":
+        if end or start:
+            existing["end_date"] = end or start
+            answered_date_field = True
+    else:
+        if start and not existing.get("start_date"):
+            existing["start_date"] = start
+        if end and not existing.get("end_date"):
+            existing["end_date"] = end
     parsed_a_date = bool(start or end)
+    if answered_date_field:
+        return {"slots": existing, "confirmed": False}
+
+    if awaiting == "clarification" and asked_field:
+        value = _direct_clarification_value(
+            asked_field,
+            text,
+            parsed_a_date=parsed_a_date,
+            already_filled=bool(existing.get(asked_field)),
+        )
+        if value is not None:
+            existing[asked_field] = value
+            return {"slots": existing, "confirmed": False}
 
     # 2. LLM-first turn classification + slot extraction.
     user_prompt = (
         f"Conversation so far:\n{_conversation_context(state)}\n\n"
+        f"Current date: {get_today_iso()}\n"
+        f"Current slots: {existing!r}\n"
         f"Latest user message: {text!r}\n"
         f"Currently awaiting: {awaiting or 'nothing'}\n"
         f"Field we last asked about: {missing_slots[0] if missing_slots else 'n/a'}\n\n"
@@ -283,8 +403,6 @@ async def extract_slots(state: ChatState) -> ChatState:
     # 3. Offline fallback: minimal keyword detection so the bot still works
     #    when DeepSeek is unreachable. This is intentionally narrower than
     #    the LLM path — we only catch the obvious cases.
-    lowered = _normalise(text)
-
     # Catch re-stated commands BEFORE the clarification fallback so they
     # never get stored as a field value (e.g. "create_booking" becoming
     # the project name). This applies regardless of awaiting state.
@@ -322,6 +440,33 @@ async def extract_slots(state: ChatState) -> ChatState:
         return {"slots": existing, "missing_slots": list(_REQUIRED_ORDER)}
 
     return {"slots": existing, "confirmed": False}
+
+
+def _direct_clarification_value(
+    field: str,
+    text: str,
+    *,
+    parsed_a_date: bool,
+    already_filled: bool,
+) -> str | int | None:
+    """Return a direct slot value for simple clarification answers.
+
+    When the bot has asked for a specific text field, the user's next plain
+    reply is the value. This prevents short answers like "1" from going to the
+    LLM and coming back as an empty extraction.
+    """
+
+    if already_filled or field in ("start_date", "end_date"):
+        return None
+    if (
+        _looks_like_command(text)
+        or _looks_like_side_question(text)
+        or _looks_like_control_reply(text)
+    ):
+        return None
+    if parsed_a_date or len(text.split(",")) > 2 or len(text) >= 200:
+        return None
+    return _coerce_field_value(field, text)
 
 
 def _coerce_field_value(field: str, text: str) -> str | int | None:

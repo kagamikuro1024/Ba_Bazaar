@@ -114,13 +114,20 @@ async def confirm(state: ChatState) -> ChatState:
             lines.append(f"  {i}. =={name}== (fit: =={score}==)")
 
     lines.append("")
-    lines.append("Reply **yes** to submit, or tell me what to change.")
+    lines.append("Reply **yes** to submit, **no** to cancel, or tell me what to change.")
 
     text = "\n".join(lines)
     _stream_chunks(text)
 
+    msg = AIMessage(content=text)
+    msg.additional_kwargs["action_buttons"] = [
+        {"label": "Yes", "value": "yes"},
+        {"label": "No", "value": "no"},
+    ]
+    msg.additional_kwargs["action_field"] = "confirmation"
+
     return {
-        "messages": [AIMessage(content=text)],
+        "messages": [msg],
         "awaiting_user": "confirmation",
     }
 

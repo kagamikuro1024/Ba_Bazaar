@@ -16,7 +16,7 @@ import re
 from typing import Literal, get_args
 
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ba_chat.llm import LLMUnavailable, call_json_with_retry
 from ba_chat.state import AnalyzeTarget, ChatState, Intent
@@ -33,7 +33,7 @@ _AVAILABLE_TARGETS = set(get_args(AnalyzeTarget))
 
 class _RouteDecision(BaseModel):
     intent: _AvailableIntent
-    analyze_target: AnalyzeTarget | None = Field(
+    analyze_target: str | None = Field(
         default=None,
         description=(
             "Which Ba_Bazaar surface to summarise. Required when intent='analyze'. "
@@ -42,6 +42,13 @@ class _RouteDecision(BaseModel):
             "monthly utilization."
         ),
     )
+
+    @field_validator("analyze_target", mode="before")
+    @classmethod
+    def _coerce_analyze_target(cls, value: object) -> str | None:
+        if isinstance(value, str) and value in _AVAILABLE_TARGETS:
+            return value
+        return None
 
 
 _SYSTEM = (
