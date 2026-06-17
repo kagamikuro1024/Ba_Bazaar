@@ -550,7 +550,7 @@ export function TimelinePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [compactMobileInfo, setCompactMobileInfo] = useState(false);
   const [dragScroll, setDragScroll] = useState<DragScrollState | null>(null);
-  const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [legendCollapsed, setLegendCollapsed] = useState(true);
   const [baSortMode, setBaSortMode] = useState<BASortMode>('name');
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => Number(format(new Date(), 'yyyy')));
@@ -894,6 +894,7 @@ export function TimelinePage() {
   }
 
   function beginDragScroll(event: PointerEvent<HTMLDivElement>) {
+    if (isMobile) return;
     if (event.button !== 0 || isTextSelectionTarget(event.target)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragScroll({
