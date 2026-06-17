@@ -2,7 +2,6 @@ import type { BAProfile, BookingStatus } from '@/lib/api';
 import { Badge } from './ui/badge';
 import { statusTone } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { AlertTriangle } from 'lucide-react';
 
 export function Avatar({ name, url }: { name: string; url?: string | null }) {
   if (url) {
@@ -22,11 +21,9 @@ export function Avatar({ name, url }: { name: string; url?: string | null }) {
 
 export function BAIdentity({
   ba,
-  showConflictIcon = false,
   showNameTooltip = false
 }: {
   ba: BAProfile | null;
-  showConflictIcon?: boolean;
   showNameTooltip?: boolean;
 }) {
   if (!ba) {
@@ -53,16 +50,12 @@ export function BAIdentity({
           <span className="truncate text-sm font-semibold text-slate-950">
             {ba.full_name}
           </span>
-          {showConflictIcon ? (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
-          ) : null}
           {ba.status === 'ON_LEAVE' && (
             <span className="shrink-0 inline-flex items-center rounded bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
               ON LEAVE
             </span>
           )}
         </div>
-
         <p className="text-xs text-slate-500">{ba.level}</p>
       </div>
     </div>

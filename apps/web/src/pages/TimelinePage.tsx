@@ -1378,11 +1378,12 @@ export function TimelinePage() {
                     onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    <BAIdentity ba={ba} showConflictIcon={flagged} showNameTooltip />
+                    <BAIdentity ba={ba} showNameTooltip />
                     <span
                       className="flex shrink-0 items-center gap-1.5"
                       title={utilizationTooltip(viewMode, capacity)}
                     >
+                      {flagged ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" /> : null}
                       <span className={cn('text-sm font-bold', capacityColor(utilization))}>
                         {utilization}%
                       </span>
