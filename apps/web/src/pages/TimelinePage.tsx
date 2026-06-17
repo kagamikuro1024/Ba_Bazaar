@@ -37,8 +37,10 @@ import {
   apiFetch,
   type BAProfile,
   type Booking,
+  type BookingPriority,
   type Project,
-  getBookingRequirements
+  getBookingRequirements,
+  getRequestType
 } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { Avatar, BAIdentity, StatusBadge } from '@/components/common';
@@ -59,6 +61,18 @@ type RequestDraft = {
   end_date: string;
   direct: boolean;
   project_id?: string;
+};
+
+type EditRequestDraft = {
+  id: string;
+  title: string;
+  description: string;
+  notes: string;
+  start_date: string;
+  end_date: string;
+  capacity_percent: number;
+  priority: BookingPriority;
+  ba_id?: string;
 };
 
 type DraftSelection = {
@@ -578,6 +592,7 @@ export function TimelinePage() {
   const [baFilter, setBaFilter] = useState(() => searchParams.get('baId') ?? '');
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [editingRequest, setEditingRequest] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveDraftSelection | null>(
     null
@@ -613,6 +628,19 @@ export function TimelinePage() {
     },
     onSuccess: () => {
       setPendingReassign(null);
+      void queryClient.invalidateQueries();
+    }
+  });
+
+  const updateRequest = useMutation({
+    mutationFn: (requestDraft: EditRequestDraft) =>
+      apiFetch(`/api/bookings/${requestDraft.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(requestDraft)
+      }),
+    onSuccess: () => {
+      setEditingRequest(null);
+      setSuccessMessage('Request updated and sent for manager review.');
       void queryClient.invalidateQueries();
     }
   });
@@ -667,12 +695,12 @@ export function TimelinePage() {
 
   // Hide the FAB when local drawers or detail modals are open
   useEffect(() => {
-    const isAnyModalOpen = Boolean(draft) || Boolean(selectedBooking);
+    const isAnyModalOpen = Boolean(draft) || Boolean(selectedBooking) || Boolean(editingRequest);
     setVisible(!isAnyModalOpen);
     return () => {
       setVisible(true);
     };
-  }, [draft, selectedBooking, setVisible]);
+  }, [draft, editingRequest, selectedBooking, setVisible]);
 
   // Register "New booking" primary action for the Speed Dial
   useFabAction(
@@ -1442,10 +1470,24 @@ export function TimelinePage() {
         allBas={bas.data ?? []}
         capacitySummaryItems={summary.data?.items ?? []}
         onClose={() => setSelectedBooking(null)}
+        onEditRequest={(booking) => {
+          setSelectedBooking(null);
+          setEditingRequest(booking);
+        }}
         onDone={() => {
           setSelectedBooking(null);
           void queryClient.invalidateQueries();
         }}
+      />
+      <EditRequestModal
+        booking={editingRequest}
+        bas={bas.data ?? []}
+        isPending={updateRequest.isPending}
+        error={updateRequest.error}
+        onClose={() => {
+          if (!updateRequest.isPending) setEditingRequest(null);
+        }}
+        onSubmit={(requestDraft) => updateRequest.mutate(requestDraft)}
       />
       {pendingReassign && (
         <div className="fixed bottom-6 left-1/2 z-50 flex flex-col gap-3 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-4 max-w-lg">
@@ -2118,12 +2160,225 @@ function rangesOverlap(
   );
 }
 
+function EditRequestModal({
+  booking,
+  bas,
+  isPending,
+  error,
+  onClose,
+  onSubmit
+}: {
+  booking: Booking | null;
+  bas: BAProfile[];
+  isPending: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onSubmit: (draft: EditRequestDraft) => void;
+}) {
+  const [draft, setDraft] = useState<EditRequestDraft | null>(null);
+  const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    if (!booking) {
+      setDraft(null);
+      setLocalError('');
+      return;
+    }
+
+    setDraft({
+      id: booking.id,
+      title: booking.title,
+      description: booking.description,
+      notes: booking.notes ?? '',
+      start_date: booking.start_date.slice(0, 10),
+      end_date: booking.end_date.slice(0, 10),
+      capacity_percent: booking.capacity_percent,
+      priority: booking.priority,
+      ba_id: booking.ba_id ?? undefined
+    });
+    setLocalError('');
+  }, [booking]);
+
+  if (!booking || !draft) {
+    return null;
+  }
+
+  const isSpecificBa = getRequestType(booking) === 'SPECIFIC_BA';
+
+  return (
+    <Modal
+      title={booking.status === 'REJECTED' ? 'Edit & Resubmit Request' : 'Edit Request'}
+      open={Boolean(booking)}
+      onClose={onClose}
+    >
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (draft.end_date < draft.start_date) {
+            setLocalError('End date must be greater than or equal to start date.');
+            return;
+          }
+
+          if (isSpecificBa && !draft.ba_id) {
+            setLocalError('Requested BA is required for a specific BA request.');
+            return;
+          }
+
+          setLocalError('');
+          onSubmit(draft);
+        }}
+      >
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-slate-700">
+            Project / task name
+          </span>
+          <input
+            value={draft.title}
+            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+            className="h-10 rounded-lg border px-3 text-sm"
+            required
+          />
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Start date</span>
+            <input
+              type="date"
+              value={draft.start_date}
+              onChange={(event) => setDraft({ ...draft, start_date: event.target.value })}
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            />
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">End date</span>
+            <input
+              type="date"
+              value={draft.end_date}
+              onChange={(event) => setDraft({ ...draft, end_date: event.target.value })}
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Capacity</span>
+            <select
+              value={draft.capacity_percent}
+              onChange={(event) =>
+                setDraft({ ...draft, capacity_percent: Number(event.target.value) })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+            >
+              {CAPACITY_OPTIONS.map((capacityPercent) => (
+                <option key={capacityPercent} value={capacityPercent}>
+                  {capacityPercent}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Priority</span>
+            <select
+              value={draft.priority}
+              onChange={(event) =>
+                setDraft({ ...draft, priority: event.target.value as BookingPriority })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+            >
+              {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {isSpecificBa ? (
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Requested BA</span>
+            <select
+              value={draft.ba_id ?? ''}
+              onChange={(event) =>
+                setDraft({ ...draft, ba_id: event.target.value || undefined })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            >
+              <option value="">Select BA</option>
+              {bas.map((ba) => (
+                <option key={ba.id} value={ba.id}>
+                  {ba.full_name} - {ba.level}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Required skills / preparation note
+            </span>
+            <textarea
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+              className="min-h-20 rounded-lg border p-3 text-sm"
+              placeholder="Mention required domain or analysis skills..."
+            />
+          </label>
+        )}
+
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-slate-700">
+            Description / scope
+          </span>
+          <textarea
+            value={draft.description}
+            onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+            className="min-h-28 rounded-lg border p-3 text-sm"
+            required
+          />
+        </label>
+
+        {localError || error ? (
+          <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+            {localError || error?.message}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending
+              ? 'Submitting...'
+              : booking.status === 'REJECTED'
+                ? 'Submit again'
+                : 'Submit changes'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function BookingDetailModal({
   booking,
   allBookings,
   allBas,
   capacitySummaryItems,
   onClose,
+  onEditRequest,
   onDone
 }: {
   booking: Booking | null;
@@ -2131,6 +2386,7 @@ function BookingDetailModal({
   allBas: BAProfile[];
   capacitySummaryItems: CapacitySummaryItem[];
   onClose: () => void;
+  onEditRequest: (booking: Booking) => void;
   onDone: () => void;
 }) {
   const { user } = useAuth();
@@ -2220,6 +2476,16 @@ function BookingDetailModal({
   const capacityPercent =
     parseCapacityPercent(capacityDraft) ?? booking?.capacity_percent ?? 50;
   const canEditCapacity = isManagerRole && booking?.status === 'PENDING';
+  const hasPendingChanges = Boolean(
+    booking?.pending_changes && Object.keys(booking.pending_changes).length > 0
+  );
+  const canEditOwnRequest = Boolean(
+    booking &&
+      role === 'PM_PO' &&
+      booking.requester_id === user?.id &&
+      !hasPendingChanges &&
+      (booking.status === 'PENDING' || booking.status === 'REJECTED')
+  );
   const capacityChanged = Boolean(
     booking && canEditCapacity && capacityPercent !== booking.capacity_percent
   );
@@ -2380,6 +2646,13 @@ function BookingDetailModal({
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
+        {canEditOwnRequest ? (
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => onEditRequest(booking)}>
+              {booking.status === 'REJECTED' ? 'Edit & resubmit request' : 'Edit request'}
+            </Button>
+          </div>
+        ) : null}
         {hasConflict ? (
           <div className="grid gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950">
             <div className="flex items-start justify-between gap-3">

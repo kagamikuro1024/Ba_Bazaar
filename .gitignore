@@ -13,3 +13,5 @@ packages/shared/dist/
 apps/api/api
 apps/api/cmd/api/api
 __pycache__/
+.venv/
+
