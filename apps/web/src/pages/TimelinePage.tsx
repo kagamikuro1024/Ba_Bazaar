@@ -180,6 +180,15 @@ function bookingLabelClass(status: Booking['status']) {
   return status === 'CANCELLED' ? 'line-through' : '';
 }
 
+function bookingBarTooltip(booking: Booking) {
+  return [
+    booking.project.name,
+    `${booking.capacity_percent}%`,
+    booking.status.replaceAll('_', ' '),
+    `${formatDate(booking.start_date)} - ${formatDate(booking.end_date)}`
+  ].join(' · ');
+}
+
 type BookingLayout = {
   booking: Booking;
   leftPercent: number;
@@ -1604,6 +1613,7 @@ function TimelineRow({
                   top: `${desktopBarBaseTop + lane * desktopBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
+                title={bookingBarTooltip(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
                 <span className="inline-flex min-w-0 items-center gap-1">
@@ -1705,6 +1715,7 @@ function MobileTimelineRow({
                   top: `${(viewMode === 'week' ? mobileBarBaseTop : 16) + lane * mobileBookingLaneStep}px`
                 }}
                 onClick={() => onBookingClick(booking)}
+                title={bookingBarTooltip(booking)}
                 aria-label={`${booking.status} booking ${booking.title}`}
               >
                 <span className="inline-flex min-w-0 items-center gap-1.5">
