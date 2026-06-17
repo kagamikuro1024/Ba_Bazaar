@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   useEffect,
   useMemo,
   useRef,
@@ -6,6 +7,7 @@ import {
   type PointerEvent,
   type WheelEvent
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -127,6 +129,13 @@ type TimelineColumn = {
   subLabel: string;
   start: Date;
   end: Date;
+};
+
+type PeriodPickerPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
 };
 
 function usePrefersCoarsePointer() {
@@ -686,7 +695,12 @@ export function TimelinePage() {
 
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const periodPickerRef = useRef<HTMLDivElement>(null);
+  const periodPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const periodPickerPopoverRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const [periodPickerPosition, setPeriodPickerPosition] = useState<PeriodPickerPosition | null>(
+    null
+  );
   const [isStuck, setIsStuck] = useState(false);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
@@ -756,9 +770,35 @@ export function TimelinePage() {
       return;
     }
 
+    function updatePeriodPickerPosition() {
+      const button = periodPickerButtonRef.current;
+      if (!button) {
+        return;
+      }
+
+      const rect = button.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const desiredWidth = Math.min(viewportWidth - 16, 544);
+      const width = Math.max(Math.min(rect.width, desiredWidth), Math.min(320, desiredWidth));
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, viewportWidth - width - 8)
+      );
+      const top = rect.bottom + 12;
+      const maxHeight = Math.max(240, viewportHeight - top - 8);
+
+      setPeriodPickerPosition({ top, left, width, maxHeight });
+    }
+
+    updatePeriodPickerPosition();
+
     function handlePointerDown(event: Event) {
       const target = event.target as Node;
-      if (periodPickerRef.current?.contains(target)) {
+      if (
+        periodPickerRef.current?.contains(target) ||
+        periodPickerPopoverRef.current?.contains(target)
+      ) {
         return;
       }
       setPeriodPickerOpen(false);
@@ -770,9 +810,13 @@ export function TimelinePage() {
       }
     }
 
+    window.addEventListener('resize', updatePeriodPickerPosition);
+    window.addEventListener('scroll', updatePeriodPickerPosition, true);
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.removeEventListener('resize', updatePeriodPickerPosition);
+      window.removeEventListener('scroll', updatePeriodPickerPosition, true);
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -1105,6 +1149,7 @@ export function TimelinePage() {
             </Button>
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
               <Button
+                ref={periodPickerButtonRef}
                 variant="secondary"
                 className="min-w-0 flex-1 justify-between px-2.5 text-xs sm:px-3 sm:text-sm"
                 onClick={() => setPeriodPickerOpen((current) => !current)}
@@ -1125,9 +1170,11 @@ export function TimelinePage() {
             </Button>
             {periodPickerOpen ? (
               <PeriodPickerPopover
+                ref={periodPickerPopoverRef}
                 viewMode={viewMode}
                 pickerYear={pickerYear}
                 anchorDate={anchorDate}
+                position={periodPickerPosition}
                 onYearChange={setPickerYear}
                 onSelect={handleSelectPeriod}
               />
@@ -1867,23 +1914,37 @@ function MobileBAIdentity({
   );
 }
 
-function PeriodPickerPopover({
-  viewMode,
-  pickerYear,
-  anchorDate,
-  onYearChange,
-  onSelect
-}: {
-  viewMode: TimelineViewMode;
-  pickerYear: number;
-  anchorDate: Date;
-  onYearChange: (year: number) => void;
-  onSelect: (date: Date) => void;
-}) {
+const PeriodPickerPopover = forwardRef<
+  HTMLDivElement,
+  {
+    viewMode: TimelineViewMode;
+    pickerYear: number;
+    anchorDate: Date;
+    position: PeriodPickerPosition | null;
+    onYearChange: (year: number) => void;
+    onSelect: (date: Date) => void;
+  }
+>(function PeriodPickerPopover(
+  { viewMode, pickerYear, anchorDate, position, onYearChange, onSelect },
+  ref
+) {
   const weekSections = useMemo(() => buildWeekPickerSectionsUi(pickerYear), [pickerYear]);
 
-  return (
-    <div className="absolute left-0 top-full z-30 mt-3 w-[min(92vw,34rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+  if (typeof document === 'undefined' || !position) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[80] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        maxHeight: position.maxHeight
+      }}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
         <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear - 1)}>
           <ChevronLeft className="h-4 w-4" />
@@ -1903,7 +1964,7 @@ function PeriodPickerPopover({
         </Button>
       </div>
 
-      <div className="max-h-[24rem] overflow-y-auto p-4">
+      <div className="overflow-y-auto p-4" style={{ maxHeight: position.maxHeight - 73 }}>
         {viewMode === 'week' ? (
           <div className="grid gap-4">
             {weekSections.map((section) => (
@@ -1995,9 +2056,10 @@ function PeriodPickerPopover({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
-}
+});
 
 function PeriodPickerModal({
   open,
