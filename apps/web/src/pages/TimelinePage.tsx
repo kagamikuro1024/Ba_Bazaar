@@ -1746,6 +1746,11 @@ function MobileBAIdentity({
         )}
       </span>
       <span className="truncate font-semibold text-slate-950">{ba.full_name}</span>
+      {ba.status === 'ON_LEAVE' && (
+        <span className="shrink-0 inline-flex items-center rounded bg-amber-50 px-1 py-0.5 text-[8px] font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
+          ON LEAVE
+        </span>
+      )}
       <span
         className={cn(
           'inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap leading-none text-slate-500 transition-all duration-200 ease-out',
