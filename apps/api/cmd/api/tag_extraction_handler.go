@@ -257,7 +257,7 @@ PRD text:
 		System:      "You extract structured skill tags. Return valid JSON only.",
 		User:        prompt,
 		Temperature: 0.1,
-		MaxTokens:   600,
+		MaxTokens:   2048,
 	})
 	if err != nil {
 		return nil, 0, 0, err

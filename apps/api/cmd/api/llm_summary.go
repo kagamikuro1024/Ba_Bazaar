@@ -231,7 +231,7 @@ Facts:
 		System:      "You write short grounded summaries with citation IDs for a resource-management product. Return valid JSON only.",
 		User:        prompt,
 		Temperature: 0.0,
-		MaxTokens:   700,
+		MaxTokens:   2048,
 	})
 	if err != nil {
 		return nil, 0, 0, err
