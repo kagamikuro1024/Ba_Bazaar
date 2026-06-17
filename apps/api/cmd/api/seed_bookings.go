@@ -41,6 +41,7 @@ func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []
 		{5, 0, "CRM Revamp", "Legacy contact merge review", -18, -12, "COMPLETED", "HIGH", 50},
 		{9, 4, "Payment Refund Flow", "Refund reasons catalog", -14, -9, "COMPLETED", "MEDIUM", 50},
 		{6, 1, "Mobile Onboarding", "Activation funnel notes", -10, -5, "COMPLETED", "MEDIUM", 75},
+		{5, 2, "CRM Revamp", "CRM backlog mapping", -11, -6, "COMPLETED", "MEDIUM", 50},
 
 		// --- IN_PROGRESS (spanning today) — current work ---
 		{5, 1, "BI Dashboard", "Executive dashboard build", -3, 6, "IN_PROGRESS", "HIGH", 50},
@@ -59,12 +60,11 @@ func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []
 		{1, 2, "Payment Refund Flow", "Refund incident triage", 12, 20, "APPROVED", "HIGH", 50},
 
 		// --- PENDING (future) — requests waiting on the manager ---
-		{0, 2, "Payment Refund Flow", "Digital Bank Onboarding analysis", 5, 14, "PENDING", "HIGH", 50}, // CONFLICT with BA0 approved 70%
+		{0, 2, "Payment Refund Flow", "Digital Bank Onboarding analysis", 5, 14, "PENDING", "HIGH", 50}, // CONFLICT with BA0 approved 75%
 		{3, 1, "CRM Revamp", "Free-capacity request (easily assignable)", 6, 12, "PENDING", "MEDIUM", 50},
 		{10, 4, "BI Dashboard", "Executive metrics alignment", 8, 15, "PENDING", "HIGH", 75},
 		{2, 0, "HR Approval Workflow", "Regional approval rewrite", 9, 16, "PENDING", "MEDIUM", 50},
 		{6, 3, "Mobile Onboarding", "Reactivation path review", 11, 18, "PENDING", "MEDIUM", 50},
-		{5, 2, "CRM Revamp", "Extra ask that would overbook the lead", 9, 15, "PENDING", "HIGH", 50}, // CONFLICT with BA5 approved 100%
 
 		// --- REJECTED (future request, declined) ---
 		{8, 3, "CRM Revamp", "Customer profile grooming", 4, 8, "REJECTED", "LOW", 100},
