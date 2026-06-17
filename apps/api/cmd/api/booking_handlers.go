@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -645,9 +646,40 @@ func nullableString(value *string) any {
 }
 
 func (app *App) updateBookingStatus(ctx context.Context, id, status string, managerID *string, rejectReason *string, cancelReason *string) (*Booking, error) {
-	changes := []string{"status = $2", "pending_changes = null", "updated_at = now()"}
+	booking, err := app.bookingByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var pendingChangesVal any = nil
+	if booking.PendingChanges != nil {
+		existingPending, _ := pendingChangesMap(booking.PendingChanges)
+		if existingPending != nil {
+			pending := map[string]any{}
+			for _, reqKey := range []string{"required_skill_ids", "required_level"} {
+				if val, ok := existingPending[reqKey]; ok {
+					pending[reqKey] = val
+				}
+			}
+			if len(pending) > 0 {
+				encoded, _ := json.Marshal(pending)
+				pendingChangesVal = string(encoded)
+			}
+		}
+	}
+
+	changes := []string{"status = $2", "updated_at = now()"}
 	args := []any{id, status}
 	index := 3
+
+	if pendingChangesVal != nil {
+		changes = append(changes, fmt.Sprintf("pending_changes = $%d::jsonb", index))
+		args = append(args, pendingChangesVal)
+		index++
+	} else {
+		changes = append(changes, "pending_changes = null")
+	}
+
 	if managerID != nil && strings.TrimSpace(*managerID) != "" {
 		changes = append(changes, fmt.Sprintf("manager_id = $%d", index))
 		args = append(args, strings.TrimSpace(*managerID))
@@ -668,7 +700,7 @@ func (app *App) updateBookingStatus(ctx context.Context, id, status string, mana
 		args = append(args, nullableString(cancelReason))
 		index++
 	}
-	_, err := app.DB.Pool.Exec(ctx, `update bookings set `+strings.Join(changes, ", ")+` where id = $1`, args...)
+	_, err = app.DB.Pool.Exec(ctx, `update bookings set `+strings.Join(changes, ", ")+` where id = $1`, args...)
 	if err != nil {
 		return nil, err
 	}

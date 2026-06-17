@@ -5,6 +5,7 @@ import { CalendarRange, Edit3, Eye, RotateCcw, UserRound } from 'lucide-react';
 import {
   apiFetch,
   getRequestType,
+  BOOKING_REQUIREMENT_KEYS,
   type BAProfile,
   type Booking,
   type BookingPriority,
@@ -83,9 +84,11 @@ export function MyRequestsPage() {
   }, [successMessage]);
 
   function hasPendingChanges(booking: Booking) {
-    return Boolean(
-      booking.pending_changes && Object.keys(booking.pending_changes).length > 0
+    if (!booking.pending_changes) return false;
+    const changeKeys = Object.keys(booking.pending_changes).filter(
+      (key) => !BOOKING_REQUIREMENT_KEYS.includes(key)
     );
+    return changeKeys.length > 0;
   }
 
   function canEditBooking(booking: Booking) {

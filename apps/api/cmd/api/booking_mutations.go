@@ -48,7 +48,35 @@ func (app *App) handleBookingUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if requesterCanPropose {
-		pending := changes.toMap()
+		if booking.Status == "PENDING" || booking.Status == "REJECTED" {
+			if err := app.applyBookingChanges(r.Context(), booking.ID, changes, false); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+				return
+			}
+			if booking.Status != "PENDING" {
+				_, err = app.DB.Pool.Exec(r.Context(), `update bookings set status = 'PENDING', updated_at = now() where id = $1`, booking.ID)
+				if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
+			}
+			updated, _ := app.bookingByID(r.Context(), booking.ID)
+			app.createAuditLog(r.Context(), user.ID, "UPDATE_BOOKING", "Booking", booking.ID, "SUCCESS", booking, updated)
+			writeJSON(w, http.StatusOK, updated)
+			return
+		}
+
+		existingPending, _ := pendingChangesMap(booking.PendingChanges)
+		pending := map[string]any{}
+		if existingPending != nil {
+			for _, reqKey := range []string{"required_skill_ids", "required_level"} {
+				if val, ok := existingPending[reqKey]; ok {
+					pending[reqKey] = val
+				}
+			}
+		}
+		newChanges := changes.toMap()
+		for k, v := range newChanges {
+			pending[k] = v
+		}
+
 		pendingJSON, _ := json.Marshal(pending)
 		_, err = app.DB.Pool.Exec(r.Context(), `update bookings set pending_changes = $2::jsonb, status = 'PENDING', updated_at = now() where id = $1`, booking.ID, string(pendingJSON))
 		if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()}); return }
