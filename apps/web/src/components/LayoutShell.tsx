@@ -36,8 +36,7 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
 import { CreateBAModal } from './CreateBAModal';
-import { ChatPanel } from './chat/ChatPanel';
-import { GlobalActionDial } from './GlobalActionDial';
+import { ChatFab } from './chat/ChatFab';
 import { useGlobalFab } from '@/context/GlobalFabContext';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
@@ -860,7 +859,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
       <nav
         className={[
-          'fixed bottom-4 left-4 right-4 z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
+          'fixed bottom-4 left-4 right-[5.5rem] z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
           'rounded-full'
         ].join(' ')}
         aria-label="Mobile navigation"
@@ -961,18 +960,12 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         />
       )}
 
-      <ChatPanel
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
+      <ChatFab
         accessToken={accessToken}
         userRole={role}
         userId={user?.id}
       />
 
-      <GlobalActionDial
-        canCreateBooking={canCreateBooking}
-        onTriggerCreateBooking={() => setBookingModalOpen(true)}
-      />
 
       <GlobalSearchModal
         open={searchOpen}

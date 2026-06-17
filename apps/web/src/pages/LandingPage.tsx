@@ -280,7 +280,7 @@ export function LandingPage() {
             <Button asChild>
               <Link to="/login">Đăng nhập</Link>
             </Button>
-            <Button variant="secondary" className="hidden sm:inline-flex" asChild>
+            <Button variant="secondary" asChild>
               <Link to="/register">
                 Đăng ký <ArrowRight className="h-4 w-4" />
               </Link>

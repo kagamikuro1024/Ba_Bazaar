@@ -139,6 +139,8 @@ function usePrefersCoarsePointer() {
 const initialWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
 const baInfoColumnWidth = 260;
 const mobileWeekDayMinWidth = 88;
+const mobileMonthColumnMinWidth = 96;
+const mobileQuarterColumnMinWidth = 152;
 const mobileBaCardWidth = 144;
 const mobileBaCardCompactWidth = 84;
 const mobileCompactScrollThreshold = mobileWeekDayMinWidth * 2;
@@ -1178,8 +1180,7 @@ export function TimelinePage() {
             ref={timelineScrollRef}
             data-timeline-scroll="true"
             className={cn(
-              isMobile && viewMode !== 'week' ? 'overflow-x-hidden' : 'overflow-x-auto overscroll-x-contain',
-              'pb-2',
+              'overflow-x-auto overscroll-x-contain pb-2',
               !isMobile && (dragScroll ? 'cursor-grabbing select-none' : 'cursor-grab'),
               activeSelection && 'select-none touch-none'
             )}
@@ -1193,13 +1194,14 @@ export function TimelinePage() {
             <div
               className={cn('grid', !isMobile && 'min-w-[980px]')}
               style={{
-                paddingLeft: isMobile && viewMode !== 'week'
-                  ? `${(effectiveCompactMobileInfo ? mobileBaCardCompactWidth : mobileBaCardWidth) + 8}px`
-                  : undefined,
                 gridTemplateColumns: isMobile
-                  ? viewMode === 'week'
-                    ? `repeat(${columns.length}, minmax(${mobileWeekDayMinWidth}px, 1fr))`
-                    : `repeat(${columns.length}, minmax(0, 1fr))`
+                  ? `repeat(${columns.length}, minmax(${
+                      viewMode === 'quarter'
+                        ? mobileQuarterColumnMinWidth
+                        : viewMode === 'month'
+                          ? mobileMonthColumnMinWidth
+                          : mobileWeekDayMinWidth
+                    }px, 1fr))`
                   : `${baInfoColumnWidth}px repeat(${columns.length}, minmax(${viewMode === 'week' ? 92 : 132}px, 1fr))`
               }}
             >
