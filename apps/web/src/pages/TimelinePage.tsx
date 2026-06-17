@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   useEffect,
   useMemo,
   useRef,
@@ -6,6 +7,7 @@ import {
   type PointerEvent,
   type WheelEvent
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -37,8 +39,10 @@ import {
   apiFetch,
   type BAProfile,
   type Booking,
+  type BookingPriority,
   type Project,
-  getBookingRequirements
+  getBookingRequirements,
+  getRequestType
 } from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
 import { Avatar, BAIdentity, StatusBadge } from '@/components/common';
@@ -59,6 +63,18 @@ type RequestDraft = {
   end_date: string;
   direct: boolean;
   project_id?: string;
+};
+
+type EditRequestDraft = {
+  id: string;
+  title: string;
+  description: string;
+  notes: string;
+  start_date: string;
+  end_date: string;
+  capacity_percent: number;
+  priority: BookingPriority;
+  ba_id?: string;
 };
 
 type DraftSelection = {
@@ -113,6 +129,13 @@ type TimelineColumn = {
   subLabel: string;
   start: Date;
   end: Date;
+};
+
+type PeriodPickerPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
 };
 
 function usePrefersCoarsePointer() {
@@ -578,6 +601,7 @@ export function TimelinePage() {
   const [baFilter, setBaFilter] = useState(() => searchParams.get('baId') ?? '');
   const [projectFilter, setProjectFilter] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [editingRequest, setEditingRequest] = useState<Booking | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveDraftSelection | null>(
     null
@@ -613,6 +637,19 @@ export function TimelinePage() {
     },
     onSuccess: () => {
       setPendingReassign(null);
+      void queryClient.invalidateQueries();
+    }
+  });
+
+  const updateRequest = useMutation({
+    mutationFn: (requestDraft: EditRequestDraft) =>
+      apiFetch(`/api/bookings/${requestDraft.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(requestDraft)
+      }),
+    onSuccess: () => {
+      setEditingRequest(null);
+      setSuccessMessage('Request updated and sent for manager review.');
       void queryClient.invalidateQueries();
     }
   });
@@ -658,7 +695,12 @@ export function TimelinePage() {
 
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const periodPickerRef = useRef<HTMLDivElement>(null);
+  const periodPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const periodPickerPopoverRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const [periodPickerPosition, setPeriodPickerPosition] = useState<PeriodPickerPosition | null>(
+    null
+  );
   const [isStuck, setIsStuck] = useState(false);
   const canCreateBooking = role === 'PM_PO' || role === 'BA_MANAGER';
   const isMobile = useIsMobile();
@@ -667,12 +709,12 @@ export function TimelinePage() {
 
   // Hide the FAB when local drawers or detail modals are open
   useEffect(() => {
-    const isAnyModalOpen = Boolean(draft) || Boolean(selectedBooking);
+    const isAnyModalOpen = Boolean(draft) || Boolean(selectedBooking) || Boolean(editingRequest);
     setVisible(!isAnyModalOpen);
     return () => {
       setVisible(true);
     };
-  }, [draft, selectedBooking, setVisible]);
+  }, [draft, editingRequest, selectedBooking, setVisible]);
 
   // Register "New booking" primary action for the Speed Dial
   useFabAction(
@@ -728,9 +770,35 @@ export function TimelinePage() {
       return;
     }
 
+    function updatePeriodPickerPosition() {
+      const button = periodPickerButtonRef.current;
+      if (!button) {
+        return;
+      }
+
+      const rect = button.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const desiredWidth = Math.min(viewportWidth - 16, 544);
+      const width = Math.max(Math.min(rect.width, desiredWidth), Math.min(320, desiredWidth));
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, viewportWidth - width - 8)
+      );
+      const top = rect.bottom + 12;
+      const maxHeight = Math.max(240, viewportHeight - top - 8);
+
+      setPeriodPickerPosition({ top, left, width, maxHeight });
+    }
+
+    updatePeriodPickerPosition();
+
     function handlePointerDown(event: Event) {
       const target = event.target as Node;
-      if (periodPickerRef.current?.contains(target)) {
+      if (
+        periodPickerRef.current?.contains(target) ||
+        periodPickerPopoverRef.current?.contains(target)
+      ) {
         return;
       }
       setPeriodPickerOpen(false);
@@ -742,9 +810,13 @@ export function TimelinePage() {
       }
     }
 
+    window.addEventListener('resize', updatePeriodPickerPosition);
+    window.addEventListener('scroll', updatePeriodPickerPosition, true);
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.removeEventListener('resize', updatePeriodPickerPosition);
+      window.removeEventListener('scroll', updatePeriodPickerPosition, true);
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -1077,6 +1149,7 @@ export function TimelinePage() {
             </Button>
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-56 sm:flex-none">
               <Button
+                ref={periodPickerButtonRef}
                 variant="secondary"
                 className="min-w-0 flex-1 justify-between px-2.5 text-xs sm:px-3 sm:text-sm"
                 onClick={() => setPeriodPickerOpen((current) => !current)}
@@ -1097,9 +1170,11 @@ export function TimelinePage() {
             </Button>
             {periodPickerOpen ? (
               <PeriodPickerPopover
+                ref={periodPickerPopoverRef}
                 viewMode={viewMode}
                 pickerYear={pickerYear}
                 anchorDate={anchorDate}
+                position={periodPickerPosition}
                 onYearChange={setPickerYear}
                 onSelect={handleSelectPeriod}
               />
@@ -1442,10 +1517,24 @@ export function TimelinePage() {
         allBas={bas.data ?? []}
         capacitySummaryItems={summary.data?.items ?? []}
         onClose={() => setSelectedBooking(null)}
+        onEditRequest={(booking) => {
+          setSelectedBooking(null);
+          setEditingRequest(booking);
+        }}
         onDone={() => {
           setSelectedBooking(null);
           void queryClient.invalidateQueries();
         }}
+      />
+      <EditRequestModal
+        booking={editingRequest}
+        bas={bas.data ?? []}
+        isPending={updateRequest.isPending}
+        error={updateRequest.error}
+        onClose={() => {
+          if (!updateRequest.isPending) setEditingRequest(null);
+        }}
+        onSubmit={(requestDraft) => updateRequest.mutate(requestDraft)}
       />
       {pendingReassign && (
         <div className="fixed bottom-6 left-1/2 z-50 flex flex-col gap-3 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-4 max-w-lg">
@@ -1825,23 +1914,37 @@ function MobileBAIdentity({
   );
 }
 
-function PeriodPickerPopover({
-  viewMode,
-  pickerYear,
-  anchorDate,
-  onYearChange,
-  onSelect
-}: {
-  viewMode: TimelineViewMode;
-  pickerYear: number;
-  anchorDate: Date;
-  onYearChange: (year: number) => void;
-  onSelect: (date: Date) => void;
-}) {
+const PeriodPickerPopover = forwardRef<
+  HTMLDivElement,
+  {
+    viewMode: TimelineViewMode;
+    pickerYear: number;
+    anchorDate: Date;
+    position: PeriodPickerPosition | null;
+    onYearChange: (year: number) => void;
+    onSelect: (date: Date) => void;
+  }
+>(function PeriodPickerPopover(
+  { viewMode, pickerYear, anchorDate, position, onYearChange, onSelect },
+  ref
+) {
   const weekSections = useMemo(() => buildWeekPickerSectionsUi(pickerYear), [pickerYear]);
 
-  return (
-    <div className="absolute left-0 top-full z-30 mt-3 w-[min(92vw,34rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+  if (typeof document === 'undefined' || !position) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[80] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10"
+      style={{
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        maxHeight: position.maxHeight
+      }}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
         <Button variant="secondary" size="sm" onClick={() => onYearChange(pickerYear - 1)}>
           <ChevronLeft className="h-4 w-4" />
@@ -1861,7 +1964,7 @@ function PeriodPickerPopover({
         </Button>
       </div>
 
-      <div className="max-h-[24rem] overflow-y-auto p-4">
+      <div className="overflow-y-auto p-4" style={{ maxHeight: position.maxHeight - 73 }}>
         {viewMode === 'week' ? (
           <div className="grid gap-4">
             {weekSections.map((section) => (
@@ -1953,9 +2056,10 @@ function PeriodPickerPopover({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
-}
+});
 
 function PeriodPickerModal({
   open,
@@ -2118,12 +2222,225 @@ function rangesOverlap(
   );
 }
 
+function EditRequestModal({
+  booking,
+  bas,
+  isPending,
+  error,
+  onClose,
+  onSubmit
+}: {
+  booking: Booking | null;
+  bas: BAProfile[];
+  isPending: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onSubmit: (draft: EditRequestDraft) => void;
+}) {
+  const [draft, setDraft] = useState<EditRequestDraft | null>(null);
+  const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    if (!booking) {
+      setDraft(null);
+      setLocalError('');
+      return;
+    }
+
+    setDraft({
+      id: booking.id,
+      title: booking.title,
+      description: booking.description,
+      notes: booking.notes ?? '',
+      start_date: booking.start_date.slice(0, 10),
+      end_date: booking.end_date.slice(0, 10),
+      capacity_percent: booking.capacity_percent,
+      priority: booking.priority,
+      ba_id: booking.ba_id ?? undefined
+    });
+    setLocalError('');
+  }, [booking]);
+
+  if (!booking || !draft) {
+    return null;
+  }
+
+  const isSpecificBa = getRequestType(booking) === 'SPECIFIC_BA';
+
+  return (
+    <Modal
+      title={booking.status === 'REJECTED' ? 'Edit & Resubmit Request' : 'Edit Request'}
+      open={Boolean(booking)}
+      onClose={onClose}
+    >
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (draft.end_date < draft.start_date) {
+            setLocalError('End date must be greater than or equal to start date.');
+            return;
+          }
+
+          if (isSpecificBa && !draft.ba_id) {
+            setLocalError('Requested BA is required for a specific BA request.');
+            return;
+          }
+
+          setLocalError('');
+          onSubmit(draft);
+        }}
+      >
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-slate-700">
+            Project / task name
+          </span>
+          <input
+            value={draft.title}
+            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+            className="h-10 rounded-lg border px-3 text-sm"
+            required
+          />
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Start date</span>
+            <input
+              type="date"
+              value={draft.start_date}
+              onChange={(event) => setDraft({ ...draft, start_date: event.target.value })}
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            />
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">End date</span>
+            <input
+              type="date"
+              value={draft.end_date}
+              onChange={(event) => setDraft({ ...draft, end_date: event.target.value })}
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Capacity</span>
+            <select
+              value={draft.capacity_percent}
+              onChange={(event) =>
+                setDraft({ ...draft, capacity_percent: Number(event.target.value) })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+            >
+              {CAPACITY_OPTIONS.map((capacityPercent) => (
+                <option key={capacityPercent} value={capacityPercent}>
+                  {capacityPercent}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Priority</span>
+            <select
+              value={draft.priority}
+              onChange={(event) =>
+                setDraft({ ...draft, priority: event.target.value as BookingPriority })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+            >
+              {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {isSpecificBa ? (
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">Requested BA</span>
+            <select
+              value={draft.ba_id ?? ''}
+              onChange={(event) =>
+                setDraft({ ...draft, ba_id: event.target.value || undefined })
+              }
+              className="h-10 rounded-lg border px-3 text-sm"
+              required
+            >
+              <option value="">Select BA</option>
+              {bas.map((ba) => (
+                <option key={ba.id} value={ba.id}>
+                  {ba.full_name} - {ba.level}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Required skills / preparation note
+            </span>
+            <textarea
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+              className="min-h-20 rounded-lg border p-3 text-sm"
+              placeholder="Mention required domain or analysis skills..."
+            />
+          </label>
+        )}
+
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-slate-700">
+            Description / scope
+          </span>
+          <textarea
+            value={draft.description}
+            onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+            className="min-h-28 rounded-lg border p-3 text-sm"
+            required
+          />
+        </label>
+
+        {localError || error ? (
+          <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+            {localError || error?.message}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending
+              ? 'Submitting...'
+              : booking.status === 'REJECTED'
+                ? 'Submit again'
+                : 'Submit changes'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function BookingDetailModal({
   booking,
   allBookings,
   allBas,
   capacitySummaryItems,
   onClose,
+  onEditRequest,
   onDone
 }: {
   booking: Booking | null;
@@ -2131,6 +2448,7 @@ function BookingDetailModal({
   allBas: BAProfile[];
   capacitySummaryItems: CapacitySummaryItem[];
   onClose: () => void;
+  onEditRequest: (booking: Booking) => void;
   onDone: () => void;
 }) {
   const { user } = useAuth();
@@ -2220,6 +2538,16 @@ function BookingDetailModal({
   const capacityPercent =
     parseCapacityPercent(capacityDraft) ?? booking?.capacity_percent ?? 50;
   const canEditCapacity = isManagerRole && booking?.status === 'PENDING';
+  const hasPendingChanges = Boolean(
+    booking?.pending_changes && Object.keys(booking.pending_changes).length > 0
+  );
+  const canEditOwnRequest = Boolean(
+    booking &&
+      role === 'PM_PO' &&
+      booking.requester_id === user?.id &&
+      !hasPendingChanges &&
+      (booking.status === 'PENDING' || booking.status === 'REJECTED')
+  );
   const capacityChanged = Boolean(
     booking && canEditCapacity && capacityPercent !== booking.capacity_percent
   );
@@ -2380,6 +2708,13 @@ function BookingDetailModal({
             {booking.cancel_reason ? <p>Cancel reason: {booking.cancel_reason}</p> : null}
           </div>
         </div>
+        {canEditOwnRequest ? (
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => onEditRequest(booking)}>
+              {booking.status === 'REJECTED' ? 'Edit & resubmit request' : 'Edit request'}
+            </Button>
+          </div>
+        ) : null}
         {hasConflict ? (
           <div className="grid gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950">
             <div className="flex items-start justify-between gap-3">
