@@ -1164,10 +1164,6 @@ export function TimelinePage() {
                   Cancelled
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-6 rounded border border-dashed bg-slate-50" />{' '}
-                  Available
-                </div>
-                <div className="flex items-center gap-1.5">
                   <span className="flex h-3 w-6 items-center justify-center rounded bg-rose-600 text-white">
                     <AlertTriangle className="h-2 w-2" />
                   </span>{' '}
