@@ -48,6 +48,8 @@ RUN apt-get update \
     python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
+    build-essential \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -67,6 +69,7 @@ COPY --chown=1000:0 scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
 COPY --chown=1000:0 scripts/hf-web-server.mjs scripts/hf-web-server.mjs
 
 RUN python3 -m venv /app/apps/ai/.venv \
+  && /app/apps/ai/.venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
   && /app/apps/ai/.venv/bin/pip install --no-cache-dir -e /app/apps/ai
 
 RUN chmod +x /app/scripts/hf-entrypoint.sh \
