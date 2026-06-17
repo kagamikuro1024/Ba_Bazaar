@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -13,9 +14,9 @@ type seededBooking struct {
 
 func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []string, projectIDs map[string]string) ([]seededBooking, error) {
 	base := []struct {
-		BAIndex, RequesterIndex int
+		BAIndex, RequesterIndex                                  int
 		ProjectName, Title, StartDate, EndDate, Status, Priority string
-		Capacity int
+		Capacity                                                 int
 	}{
 		{0, 0, "Payment Refund Flow", "Refund analysis sprint", "2026-06-01", "2026-06-05", "APPROVED", "HIGH", 50},
 		{0, 1, "CRM Revamp", "Pending CRM dependency mapping", "2026-06-03", "2026-06-06", "PENDING", "MEDIUM", 25},
@@ -55,8 +56,18 @@ func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []
 		{5, 2, "Mobile Onboarding", "Should be blocked if approved", "2026-06-11", "2026-06-12", "PENDING", "HIGH", 50},
 		{12, 3, "CRM Revamp", "Historical on-leave booking", "2026-05-01", "2026-05-03", "COMPLETED", "LOW", 50},
 		{14, 4, "Logistics Tracking", "Historical resigned BA booking", "2026-04-01", "2026-04-05", "COMPLETED", "MEDIUM", 100},
+		{6, 0, "Payment Refund Flow", "Refund incident triage", "2026-06-12", "2026-06-16", "APPROVED", "HIGH", 75},
+		{2, 1, "CRM Revamp", "CRM pilot backlog split", "2026-06-13", "2026-06-17", "IN_PROGRESS", "MEDIUM", 50},
+		{9, 4, "BI Dashboard", "Executive metrics alignment", "2026-06-14", "2026-06-18", "PENDING", "HIGH", 75},
+		{11, 2, "HR Approval Workflow", "Regional approval rewrite", "2026-06-15", "2026-06-18", "REJECTED", "MEDIUM", 50},
+		{1, 3, "Mobile Onboarding", "Onboarding copy refresh", "2026-06-16", "2026-06-20", "COMPLETED", "LOW", 25},
+		{4, 1, "Logistics Tracking", "Carrier SLA cleanup", "2026-06-17", "2026-06-21", "CANCELLED", "LOW", 50},
+		{0, 4, "BI Dashboard", "Capacity snapshot QA", "2026-06-18", "2026-06-22", "APPROVED", "MEDIUM", 50},
+		{8, 0, "Payment Refund Flow", "Refund escalation mapping", "2026-06-19", "2026-06-24", "PENDING", "URGENT", 100},
+		{10, 3, "CRM Revamp", "CRM archive cleanup", "2026-06-20", "2026-06-23", "COMPLETED", "MEDIUM", 50},
+		{7, 2, "Mobile Onboarding", "Reactivation path review", "2026-06-21", "2026-06-25", "IN_PROGRESS", "HIGH", 75},
 	}
-	created := make([]seededBooking, 0, len(base)+6)
+	created := make([]seededBooking, 0, len(base)+8)
 	for _, item := range base {
 		id, err := seedOneBooking(ctx, db, managerID, pmIDs[item.RequesterIndex], baIDs[item.BAIndex], projectIDs[item.ProjectName], item.ProjectName, item.Title, item.StartDate, item.EndDate, item.Capacity, item.Status, item.Priority, nil, nil)
 		if err != nil {
@@ -65,10 +76,10 @@ func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []
 		created = append(created, seededBooking{ID: id})
 	}
 	inbox := []struct {
-		BAIndex *int
-		RequesterIndex int
+		BAIndex                                                              *int
+		RequesterIndex                                                       int
 		ProjectName, Title, Description, Notes, StartDate, EndDate, Priority string
-		Capacity int
+		Capacity                                                             int
 	}{
 		{intPtr(4), 4, "Payment Refund Flow", "Payment Refund Flow", "Portal request for failed refunds and validation updates.", "Requested BA: Bui Phuong Thao", "2026-06-01", "2026-06-05", "URGENT", 100},
 		{nil, 1, "CRM Revamp", "CRM Revamp", "Open request for dependency mapping and BA assignment.", "BA not assigned yet.", "2026-06-03", "2026-06-06", "MEDIUM", 25},
@@ -76,6 +87,8 @@ func seedBookings(ctx context.Context, db *DB, managerID string, pmIDs, baIDs []
 		{intPtr(3), 0, "CRM Revamp", "Reporting Portal Upgrade", "Specific BA request for portal reporting enhancements.", "Requested BA: Le Dang Khoa", "2026-06-07", "2026-06-11", "MEDIUM", 75},
 		{intPtr(9), 2, "BI Dashboard", "Data Warehouse Redesign", "Specific BA request for reporting model redesign.", "Requested BA: Nguyen Mai Linh", "2026-06-08", "2026-06-13", "HIGH", 25},
 		{nil, 2, "BI Dashboard", "Analytics Dashboard", "Open request for analytics dashboard discovery.", "Needs BA assignment.", "2026-06-09", "2026-06-13", "HIGH", 50},
+		{nil, 0, "Internal Portal", "Internal Portal Expansion", "Open request for shared portal support and BA assignment.", "Pending triage before manager approves.", "2026-06-13", "2026-06-19", "MEDIUM", 50},
+		{intPtr(6), 4, "Logistics Tracking", "Shipment Alert Rules", "Specific BA request for shipment alert rule redesign.", "Requested BA: Tran Gia Huy", "2026-06-15", "2026-06-20", "HIGH", 75},
 	}
 	for _, item := range inbox {
 		var baID *string
@@ -98,6 +111,8 @@ func seedOneBooking(ctx context.Context, db *DB, managerID, requesterID, baID, p
 
 func seedOneBookingWithDetails(ctx context.Context, db *DB, managerID, requesterID string, baID *string, projectID, title, description string, notes *string, startDate, endDate string, capacity int, status, priority string) (string, error) {
 	id := uuid.NewString()
+	shiftedStartDate := shiftBookingDate(startDate)
+	shiftedEndDate := shiftBookingDate(endDate)
 	approved := status == "APPROVED" || status == "IN_PROGRESS" || status == "COMPLETED"
 	rejected := status == "REJECTED"
 	cancelled := status == "CANCELLED"
@@ -109,17 +124,17 @@ func seedOneBookingWithDetails(ctx context.Context, db *DB, managerID, requester
 	var approvedAt, rejectedAt, cancelledAt any
 	if rejected {
 		rejectReason = "BA has conflicting priority work in this period."
-		rejectedAt = dateOnly("2026-06-01")
+		rejectedAt = shiftedStartDate.AddDate(0, 0, -1)
 	}
 	if cancelled {
 		cancelReason = "Project scope changed before kickoff."
-		cancelledAt = dateOnly("2026-05-10")
+		cancelledAt = shiftedStartDate.AddDate(0, 0, -2)
 	}
 	if approved {
 		managerComment = "Approved in seed data."
-		approvedAt = dateOnly(startDate)
+		approvedAt = shiftedStartDate
 	}
-	_, err := db.Pool.Exec(ctx, `insert into bookings (id, ba_id, project_id, requester_id, manager_id, title, description, notes, start_date, end_date, capacity_percent, priority, status, reject_reason, cancel_reason, manager_comment, approved_at, rejected_at, cancelled_at, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now(),now())`, id, nullableSeedString(baID), projectID, requesterID, managerRef, title, description, nullableSeedString(notes), dateOnly(startDate), dateOnly(endDate), capacity, priority, status, rejectReason, cancelReason, managerComment, approvedAt, rejectedAt, cancelledAt)
+	_, err := db.Pool.Exec(ctx, `insert into bookings (id, ba_id, project_id, requester_id, manager_id, title, description, notes, start_date, end_date, capacity_percent, priority, status, reject_reason, cancel_reason, manager_comment, approved_at, rejected_at, cancelled_at, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now(),now())`, id, nullableSeedString(baID), projectID, requesterID, managerRef, title, description, nullableSeedString(notes), shiftedStartDate, shiftedEndDate, capacity, priority, status, rejectReason, cancelReason, managerComment, approvedAt, rejectedAt, cancelledAt)
 	return id, err
 }
 
@@ -144,7 +159,7 @@ func seedNotesNotificationsAudit(ctx context.Context, db *DB, managerID string, 
 		}
 	}
 	payload := fmt.Sprintf(`{"users":21,"ba_profiles":15,"bookings":%d}`, len(bookings))
-	_, err := db.Pool.Exec(ctx, `insert into audit_logs (id, actor_id, action, target_type, target_id, new_value, result, created_at) values ($1,$2,'SEED_DATABASE','Database',$2,$3::jsonb,'SUCCESS',now())`, uuid.NewString(), managerID, payload)
+	_, err := db.Pool.Exec(ctx, `insert into audit_logs (id, actor_id, action, target_type, target_id, new_value, result, created_at) values ($1,$2,'SEED_DATABASE','Database',$3,$4::jsonb,'SUCCESS',now())`, uuid.NewString(), managerID, managerID, payload)
 	return err
 }
 
@@ -153,6 +168,10 @@ func nullableSeedString(value *string) any {
 		return nil
 	}
 	return *value
+}
+
+func shiftBookingDate(value string) time.Time {
+	return dateOnly(value).AddDate(0, 0, 14)
 }
 
 func intPtr(value int) *int { return &value }

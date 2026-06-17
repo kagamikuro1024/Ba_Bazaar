@@ -19,7 +19,13 @@ export function Avatar({ name, url }: { name: string; url?: string | null }) {
   );
 }
 
-export function BAIdentity({ ba }: { ba: BAProfile | null }) {
+export function BAIdentity({
+  ba,
+  showNameTooltip = false
+}: {
+  ba: BAProfile | null;
+  showNameTooltip?: boolean;
+}) {
   if (!ba) {
     return (
       <div className="flex min-w-0 items-center gap-3">
@@ -34,11 +40,16 @@ export function BAIdentity({ ba }: { ba: BAProfile | null }) {
     );
   }
   return (
-    <div className="flex min-w-0 items-center gap-3">
+    <div
+      className="flex min-w-0 items-center gap-3"
+      title={showNameTooltip ? ba.full_name : undefined}
+    >
       <Avatar name={ba.full_name} url={ba.avatar_url} />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="truncate text-sm font-semibold text-slate-950">{ba.full_name}</span>
+          <span className="truncate text-sm font-semibold text-slate-950">
+            {ba.full_name}
+          </span>
           {ba.status === 'ON_LEAVE' && (
             <span className="shrink-0 inline-flex items-center rounded bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20">
               ON LEAVE

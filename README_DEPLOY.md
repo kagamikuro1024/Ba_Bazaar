@@ -283,7 +283,7 @@ Run seed inside the API container:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production exec api \
-  sh -lc 'cd /app/apps/api && ./node_modules/.bin/tsx prisma/seed.ts'
+  sh -lc '/app/ba-bazaar-api seed'
 ```
 
 Verify:

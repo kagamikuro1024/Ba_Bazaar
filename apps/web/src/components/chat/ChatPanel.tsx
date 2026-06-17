@@ -13,12 +13,6 @@ import { useChatSession } from './useChatSession';
 // access token and role so the chat agent can call the Go API on their behalf.
 // ---------------------------------------------------------------------------
 
-const SUGGESTED_PROMPTS = [
-  'Show me the manager dashboard',
-  "What's pending in the action center?",
-  'Summarize this month’s utilization report'
-];
-
 export function ChatPanel({
   open,
   onClose,
@@ -34,6 +28,8 @@ export function ChatPanel({
 }) {
   const session = useChatSession({ accessToken, userRole, userId });
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const suggestedPrompts = getSuggestedPrompts(userRole);
+  const emptyStateCopy = getEmptyStateCopy(userRole);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -93,7 +89,11 @@ export function ChatPanel({
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto bg-slate-50 py-3">
         {session.messages.length === 0 ? (
-          <EmptyState onPick={(prompt) => session.send(prompt)} />
+          <EmptyState
+            copy={emptyStateCopy}
+            prompts={suggestedPrompts}
+            onPick={(prompt) => session.send(prompt)}
+          />
         ) : (
           <div className="grid gap-3">
             {session.messages.map((msg) => (
@@ -127,15 +127,20 @@ export function ChatPanel({
   );
 }
 
-function EmptyState({ onPick }: { onPick: (prompt: string) => void }) {
+function EmptyState({
+  copy,
+  prompts,
+  onPick
+}: {
+  copy: string;
+  prompts: string[];
+  onPick: (prompt: string) => void;
+}) {
   return (
     <div className="grid gap-3 px-3 text-sm text-slate-600">
-      <p>
-        Ask about the dashboard, the action center, your schedule, or this month's reports.
-        Replies are grounded in live data — never guessed.
-      </p>
+      <p>{copy}</p>
       <div className="grid gap-2">
-        {SUGGESTED_PROMPTS.map((prompt) => (
+        {prompts.map((prompt) => (
           <button
             key={prompt}
             type="button"
@@ -148,4 +153,40 @@ function EmptyState({ onPick }: { onPick: (prompt: string) => void }) {
       </div>
     </div>
   );
+}
+
+function getSuggestedPrompts(userRole?: string) {
+  if (userRole === 'BA') {
+    return [
+      'Show my schedule for today',
+      'What work do I have this week?',
+      'Summarize my upcoming assignments'
+    ];
+  }
+
+  if (userRole === 'PM_PO') {
+    return [
+      'Show my pending requests',
+      'What requests were approved or rejected this month?',
+      'Summarize my current booking requests'
+    ];
+  }
+
+  return [
+    'Show me the manager dashboard',
+    "What's pending in the action center?",
+    'Summarize this month’s utilization report'
+  ];
+}
+
+function getEmptyStateCopy(userRole?: string) {
+  if (userRole === 'BA') {
+    return 'Ask about your schedule, current assignments, or upcoming work. Replies are grounded in live data — never guessed.';
+  }
+
+  if (userRole === 'PM_PO') {
+    return 'Ask about your booking requests, approval status, or recent request activity. Replies are grounded in live data — never guessed.';
+  }
+
+  return "Ask about the dashboard, the action center, your team's schedule, or this month's reports. Replies are grounded in live data — never guessed.";
 }
