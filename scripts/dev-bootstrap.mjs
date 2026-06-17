@@ -119,6 +119,26 @@ if (needsVenvCreate) {
 }
 
 if (needsDepsInstall) {
+  // On Windows + Python 3.11 or 3.12, pre-install precompiled annoy wheel from GitHub to bypass C++ Build Tools requirement
+  if (isWin) {
+    const venvPythonPath = resolve(venvBinDir, 'python.exe');
+    const pyVersionRes = spawnSync(venvPythonPath, ['-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'], { encoding: 'utf8' });
+    const pyVersion = (pyVersionRes.stdout || '').trim();
+    if (pyVersion === '3.11' || pyVersion === '3.12') {
+      console.log(`[bootstrap] Windows + Python ${pyVersion} detected. Pre-installing precompiled annoy wheel...`);
+      const wheelUrl = `https://github.com/Sprocketer/annoy-wheels/raw/main/annoy-1.17.3-cp${pyVersion.replace('.', '')}-cp${pyVersion.replace('.', '')}-win_amd64.whl`;
+      const wheelRes = spawnSync(pipPath, ['install', '--no-cache-dir', wheelUrl], {
+        stdio: 'inherit',
+        cwd: ROOT
+      });
+      if (wheelRes.status === 0) {
+        console.log('[bootstrap] Precompiled annoy wheel installed successfully!');
+      } else {
+        console.warn('[bootstrap] Warning: Failed to install precompiled annoy wheel, will attempt standard build...');
+      }
+    }
+  }
+
   console.log('[bootstrap] Installing/updating apps/ai package and dependencies in virtual environment...');
   const installRes = spawnSync(pipPath, ['install', '-e', resolve(ROOT, 'apps/ai')], {
     stdio: 'inherit',
