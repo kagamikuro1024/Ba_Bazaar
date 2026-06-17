@@ -168,7 +168,7 @@ function bookingBarClass(status: Booking['status'], hasOverbookRisk = false) {
     case 'COMPLETED':
       return 'border border-emerald-200 bg-emerald-100/90 text-emerald-800';
     case 'CANCELLED':
-      return 'border border-slate-400 bg-slate-200 text-slate-700 opacity-90';
+      return 'border border-slate-200 bg-slate-200 text-slate-400';
     case 'REJECTED':
       return 'border border-rose-200 bg-rose-100/80 text-rose-700';
     default:
@@ -1130,7 +1130,7 @@ export function TimelinePage() {
                   Rejected
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-6 rounded border border-slate-400 bg-slate-200" />{' '}
+                  <span className="h-3 w-6 rounded border border-slate-200 bg-slate-200" />{' '}
                   Cancelled
                 </div>
                 <div className="flex items-center gap-1.5">
