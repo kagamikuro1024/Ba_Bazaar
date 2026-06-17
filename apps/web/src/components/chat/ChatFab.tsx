@@ -29,7 +29,7 @@ export function ChatFab({
     <>
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(!open)}
         aria-label={open ? 'Close assistant' : 'Open assistant'}
         aria-expanded={open}
         className={cn(

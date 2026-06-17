@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGlobalFab, type FabAction } from '@/context/GlobalFabContext';
 
@@ -14,7 +14,7 @@ export function GlobalActionDial({
   onTriggerCreateBooking,
   defaultPrimaryLabel = 'Create booking'
 }: GlobalActionDialProps) {
-  const { primaryAction, visible, setChatOpen } = useGlobalFab();
+  const { primaryAction, visible } = useGlobalFab();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);

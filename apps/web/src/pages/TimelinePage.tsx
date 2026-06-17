@@ -1265,7 +1265,6 @@ export function TimelinePage() {
                     <MobileTimelineRow
                       key={ba.id}
                       ba={ba}
-                      viewMode={viewMode}
                       columns={columns}
                       bookings={baBookings}
                       rowMinHeight={mobileRowMinHeight}
@@ -1663,7 +1662,6 @@ function TimelineRow({
 
 function MobileTimelineRow({
   ba,
-  viewMode,
   columns,
   bookings,
   rowMinHeight,
@@ -1675,7 +1673,6 @@ function MobileTimelineRow({
   onBookingClick
 }: {
   ba: BAProfile;
-  viewMode: TimelineViewMode;
   columns: TimelineColumn[];
   bookings: Booking[];
   rowMinHeight: number;
