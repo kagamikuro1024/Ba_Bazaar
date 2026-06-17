@@ -29,12 +29,11 @@ type deepSeekChatRequest struct {
 }
 
 // callDeepSeekJSON sends a chat request with JSON output mode and returns the
-// raw JSON string from the first choice. Callers unmarshal into their own
-// schema and must validate the result.
-func callDeepSeekJSON(ctx context.Context, request deepSeekChatRequest) (string, error) {
+// raw JSON string from the first choice, along with input and output token counts.
+func callDeepSeekJSON(ctx context.Context, request deepSeekChatRequest) (string, int, int, error) {
 	apiKey := strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY"))
 	if apiKey == "" {
-		return "", fmt.Errorf("DEEPSEEK_API_KEY is not configured")
+		return "", 0, 0, fmt.Errorf("DEEPSEEK_API_KEY is not configured")
 	}
 	model := envOr("DEEPSEEK_MODEL", "deepseek-chat")
 	baseURL := strings.TrimRight(envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com"), "/")
@@ -54,18 +53,18 @@ func callDeepSeekJSON(ctx context.Context, request deepSeekChatRequest) (string,
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", 0, 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := deepSeekHTTPClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", 0, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("deepseek status %d", resp.StatusCode)
+		return "", 0, 0, fmt.Errorf("deepseek status %d", resp.StatusCode)
 	}
 
 	var decoded struct {
@@ -74,16 +73,21 @@ func callDeepSeekJSON(ctx context.Context, request deepSeekChatRequest) (string,
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return "", err
+		return "", 0, 0, err
 	}
 	if len(decoded.Choices) == 0 {
-		return "", fmt.Errorf("deepseek returned no choices")
+		return "", 0, 0, fmt.Errorf("deepseek returned no choices")
 	}
 
 	content := strings.TrimSpace(decoded.Choices[0].Message.Content)
-	return extractDeepSeekJSONContent(content)
+	jsonContent, err := extractDeepSeekJSONContent(content)
+	return jsonContent, decoded.Usage.PromptTokens, decoded.Usage.CompletionTokens, err
 }
 
 func extractDeepSeekJSONContent(content string) (string, error) {

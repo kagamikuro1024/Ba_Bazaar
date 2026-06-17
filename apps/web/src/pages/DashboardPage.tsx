@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -41,7 +41,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader, StatCard } from '@/components';
 import { AISummaryCard } from '@/components/AISummaryCard';
-import { useAISummary, type AISummary } from '@/lib/aiSummary';
 import { cn } from '@/lib/utils';
 
 const MANAGER_DASHBOARD_ACTION_ROUTES: Record<string, string> = {
@@ -171,14 +170,6 @@ export function DashboardPage() {
       ),
     enabled: isManagerDashboard
   });
-  const managerLLMSummary = useAISummary(
-    `/api/dashboard/manager-summary/llm?from=${managerRange.from}&to=${managerRange.to}`,
-    isManagerDashboard && Boolean(managerSummary.data)
-  );
-  const baScheduleSummary = useAISummary(
-    '/api/bookings/my-schedule/llm-summary',
-    isBaDashboard
-  );
 
   const dashboardData = useMemo(() => {
     const allBookings = bookings.data ?? [];
@@ -388,15 +379,17 @@ export function DashboardPage() {
         <ManagerDashboard
           actions={dashboardData.actionItems}
           summary={managerSummary.data}
-          llmSummary={managerLLMSummary.data}
-          llmSummaryLoading={managerLLMSummary.isLoading}
+          llmSummaryEndpoint={
+            isManagerDashboard && Boolean(managerSummary.data)
+              ? `/api/dashboard/manager-summary/llm?from=${managerRange.from}&to=${managerRange.to}`
+              : null
+          }
         />
       ) : (
         <>
           {isBaDashboard ? (
             <AISummaryCard
-              summary={baScheduleSummary.data}
-              isLoading={baScheduleSummary.isLoading}
+              endpoint="/api/bookings/my-schedule/llm-summary"
               title="Your AI Schedule Summary"
               loadingTitle="Summarizing your schedule"
               actionRoutes={BA_DASHBOARD_ACTION_ROUTES}
@@ -507,13 +500,11 @@ function ManagerDashboardHeaderActions({
 function ManagerDashboard({
   actions,
   summary,
-  llmSummary,
-  llmSummaryLoading
+  llmSummaryEndpoint
 }: {
   actions: ManagerActionItem[];
   summary?: ManagerDashboardSummary;
-  llmSummary?: AISummary;
-  llmSummaryLoading?: boolean;
+  llmSummaryEndpoint: string | null;
 }) {
   const team = summary?.team;
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>('ALL');
@@ -623,8 +614,7 @@ function ManagerDashboard({
       </div>
 
       <AISummaryCard
-        summary={llmSummary}
-        isLoading={llmSummaryLoading}
+        endpoint={llmSummaryEndpoint}
         actionRoutes={MANAGER_DASHBOARD_ACTION_ROUTES}
       />
 

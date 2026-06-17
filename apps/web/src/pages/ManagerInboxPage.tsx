@@ -38,7 +38,6 @@ import {
 } from '@/components';
 import { Avatar, BAIdentity } from '@/components/common';
 import { AISummaryCard } from '@/components/AISummaryCard';
-import { useAISummary } from '@/lib/aiSummary';
 import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { type RecommendationQuery } from '@/lib/recommendations';
 import { Badge } from '@/components/ui/badge';
@@ -260,10 +259,6 @@ export function ManagerInboxPage() {
     queryKey: ['manager-inbox-capacity-summary'],
     queryFn: () => apiFetch<CapacitySummary>('/api/capacity/summary')
   });
-  const queueSummary = useAISummary(
-    '/api/bookings/action-center/llm-summary',
-    user?.role === 'BA_MANAGER' || user?.role === 'ADMIN'
-  );
 
   const bookingItems = useMemo(() => {
     const payload = bookings.data;
@@ -1625,8 +1620,7 @@ export function ManagerInboxPage() {
       ) : null}
 
       <AISummaryCard
-        summary={queueSummary.data}
-        isLoading={queueSummary.isLoading}
+        endpoint="/api/bookings/action-center/llm-summary"
         title="AI Queue Summary"
         loadingTitle="Summarizing the request queue"
         actionRoutes={ACTION_CENTER_ACTION_ROUTES}

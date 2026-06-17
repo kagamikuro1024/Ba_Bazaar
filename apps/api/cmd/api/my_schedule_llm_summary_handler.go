@@ -119,7 +119,7 @@ func (app *App) handleMyScheduleLLMSummary(w http.ResponseWriter, r *http.Reques
 		suggested = append(suggested, llmSuggestedAction{ID: "check_overbook", Label: "Check your over-capacity days"})
 	}
 
-	serveLLMSummary(w, llmSummarySpec{
+	app.serveLLMSummary(w, r, llmSummarySpec{
 		Scope:     "my-schedule",
 		CacheKey:  ba.ID,
 		Facts:     facts,

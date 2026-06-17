@@ -29,13 +29,21 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
-import { apiFetch, type BAProfile, type Booking, type Project } from '@/lib/api';
+import {
+  apiFetch,
+  type BAProfile,
+  type Booking,
+  type Project,
+  getBookingRequirements
+} from '@/lib/api';
 import { CAPACITY_OPTIONS, parseCapacityPercent } from '@/lib/capacity';
-import { BAIdentity, StatusBadge } from '@/components/common';
+import { Avatar, BAIdentity, StatusBadge } from '@/components/common';
 import { BookingModal } from '@/components/BookingModal';
+import { RecommendationDropdown } from '@/components/ba/RecommendationDropdown';
 import { PageHeader } from '@/components';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -546,6 +554,73 @@ export function TimelinePage() {
   const [baSortMode, setBaSortMode] = useState<BASortMode>('name');
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => Number(format(new Date(), 'yyyy')));
+
+  const isManagerRole = role === 'BA_MANAGER';
+  const [activeDrag, setActiveDrag] = useState<{
+    booking: Booking;
+    sourceBaId: string;
+    currentBaId: string;
+  } | null>(null);
+
+  const [pendingReassign, setPendingReassign] = useState<{
+    booking: Booking;
+    sourceBaId: string;
+    targetBaId: string;
+  } | null>(null);
+
+  const confirmReassign = useMutation({
+    mutationFn: () => {
+      if (!pendingReassign) return Promise.resolve(null);
+      return apiFetch(`/api/bookings/${pendingReassign.booking.id}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ba_id: pendingReassign.targetBaId })
+      });
+    },
+    onSuccess: () => {
+      setPendingReassign(null);
+      void queryClient.invalidateQueries();
+    }
+  });
+
+  const handleDragStart = (e: React.DragEvent, booking: Booking, baId: string) => {
+    setActiveDrag({
+      booking,
+      sourceBaId: baId,
+      currentBaId: baId
+    });
+    e.dataTransfer.setData('text/plain', booking.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setActiveDrag(null);
+  };
+
+  const handleDragEnter = (e: React.DragEvent, targetBaId: string) => {
+    e.preventDefault();
+    if (activeDrag) {
+      setActiveDrag((prev) => (prev ? { ...prev, currentBaId: targetBaId } : null));
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetBaId: string) => {
+    e.preventDefault();
+    if (!activeDrag) return;
+
+    const booking = activeDrag.booking;
+    const sourceBaId = activeDrag.sourceBaId;
+
+    if (sourceBaId !== targetBaId) {
+      setPendingReassign({
+        booking,
+        sourceBaId,
+        targetBaId
+      });
+    }
+
+    setActiveDrag(null);
+  };
+
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const periodPickerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -676,6 +751,23 @@ export function TimelinePage() {
   const visibleBookings = (bookings.data ?? []).filter(
     (booking) => !projectFilter || booking.project_id === projectFilter
   );
+
+  const displayBookings = useMemo(() => {
+    const activeBookingId = activeDrag?.booking.id || pendingReassign?.booking.id;
+    const targetBaId = activeDrag?.currentBaId || pendingReassign?.targetBaId;
+
+    if (!activeBookingId || !targetBaId) {
+      return visibleBookings;
+    }
+
+    return visibleBookings.map((b) => {
+      if (b.id === activeBookingId) {
+        return { ...b, ba_id: targetBaId };
+      }
+      return b;
+    });
+  }, [visibleBookings, activeDrag, pendingReassign]);
+
   const capacityByBaId = useMemo(
     () => new Map((summary.data?.items ?? []).map((item) => [item.ba_id, item])),
     [summary.data]
@@ -705,7 +797,7 @@ export function TimelinePage() {
   const rowData = useMemo(
     () =>
       sortedVisibleBas.map((ba) => {
-        const baBookings = visibleBookings.filter((booking) => booking.ba_id === ba.id);
+        const baBookings = displayBookings.filter((booking) => booking.ba_id === ba.id);
         return {
           ba,
           bookings: baBookings,
@@ -725,7 +817,7 @@ export function TimelinePage() {
           )
         };
       }),
-    [columns, sortedVisibleBas, visibleBookings]
+    [columns, sortedVisibleBas, displayBookings]
   );
 
   function cycleBaSortMode() {
@@ -1164,10 +1256,6 @@ export function TimelinePage() {
                           ?.risk_capacity ?? 0) > 100
                       }
                       currentDate={currentDate}
-                      riskCapacity={
-                        summary.data?.items.find((item) => item.ba_id === ba.id)
-                          ?.risk_capacity ?? 0
-                      }
                       onEmptyClick={(column) =>
                         setDraft({
                           ba_id: ba.id,
@@ -1177,6 +1265,11 @@ export function TimelinePage() {
                         })
                       }
                       onBookingClick={setSelectedBooking}
+                      isManagerRole={isManagerRole}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onDragEnter={handleDragEnter}
+                      onDrop={handleDrop}
                     />
                   );
                 }
@@ -1298,12 +1391,40 @@ export function TimelinePage() {
       <BookingDetailModal
         booking={selectedBooking}
         allBookings={bookings.data ?? []}
+        allBas={bas.data ?? []}
+        capacitySummaryItems={summary.data?.items ?? []}
         onClose={() => setSelectedBooking(null)}
         onDone={() => {
           setSelectedBooking(null);
           void queryClient.invalidateQueries();
         }}
       />
+      {pendingReassign && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+          <div className="text-sm text-slate-700">
+            Confirm reassignment of <strong>{pendingReassign.booking.project.name}</strong> from{' '}
+            <strong>{pendingReassign.booking.ba?.full_name ?? 'Unassigned'}</strong> to{' '}
+            <strong>{bas.data?.find((ba) => ba.id === pendingReassign.targetBaId)?.full_name ?? 'Unassigned'}</strong>?
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setPendingReassign(null)}
+              disabled={confirmReassign.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => confirmReassign.mutate()}
+              disabled={confirmReassign.isPending}
+            >
+              {confirmReassign.isPending ? 'Saving...' : 'Confirm'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1324,7 +1445,12 @@ function TimelineRow({
   onSelectionMove,
   onSelectionEnd,
   onEmptyClick,
-  onBookingClick
+  onBookingClick,
+  isManagerRole,
+  onDragStart,
+  onDragEnd,
+  onDragEnter,
+  onDrop
 }: {
   ba: BAProfile;
   viewMode: TimelineViewMode;
@@ -1336,13 +1462,17 @@ function TimelineRow({
   allowDragSelection: boolean;
   hasOverbookRisk: boolean;
   currentDate: Date;
-  riskCapacity: number;
   activeSelection: DraftSelection | null;
   onSelectionStart: (baId: string, day: Date, pointerId: number) => void;
   onSelectionMove: (baId: string, day: Date, pointerId: number) => void;
   onSelectionEnd: (pointerId: number) => void;
   onEmptyClick: (column: TimelineColumn) => void;
   onBookingClick: (booking: Booking) => void;
+  isManagerRole?: boolean;
+  onDragStart?: (e: React.DragEvent, booking: Booking, baId: string) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragEnter?: (e: React.DragEvent, targetBaId: string) => void;
+  onDrop?: (e: React.DragEvent, targetBaId: string) => void;
 }) {
   const layouts = computeBookingLayouts(columns, bookings);
   const selectedRange = activeSelection ? sortSelectionRange(activeSelection) : null;
@@ -1394,6 +1524,9 @@ function TimelineRow({
                 onEmptyClick(column);
               }
             }}
+            onDragEnter={(e) => onDragEnter?.(e, ba.id)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => onDrop?.(e, ba.id)}
             aria-label={canCreateBooking ? 'Create booking request' : 'Available slot'}
           >
             {canCreateBooking ? (
@@ -1405,18 +1538,37 @@ function TimelineRow({
       <div
         className="pointer-events-none relative grid"
         style={{ gridColumn: `2 / span ${columns.length}` }}
+        onDragEnter={(e) => onDragEnter?.(e, ba.id)}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => onDrop?.(e, ba.id)}
       >
         <div
           className="relative"
           style={{ minHeight: rowMinHeight, marginTop: -rowMinHeight }}
         >
           {layouts.map(({ booking, leftPercent, widthPercent, lane }) => {
+            const isDraggable = isManagerRole && hasOverbookRisk;
             return (
               <button
                 key={booking.id}
+                draggable={isDraggable}
+                onDragStart={(e) => {
+                  if (isDraggable) {
+                    onDragStart?.(e, booking, ba.id);
+                  }
+                }}
+                onDragEnd={(e) => {
+                  if (isDraggable) {
+                    onDragEnd?.(e);
+                  }
+                }}
+                onDragEnter={(e) => onDragEnter?.(e, ba.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => onDrop?.(e, ba.id)}
                 className={cn(
-                  'pointer-events-auto absolute h-8 truncate rounded-lg px-2 text-left text-xs font-semibold shadow-sm transition hover:-translate-y-0.5',
-                  bookingBarClass(booking.status, hasOverbookRisk)
+                  'pointer-events-auto absolute h-8 truncate rounded-lg px-2 text-left text-xs font-semibold shadow-sm transition',
+                  bookingBarClass(booking.status, hasOverbookRisk),
+                  isDraggable ? 'cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:-translate-y-0.5' : 'hover:-translate-y-0.5'
                 )}
                 style={{
                   left: `${leftPercent}%`,
@@ -1904,11 +2056,15 @@ function rangesOverlap(
 function BookingDetailModal({
   booking,
   allBookings,
+  allBas,
+  capacitySummaryItems,
   onClose,
   onDone
 }: {
   booking: Booking | null;
   allBookings: Booking[];
+  allBas: BAProfile[];
+  capacitySummaryItems: CapacitySummaryItem[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -1918,6 +2074,10 @@ function BookingDetailModal({
   const [capacityDraft, setCapacityDraft] = useState('50');
   const [decisionKind, setDecisionKind] = useState<'reject' | 'cancel' | null>(null);
   const [decisionReason, setDecisionReason] = useState('');
+  const [selectedBaId, setSelectedBaId] = useState<string>('');
+  const [baSearch, setBaSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
   const bookingId = booking?.id;
   const bookingCapacity = booking?.capacity_percent;
   const capacityDetail = useQuery({
@@ -1987,7 +2147,10 @@ function BookingDetailModal({
     setCapacityDraft(String(bookingCapacity));
     setDecisionKind(null);
     setDecisionReason('');
-  }, [bookingId, bookingCapacity]);
+    setSelectedBaId(booking?.ba_id ?? '');
+    setBaSearch('');
+    setIsDropdownOpen(false);
+  }, [bookingId, bookingCapacity, booking?.ba_id]);
 
   const capacityPercent =
     parseCapacityPercent(capacityDraft) ?? booking?.capacity_percent ?? 50;
@@ -2012,6 +2175,18 @@ function BookingDetailModal({
       return apiFetch(`/api/bookings/${booking.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ capacity_percent: capacityPercent })
+      });
+    },
+    onSuccess: onDone
+  });
+  const reassign = useMutation({
+    mutationFn: () => {
+      if (!booking || !selectedBaId) {
+        return Promise.resolve(null);
+      }
+      return apiFetch(`/api/bookings/${booking.id}/assign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ba_id: selectedBaId })
       });
     },
     onSuccess: onDone
@@ -2050,6 +2225,49 @@ function BookingDetailModal({
     onSuccess: onDone
   });
 
+  const recommendationQuery = useMemo(() => {
+    if (!booking) return null;
+    if (!booking.start_date || !booking.end_date) return null;
+    if (booking.end_date < booking.start_date) return null;
+    const cap = capacityPercent;
+    if (!Number.isFinite(cap) || cap < 1 || cap > 100) return null;
+    const { requiredSkillIds, requiredLevel } = getBookingRequirements(booking);
+    return {
+      start_date: typeof booking.start_date === 'string'
+        ? booking.start_date.slice(0, 10)
+        : new Date(booking.start_date).toISOString().slice(0, 10),
+      end_date: typeof booking.end_date === 'string'
+        ? booking.end_date.slice(0, 10)
+        : new Date(booking.end_date).toISOString().slice(0, 10),
+      capacity_percent: cap,
+      project_id: booking.project_id,
+      required_skill_ids: requiredSkillIds.length ? requiredSkillIds : undefined,
+      level: requiredLevel || undefined,
+      limit: 5
+    };
+  }, [booking, capacityPercent]);
+
+  const filteredBas = useMemo(() => {
+    const search = baSearch.toLowerCase().trim();
+    const capacityMap = new Map(
+      (capacitySummaryItems ?? []).map((item) => [item.ba_id, item])
+    );
+
+    return allBas
+      .map((ba) => {
+        const cap = capacityMap.get(ba.id);
+        return {
+          ba,
+          availability: Math.max(0, 100 - (cap?.approved_capacity ?? 0)),
+          riskCapacity: cap?.risk_capacity ?? 0
+        };
+      })
+      .filter((item) => !search || item.ba.full_name.toLowerCase().includes(search))
+      .sort((a, b) => a.riskCapacity - b.riskCapacity);
+  }, [allBas, baSearch, capacitySummaryItems]);
+
+  const selectedBa = allBas.find((ba) => ba.id === selectedBaId);
+
   function submitDecision() {
     const reason = decisionReason.trim();
     if (!decisionKind || !reason) return;
@@ -2066,9 +2284,6 @@ function BookingDetailModal({
 
   const maxRiskCapacity = capacityDetail.data?.max_risk_capacity ?? 0;
   const maxApprovedCapacity = capacityDetail.data?.max_approved_capacity ?? 0;
-  // Conflict = pending could push past 100% if approved. Invalid overbook =
-  // already-approved load exceeds 100% (a data issue). Approving past 100% is
-  // blocked by the API, so the panel guides the manager toward a resolution.
   const invalidOverbook = maxApprovedCapacity > 100;
   const hasConflict = maxRiskCapacity > 100;
   const suggestedMaxApprove = Math.max(0, 100 - maxApprovedCapacity);
@@ -2146,6 +2361,125 @@ function BookingDetailModal({
             </div>
           </div>
         ) : null}
+
+        {isManagerRole ? (
+          <div className="grid gap-3 rounded-lg border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-slate-950">Reassign BA</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Current: {booking.ba?.full_name ?? 'Unassigned'}
+                </p>
+              </div>
+              {selectedBaId !== (booking.ba_id ?? '') && (
+                <span className="rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 animate-pulse">
+                  Changed
+                </span>
+              )}
+            </div>
+
+            <RecommendationDropdown
+              query={recommendationQuery}
+              selectedBaId={selectedBaId}
+              onSelectCandidate={(baId) => setSelectedBaId(baId)}
+            />
+
+            <div className="relative">
+              <div
+                className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                {selectedBa ? (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={selectedBa.full_name} url={selectedBa.avatar_url} />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">
+                        {selectedBa.full_name}
+                      </p>
+                      <p className="text-xs text-slate-500">{selectedBa.level}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">Choose a BA...</p>
+                )}
+                <ChevronDown
+                  className={`h-4 w-4 text-slate-400 transition ${isDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="flex items-center gap-2 border-b border-slate-100 p-3">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <input
+                      autoFocus
+                      className="w-full text-sm outline-none"
+                      placeholder="Search BAs..."
+                      value={baSearch}
+                      onChange={(e) => setBaSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto">
+                    {filteredBas.map((item) => (
+                      <div
+                        key={item.ba.id}
+                        className="flex cursor-pointer items-center justify-between gap-3 p-3 hover:bg-slate-50"
+                        onClick={() => {
+                          setSelectedBaId(item.ba.id);
+                          setIsDropdownOpen(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar name={item.ba.full_name} url={item.ba.avatar_url} />
+                          <div>
+                            <p className="text-sm font-medium text-slate-950">
+                              {item.ba.full_name}
+                            </p>
+                            <p className="text-xs text-slate-500">{item.ba.level}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={`text-xs font-semibold ${item.availability < 20 ? 'text-rose-600' : 'text-slate-600'}`}
+                          >
+                            {item.availability}% Avail.
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {item.riskCapacity}% load
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredBas.length === 0 && (
+                      <div className="p-3 text-center text-xs text-slate-500">No BAs found</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {selectedBaId !== (booking.ba_id ?? '') && (
+              <div className="flex justify-end gap-2 animate-in fade-in slide-in-from-top-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSelectedBaId(booking.ba_id ?? '')}
+                  disabled={reassign.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => reassign.mutate()}
+                  disabled={reassign.isPending}
+                >
+                  {reassign.isPending ? 'Saving...' : 'Save assignment'}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {canEditCapacity ? (
           <div className="grid gap-3 rounded-lg border p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2284,10 +2618,10 @@ function BookingDetailModal({
             </div>
           </form>
         ) : null}
-        {approve.error || reject.error || cancel.error || updateCapacity.error ? (
+        {approve.error || reject.error || cancel.error || updateCapacity.error || reassign.error ? (
           <div className="rounded-lg bg-rose-50 p-3 text-rose-700">
             {
-              (approve.error ?? reject.error ?? cancel.error ?? updateCapacity.error)
+              (approve.error ?? reject.error ?? cancel.error ?? updateCapacity.error ?? reassign.error)
                 ?.message
             }
           </div>

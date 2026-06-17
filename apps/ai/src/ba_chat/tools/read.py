@@ -8,11 +8,14 @@ JSON dict.
 from __future__ import annotations
 
 import logging
+import time
+import json
 from typing import Any
 
 import httpx
 
 from ba_chat.config import Settings, get_settings
+from ba_chat.log_context import tool_calls_var
 
 log = logging.getLogger(__name__)
 
@@ -43,13 +46,37 @@ async def _get(
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=5.0)
     url = f"{settings.api_base_url}{path}"
     log.debug("GET %s params=%s", url, params)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(url, params=params, headers=headers)
-    if response.status_code >= 300:
-        raise APIError(response.status_code, response.text[:300])
-    if not response.content:
-        return {}
-    return response.json()
+
+    start_time = time.time()
+    status = "SUCCESS"
+    err_msg = ""
+    res = {}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, params=params, headers=headers)
+        if response.status_code >= 300:
+            raise APIError(response.status_code, response.text[:300])
+        if response.content:
+            res = response.json()
+        return res
+    except Exception as e:
+        status = "FAILED"
+        err_msg = str(e)
+        raise
+    finally:
+        tool_calls = tool_calls_var.get()
+        if tool_calls is not None:
+            latency_ms = int((time.time() - start_time) * 1000)
+            tool_calls.append({
+                "tool_name": f"GET {path}",
+                "input_json": json.dumps(params or {}),
+                "output_json": json.dumps(res) if status == "SUCCESS" else "{}",
+                "status": status,
+                "latency_ms": latency_ms,
+                "error_message": err_msg
+            })
+
 
 
 # ---------------------------------------------------------------------------
