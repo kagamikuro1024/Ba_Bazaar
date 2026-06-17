@@ -113,9 +113,12 @@ _SYSTEM = (
     "redo the dates')\n"
     "  * 'side_question' — they asked a clarifying question or said something "
     "unrelated to the current field (e.g. 'what info do you need?', 'who's "
-    "free next week?', 'why are you asking that?'). When you pick this, ALSO "
-    "fill in side_reply with a short helpful answer that ends by inviting "
-    "them to continue the booking.\n"
+    "free next week?', 'why are you asking that?', 'I haven't decided yet, "
+    "can you help me?', 'I'm not sure'). When you pick this, ALSO fill in "
+    "side_reply with a short helpful answer that ends by inviting them to "
+    "continue the booking.\n"
+    "  * During clarification, 'yes', 'ok', or similar acknowledgement is "
+    "not a slot answer unless the assistant asked for final confirmation.\n"
     "  * 'restate_command' — they retyped the original 'create booking' "
     "command instead of answering\n"
     "\n"
@@ -157,6 +160,8 @@ _OFFLINE_CANCEL = {
     "no", "n", "nope", "cancel", "stop", "abort",
     "nevermind", "never mind", "quit", "exit",
     "no thanks", "no thank you", "forget it", "drop it",
+    "i changed my mind", "changed my mind", "i changed my mind never mind",
+    "i changed my mind, never mind",
 }
 _OFFLINE_BACK = {"back", "go back", "previous", "undo", "redo"}
 _OFFLINE_CONFIRM = {
@@ -206,6 +211,13 @@ _SIDE_QUESTION_RE = re.compile(
 )
 _CONTROL_REPLY_RE = re.compile(
     r"^\s*(wait|hold on|go back|back|previous|redo|change|edit)\b",
+    re.IGNORECASE,
+)
+_NON_ANSWER_RE = re.compile(
+    r"(haven'?t\s+(made\s+up|decided)|not\s+(decided|sure)|"
+    r"don'?t\s+know|do\s+not\s+know|no\s+idea|unsure|"
+    r"help\s+me|can\s+you\s+help|could\s+you\s+help|"
+    r"\bsuggest\b|\brecommend\b)",
     re.IGNORECASE,
 )
 
@@ -288,7 +300,7 @@ async def extract_slots(state: ChatState) -> ChatState:
             return {"slots": existing, "confirmed": True}
 
     if awaiting == "clarification":
-        if asked_field != "description" and lowered in _OFFLINE_CANCEL:
+        if lowered in _OFFLINE_CANCEL:
             return _cancel_state()
         if lowered in _OFFLINE_BACK:
             return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
@@ -364,8 +376,14 @@ async def extract_slots(state: ChatState) -> ChatState:
         if turn_intent == "cancel":
             return _cancel_state()
 
-        if turn_intent == "confirm":
+        if turn_intent == "confirm" and awaiting == "confirmation":
             return {"slots": existing, "confirmed": True}
+        if turn_intent == "confirm":
+            return {
+                "slots": existing,
+                "confirmed": False,
+                "side_reply_text": _clarification_ack_reply(asked_field),
+            }
 
         if turn_intent == "go_back" and awaiting == "clarification":
             return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
@@ -415,6 +433,12 @@ async def extract_slots(state: ChatState) -> ChatState:
         return {"slots": existing, "confirmed": True}
     if awaiting == "clarification" and lowered in _OFFLINE_BACK:
         return {"slots": _go_back_clear_last_slot(existing), "confirmed": False}
+    if awaiting == "clarification" and asked_field and _looks_like_non_answer(text):
+        return {
+            "slots": existing,
+            "confirmed": False,
+            "side_reply_text": _clarification_help_reply(asked_field),
+        }
 
     # Last-resort: when we asked a specific field, treat the reply as that
     # field's value (deterministic clarification fallback).
@@ -425,6 +449,8 @@ async def extract_slots(state: ChatState) -> ChatState:
                 len(text.split(",")) <= 2
                 and len(text) < 200
                 and not _looks_like_command(text)
+                and _normalise(text) not in _OFFLINE_CONFIRM
+                and not _looks_like_non_answer(text)
                 and not parsed_a_date
             ):
                 value = _coerce_field_value(first_missing, text)
@@ -462,6 +488,8 @@ def _direct_clarification_value(
         _looks_like_command(text)
         or _looks_like_side_question(text)
         or _looks_like_control_reply(text)
+        or _looks_like_non_answer(text)
+        or _normalise(text) in _OFFLINE_CONFIRM
     ):
         return None
     if parsed_a_date or len(text.split(",")) > 2 or len(text) >= 200:
@@ -507,3 +535,30 @@ def _looks_like_command(text: str) -> bool:
     if any(cleaned.startswith(prefix) for prefix in _COMMAND_PREFIXES):
         return True
     return False
+
+
+def _looks_like_non_answer(text: str) -> bool:
+    return bool(_NON_ANSWER_RE.search(text.strip()))
+
+
+def _clarification_ack_reply(field: str | None) -> str:
+    if field == "title":
+        return "I still need the booking title. What short title should I use?"
+    if field == "project_name":
+        return "I still need the project or client name. Which one should I use?"
+    return "I still need that detail before I can continue. What should I use?"
+
+
+def _clarification_help_reply(field: str | None) -> str:
+    if field == "project_name":
+        return (
+            "No problem. You can use a real project/client name, or a temporary "
+            "placeholder like 'TBD project'. Which project or client should I put "
+            "on the booking?"
+        )
+    if field == "title":
+        return (
+            "No problem. A good title is a few words that describe the work, like "
+            "'Discovery support' or 'Refund flow analysis'. What title should I use?"
+        )
+    return "No problem. Tell me the detail you want to use, or say skip if this field allows it."

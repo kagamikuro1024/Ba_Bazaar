@@ -92,6 +92,33 @@ async def test_smalltalk_routes_to_respond() -> None:
     assert "manager dashboard" in last_ai.content.lower()
 
 
+async def test_explicit_booking_command_wins_after_dashboard_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib
+
+    router_node = importlib.import_module("ba_chat.nodes.router")
+
+    async def fail_if_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("explicit booking commands should not call the LLM router")
+
+    monkeypatch.setattr(router_node, "call_json_with_retry", fail_if_called)
+
+    result = await router_node.router(
+        {
+            "messages": [
+                HumanMessage(content="Show me the manager dashboard"),
+                AIMessage(content="Team utilization is 18.5% with 11 pending requests."),
+                HumanMessage(content="create booking"),
+            ],
+            "awaiting_user": None,
+        }
+    )
+
+    assert result["intent"] == "create_booking"
+    assert result["analyze_target"] is None
+
+
 @respx.mock
 async def test_action_center_uses_llm_summary_payload() -> None:
     payload = {

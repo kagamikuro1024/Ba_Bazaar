@@ -100,6 +100,11 @@ async def router(state: ChatState) -> ChatState:
     if awaiting in ("confirmation", "clarification"):
         return {"intent": "create_booking", "analyze_target": None}
 
+    # Explicit booking commands are high-impact and should not depend on the
+    # LLM interpreting prior dashboard context correctly.
+    if _is_booking_request(last_human):
+        return {"intent": "create_booking", "analyze_target": None}
+
     try:
         decision = await call_json_with_retry(
             system=_SYSTEM,
@@ -153,16 +158,20 @@ _SMALLTALK = re.compile(
 )
 
 
+def _is_booking_request(text: str) -> bool:
+    lowered = text.lower()
+    return any(keyword in lowered for keyword in _BOOKING_KEYWORDS)
+
+
 def _keyword_route(text: str) -> ChatState:
     if _SMALLTALK.search(text):
         return {"intent": "smalltalk", "analyze_target": None}
 
-    lowered = text.lower()
-
     # Booking creation keywords win — they're more specific than analyze ones.
-    if any(keyword in lowered for keyword in _BOOKING_KEYWORDS):
+    if _is_booking_request(text):
         return {"intent": "create_booking", "analyze_target": None}
 
+    lowered = text.lower()
     for target, keywords in _TARGET_KEYWORDS.items():
         if any(keyword in lowered for keyword in keywords):
             return {"intent": "analyze", "analyze_target": target}

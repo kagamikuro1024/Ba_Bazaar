@@ -476,6 +476,78 @@ async def test_direct_clarification_still_defers_side_questions_to_llm(
     assert result.get("side_reply_text")
 
 
+async def test_project_help_request_is_not_stored_as_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-answer like 'I haven't decided, help me' must not become project_name."""
+
+    import importlib
+
+    from ba_chat.llm import LLMUnavailable
+
+    extract_slots_node = importlib.import_module("ba_chat.nodes.extract_slots")
+
+    async def fail_llm(**_kw: object) -> object:
+        raise LLMUnavailable("offline")
+
+    monkeypatch.setattr(extract_slots_node, "call_json_with_retry", fail_llm)
+
+    result = await extract_slots_node.extract_slots(
+        {
+            "messages": [HumanMessage(content="i still havent made up yet can you help me")],
+            "user_id": "tester",
+            "user_role": "BA_MANAGER",
+            "auth_header": "Bearer t",
+            "intent": "create_booking",
+            "awaiting_user": "clarification",
+            "missing_slots": ["project_name", "title"],
+            "slots": {},
+        }
+    )
+
+    slots = result.get("slots") or {}
+    assert slots.get("project_name") is None
+    assert result.get("confirmed") is False
+    assert "project" in (result.get("side_reply_text") or "").lower()
+
+
+async def test_clarification_yes_is_not_stored_as_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Acknowledge/confirm words during slot collection are not text field values."""
+
+    import importlib
+
+    extract_slots_node = importlib.import_module("ba_chat.nodes.extract_slots")
+
+    async def mock_call_json_with_retry(**_kw: object) -> object:
+        return extract_slots_node._SlotExtraction(turn_intent="confirm")
+
+    monkeypatch.setattr(
+        extract_slots_node,
+        "call_json_with_retry",
+        mock_call_json_with_retry,
+    )
+
+    result = await extract_slots_node.extract_slots(
+        {
+            "messages": [HumanMessage(content="yes")],
+            "user_id": "tester",
+            "user_role": "BA_MANAGER",
+            "auth_header": "Bearer t",
+            "intent": "create_booking",
+            "awaiting_user": "clarification",
+            "missing_slots": ["title", "description"],
+            "slots": {"project_name": "CRM Revamp"},
+        }
+    )
+
+    slots = result.get("slots") or {}
+    assert slots.get("title") is None
+    assert result.get("confirmed") is False
+    assert "title" in (result.get("side_reply_text") or "").lower()
+
+
 async def test_direct_clarification_still_defers_control_replies_to_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -575,6 +647,75 @@ async def test_ask_missing_keeps_prompt_on_current_slot() -> None:
         button["label"] == "Today"
         for button in msg.additional_kwargs["action_buttons"]
     )
+
+
+async def test_ask_missing_llm_prompt_is_valid_for_json_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DeepSeek rejects json_object mode unless the prompt says JSON."""
+
+    import importlib
+
+    validate_slots_node = importlib.import_module("ba_chat.nodes.validate_slots")
+    captured: dict[str, str] = {}
+
+    async def fake_call_json_with_retry(**kwargs: object) -> object:
+        captured["system"] = str(kwargs["system"])
+        captured["user"] = str(kwargs["user"])
+        return validate_slots_node._MissingFieldPrompt(
+            field="project_name",
+            question="Which project is this booking for?",
+        )
+
+    monkeypatch.setattr(
+        validate_slots_node,
+        "call_json_with_retry",
+        fake_call_json_with_retry,
+    )
+
+    field, question = await validate_slots_node._next_missing_field_question(
+        {"slots": {}, "missing_slots": ["project_name"]},
+    )
+
+    assert field == "project_name"
+    assert question == "Which project is this booking for?"
+    assert "json" in captured["system"].lower()
+    assert "json" in captured["user"].lower()
+
+
+async def test_ask_missing_uses_llm_selected_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The app passes missing fields; the LLM can choose which one to collect."""
+
+    import importlib
+
+    validate_slots_node = importlib.import_module("ba_chat.nodes.validate_slots")
+
+    async def fake_call_json_with_retry(**_kwargs: object) -> object:
+        return validate_slots_node._MissingFieldPrompt(
+            field="title",
+            question="What's a short title for this booking?",
+        )
+
+    monkeypatch.setattr(
+        validate_slots_node,
+        "call_json_with_retry",
+        fake_call_json_with_retry,
+    )
+
+    result = await validate_slots_node.ask_missing(
+        {
+            "slots": {},
+            "missing_slots": ["project_name", "title", "description"],
+        }
+    )
+
+    msg = result["messages"][0]
+    assert isinstance(msg, AIMessage)
+    assert msg.content == "What's a short title for this booking?"
+    assert msg.additional_kwargs["action_field"] == "title"
+    assert result["missing_slots"] == ["title", "project_name", "description"]
 
 
 @respx.mock
