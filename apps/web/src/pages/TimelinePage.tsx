@@ -168,12 +168,16 @@ function bookingBarClass(status: Booking['status'], hasOverbookRisk = false) {
     case 'COMPLETED':
       return 'border border-emerald-200 bg-emerald-100/90 text-emerald-800';
     case 'CANCELLED':
-      return 'border border-rose-200 bg-rose-100/80 text-rose-700';
-    case 'REJECTED':
       return 'border border-gray-300 bg-gray-100 text-gray-700 opacity-80';
+    case 'REJECTED':
+      return 'border border-rose-200 bg-rose-100/80 text-rose-700';
     default:
       return 'bg-blue-600 text-white';
   }
+}
+
+function bookingLabelClass(status: Booking['status']) {
+  return status === 'REJECTED' || status === 'CANCELLED' ? 'line-through' : '';
 }
 
 type BookingLayout = {
@@ -1122,11 +1126,11 @@ export function TimelinePage() {
                   Pending
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-6 rounded border border-gray-300 bg-gray-200" />{' '}
+                  <span className="h-3 w-6 rounded border border-rose-200 bg-rose-100/80" />{' '}
                   Rejected
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-6 rounded border border-rose-200 bg-rose-100/80" />{' '}
+                  <span className="h-3 w-6 rounded border border-gray-300 bg-gray-200" />{' '}
                   Cancelled
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -1605,7 +1609,7 @@ function TimelineRow({
                   {hasOverbookRisk ? (
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   ) : null}
-                  <span className="truncate">
+                  <span className={cn('truncate', bookingLabelClass(booking.status))}>
                     {viewMode === 'week' ? (
                       <>
                         {booking.project.name} - {booking.capacity_percent}%
@@ -1706,7 +1710,7 @@ function MobileTimelineRow({
                   {hasOverbookRisk ? (
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                   ) : null}
-                  <span className="truncate">
+                  <span className={cn('truncate', bookingLabelClass(booking.status))}>
                     {booking.project.name} - {booking.capacity_percent}%
                   </span>
                 </span>
