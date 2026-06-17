@@ -16,6 +16,24 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    try {
+      const user = await login(email, password);
+      navigate(roleHomePath(user.role), { replace: true });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Login failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe,_transparent_32rem),linear-gradient(180deg,#f8fafc,#eef6ff)] px-3 py-5 sm:px-4 sm:py-10">
       <div className="mx-auto grid max-w-md gap-4 sm:gap-6">
@@ -34,7 +52,8 @@ export function LoginPage() {
           </p>
         </div>
         <Card className="rounded-[1rem] border-slate-200">
-          <CardContent className="grid gap-4 p-5">
+          <CardContent>
+            <form className="grid gap-4 p-5" onSubmit={handleSubmit}>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Email
               <input
@@ -72,26 +91,13 @@ export function LoginPage() {
                 {error}
               </div>
             ) : null}
-            <Button
-              onClick={async () => {
-                setSubmitting(true);
-                setError('');
-                try {
-                  const user = await login(email, password);
-                  navigate(roleHomePath(user.role), { replace: true });
-                } catch (nextError) {
-                  setError(nextError instanceof Error ? nextError.message : 'Login failed.');
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-              disabled={submitting}
-            >
+            <Button type="submit" disabled={submitting}>
               {submitting ? 'Signing in...' : 'Sign in'}
             </Button>
             <p className="text-sm text-slate-600">
               Need a PM/PO account? <Link className="font-semibold text-blue-700" to="/register">Register here</Link>.
             </p>
+            </form>
           </CardContent>
         </Card>
         {showDemoAccounts ? (
