@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "predev": "node scripts/dev-free-ports.mjs",
+    "predev": "node scripts/dev-bootstrap.mjs",
     "dev": "concurrently --kill-others-on-fail --restart-tries 0 -n web,api,ai -c blue,green,magenta \"pnpm dev:web\" \"pnpm dev:api\" \"pnpm dev:ai\"",
     "dev:web": "pnpm --filter @ba-bazaar/web dev",
     "dev:api": "pnpm --filter @ba-bazaar/api dev",
