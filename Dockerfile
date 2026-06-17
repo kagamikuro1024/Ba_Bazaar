@@ -45,6 +45,9 @@ RUN apt-get update \
     postgresql-15 \
     postgresql-client-15 \
     tini \
+    python3 \
+    python3-pip \
+    python3-venv \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -58,9 +61,13 @@ COPY --from=build --chown=1000:0 /app/apps/api/prisma apps/api/prisma
 COPY --from=build --chown=1000:0 /app/apps/api/prisma.config.ts apps/api/prisma.config.ts
 COPY --from=build --chown=1000:0 /app/apps/web/dist apps/web/dist
 COPY --from=build --chown=1000:0 /app/packages/shared packages/shared
+COPY --from=build --chown=1000:0 /app/apps/ai apps/ai
 COPY --from=api-build --chown=1000:0 /out/ba-bazaar-api /app/ba-bazaar-api
 COPY --chown=1000:0 scripts/hf-entrypoint.sh scripts/hf-entrypoint.sh
 COPY --chown=1000:0 scripts/hf-web-server.mjs scripts/hf-web-server.mjs
+
+RUN python3 -m venv /app/apps/ai/.venv \
+  && /app/apps/ai/.venv/bin/pip install --no-cache-dir -e /app/apps/ai
 
 RUN chmod +x /app/scripts/hf-entrypoint.sh \
   && mkdir -p /home/user/pgdata /home/user/postgres-socket \

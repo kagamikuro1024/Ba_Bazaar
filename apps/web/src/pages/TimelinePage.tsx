@@ -1400,29 +1400,36 @@ export function TimelinePage() {
         }}
       />
       {pendingReassign && (
-        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-          <div className="text-sm text-slate-700">
-            Confirm reassignment of <strong>{pendingReassign.booking.project.name}</strong> from{' '}
-            <strong>{pendingReassign.booking.ba?.full_name ?? 'Unassigned'}</strong> to{' '}
-            <strong>{bas.data?.find((ba) => ba.id === pendingReassign.targetBaId)?.full_name ?? 'Unassigned'}</strong>?
+        <div className="fixed bottom-6 left-1/2 z-50 flex flex-col gap-3 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl animate-in fade-in slide-in-from-bottom-4 max-w-lg">
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-700">
+              Confirm reassignment of <strong>{pendingReassign.booking.project.name}</strong> from{' '}
+              <strong>{pendingReassign.booking.ba?.full_name ?? 'Unassigned'}</strong> to{' '}
+              <strong>{bas.data?.find((ba) => ba.id === pendingReassign.targetBaId)?.full_name ?? 'Unassigned'}</strong>?
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setPendingReassign(null)}
+                disabled={confirmReassign.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => confirmReassign.mutate()}
+                disabled={confirmReassign.isPending}
+              >
+                {confirmReassign.isPending ? 'Saving...' : 'Confirm'}
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setPendingReassign(null)}
-              disabled={confirmReassign.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => confirmReassign.mutate()}
-              disabled={confirmReassign.isPending}
-            >
-              {confirmReassign.isPending ? 'Saving...' : 'Confirm'}
-            </Button>
-          </div>
+          {confirmReassign.error && (
+            <div className="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700 border border-rose-100 max-h-24 overflow-y-auto">
+              {confirmReassign.error.message}
+            </div>
+          )}
         </div>
       )}
     </div>
