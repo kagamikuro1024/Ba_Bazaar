@@ -74,17 +74,30 @@ const roleBenefits = [
   {
     role: 'PM/PO',
     title: 'Đặt BA đúng thời điểm',
-    body: 'Gửi yêu cầu theo dự án, timeline và mức capacity cần thiết mà không phải hỏi lịch thủ công.'
+    body: 'Gửi yêu cầu theo dự án, timeline và mức capacity cần thiết mà không phải hỏi lịch thủ công.',
+    icon: Users,
+    color: 'text-blue-600 bg-blue-50 border-blue-100'
   },
   {
     role: 'BA Manager',
-    title: 'Kiểm soát khối lượng công việc',
-    body: 'Ưu tiên yêu cầu, xử lý rủi ro quá tải và phân bổ nguồn lực dựa trên dữ liệu capacity hiện tại.'
+    title: 'Điều phối nguồn lực',
+    body: 'Duyệt & xử lý xung đột công suất, quản lý kho BA, theo dõi timeline thực tế để tránh overbook.',
+    icon: LayoutDashboard,
+    color: 'text-violet-600 bg-violet-50 border-violet-100'
   },
   {
     role: 'BA',
     title: 'Nắm rõ lịch cá nhân',
-    body: 'Theo dõi công việc được phân công, thay đổi lịch và thông báo liên quan trong một không gian làm việc.'
+    body: 'Theo dõi công việc được giao, xem tải công việc cá nhân trực quan và nhận gợi ý thông tin từ AI.',
+    icon: CalendarDays,
+    color: 'text-emerald-600 bg-emerald-50 border-emerald-100'
+  },
+  {
+    role: 'IT Admin',
+    title: 'Vận hành & Giám sát AI',
+    body: 'Quản trị user, phân quyền chặt chẽ, truy vết logs chi tiết và theo dõi sức khỏe AI qua AI Observability.',
+    icon: ShieldCheck,
+    color: 'text-amber-600 bg-amber-50 border-amber-100'
   }
 ];
 
@@ -428,31 +441,61 @@ export function LandingPage() {
 
         <section id="roles" className="border-y border-slate-200 bg-slate-50 py-14 sm:py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-              <div>
-                <p className="text-sm font-bold uppercase text-blue-700">
-                  Thiết kế cho đội vận hành
-                </p>
-                <h2 className="mt-3 text-3xl font-bold text-slate-950">
-                  Mỗi vai trò thấy đúng việc cần xử lý.
-                </h2>
-                <p className="mt-4 text-sm leading-6 text-slate-600">
-                  Dashboard, timeline, hộp xử lý của BA Manager, danh bạ BA và báo cáo được tổ chức
-                  theo luồng công việc thực tế của đội ngũ BA.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                {roleBenefits.map((item) => (
-                  <Card key={item.role} className="h-full">
-                    <CardContent className="p-5">
-                      <p className="text-sm font-bold uppercase text-blue-700">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm font-extrabold uppercase tracking-wider text-blue-700">
+                Thiết kế cho đội vận hành
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                4 vai trò cốt lõi và Triết lý thiết kế AI
+              </h2>
+              <p className="mt-4 text-sm leading-relaxed text-slate-600">
+                BA Bazaar phân bổ quyền hạn và cung cấp giao diện chuyên biệt cho từng nhân sự trong quy trình quản lý nguồn lực.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {roleBenefits.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Card key={item.role} className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-blue-200 bg-white">
+                    <CardContent className="p-5 flex flex-col h-full">
+                      <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${item.color} mb-4 transition-transform duration-300 group-hover:scale-105 shrink-0`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                         {item.role}
                       </p>
-                      <h3 className="mt-3 text-base font-bold text-slate-950">{item.title}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
+                      <h3 className="mt-2 text-base font-bold text-slate-950 transition-colors group-hover:text-blue-700">
+                        {item.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600 flex-grow">
+                        {item.body}
+                      </p>
                     </CardContent>
                   </Card>
-                ))}
+                );
+              })}
+            </div>
+
+            <div className="mt-12 overflow-hidden rounded-2xl border border-blue-200/60 bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-violet-50/70 p-6 shadow-sm">
+              <div className="flex flex-col items-start gap-4 md:flex-row md:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+                  <Sparkles className="h-6 w-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                      Triết lý thiết kế AI
+                    </span>
+                  </div>
+                  <h4 className="mt-2 text-base font-bold text-slate-950">
+                    AI hỗ trợ ra quyết định, con người luôn nắm quyền kiểm soát
+                  </h4>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                    Mọi đề xuất, gợi ý hay tóm tắt của AI đều có dẫn chứng rõ ràng từ dữ liệu thực tế và{' '}
+                    <strong className="text-slate-950">không tự ý thay đổi dữ liệu hệ thống</strong>. Con người luôn là người bấm nút đưa ra quyết định cuối cùng.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

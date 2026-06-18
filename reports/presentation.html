@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BA Bazaar Presentation - Vibe Engineers</title>
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f4ff',
+              100: '#d9e2ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .slide {
+      display: none;
+      opacity: 0;
+      transition: opacity 0.4s ease-in-out;
+    }
+    .slide.active {
+      display: flex;
+      opacity: 1;
+    }
+    .gradient-glow {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.03) 50%, transparent 100%);
+      filter: blur(60px);
+      z-index: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-50/50 text-slate-800 font-sans w-screen h-screen flex flex-col overflow-hidden relative select-none">
+  
+  <!-- Ambient Gradient Background Glows -->
+  <div class="gradient-glow top-0 left-10"></div>
+  <div class="gradient-glow bottom-0 right-10"></div>
+
+  <!-- Fullscreen Main Container -->
+  <div class="relative w-full h-full flex flex-col z-10 bg-white/40 backdrop-blur-sm">
+    
+    <!-- Window Top Header (Dashboard Style) -->
+    <header class="h-16 border-b border-slate-200/80 px-8 flex items-center justify-between shrink-0 bg-white shadow-sm z-20">
+      <!-- Left side controls -->
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-[#ff5f56] inline-block"></span>
+        <span class="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block"></span>
+        <span class="w-3 h-3 rounded-full bg-[#27c93f] inline-block"></span>
+        <span class="ml-4 text-[10px] font-bold tracking-wider text-slate-500 font-mono uppercase bg-slate-100 px-2.5 py-1 rounded border border-slate-200">Presentation Deck</span>
+      </div>
+      <!-- Center Title -->
+      <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+        <svg class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+        <span class="font-outfit font-extrabold tracking-tight text-sm text-slate-800 uppercase">BA BAZAAR — RESOURCE OPTIMIZATION</span>
+      </div>
+      <!-- Right Side Team Name -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full font-outfit uppercase tracking-wider">
+          Vibe Engineers
+        </span>
+      </div>
+    </header>
+
+    <!-- Slide Content Area (Expands to fill screen, centered contents) -->
+    <main class="flex-grow flex flex-col justify-center px-16 py-12 max-w-7xl mx-auto w-full overflow-y-auto">
+
+      <!-- SLIDE 1: Title & Team Intro -->
+      <div class="slide active flex-col justify-center h-full">
+        <div class="grid md:grid-cols-12 gap-10 items-center">
+          <div class="md:col-span-7 flex flex-col gap-5">
+            <div class="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 px-3.5 py-1 rounded-full text-xs font-semibold w-max uppercase tracking-wider">
+              <svg class="w-3.5 h-3.5 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path d="M10.4 2.1a1 1 0 00-1.8 0L3.1 14.5a1 1 0 00.9 1.5h12a1 1 0 00.9-1.5L10.4 2.1z"/></svg>
+              AI-Powered resource scheduling
+            </div>
+            <h1 class="text-5xl md:text-7xl font-outfit font-black tracking-tight leading-none bg-gradient-to-r from-slate-900 via-slate-800 to-blue-700 bg-clip-text text-transparent">
+              BA BAZAAR
+            </h1>
+            <p class="text-xl text-slate-600 leading-relaxed font-light">
+              Giải pháp tối ưu hóa phân bổ nguồn lực Business Analyst dựa trên Man-day thực tế &amp; hỗ trợ quyết định bằng Trợ lý AI.
+            </p>
+            <div class="mt-2 p-4 rounded-xl border border-slate-200/80 bg-slate-50 flex items-start gap-3.5">
+              <div class="text-2xl font-serif text-blue-600 mt-[-4px] font-bold">“</div>
+              <div>
+                <p class="text-sm italic font-semibold text-slate-700">"Context is King, tokens are everything"</p>
+                <p class="text-xs text-slate-500 mt-1">— Triết lý thiết kế lõi của Vibe Engineers</p>
+              </div>
+            </div>
+          </div>
+          <div class="md:col-span-5">
+            <div class="p-8 rounded-3xl border border-slate-200 bg-white relative overflow-hidden group shadow-lg hover:border-blue-500/30 transition-all duration-300">
+              <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-50 rounded-full blur-2xl"></div>
+              <p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1.5">Tác giả</p>
+              <h3 class="text-3xl font-outfit font-bold text-slate-900">Vibe Engineers</h3>
+              <p class="text-xs text-slate-400 font-mono mt-1">Status: Ready to Pitch</p>
+              <div class="mt-5 pt-5 border-t border-slate-100 text-sm leading-relaxed text-slate-600 flex flex-col gap-3">
+                <p>
+                  Chúng tôi không chỉ viết code. Chúng tôi tối ưu hóa từng **token ngữ cảnh** để kiến tạo trải nghiệm AI mượt mà và có **"vibe" công nghệ** đỉnh cao nhất.
+                </p>
+                <p class="text-xs text-blue-600 font-mono bg-blue-50/50 p-2.5 rounded-lg border border-blue-100/40">
+                  &gt; LLM integration: DeepSeek-v4-flash<br>
+                  &gt; Architecture: Go + React + PostgreSQL
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 2: Nỗi đau 1 & 2 (Overbook & Bench) -->
+      <div class="slide flex-col justify-center h-full">
+        <div class="flex flex-col gap-2 mb-8">
+          <p class="text-xs font-bold text-red-600 uppercase tracking-widest">0. Bài Toán Vận Hành — Phần 1</p>
+          <h2 class="text-4xl font-outfit font-extrabold tracking-tight text-slate-900">Những Con Số Mơ Hồ Trên Báo Cáo</h2>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8 items-stretch">
+          <!-- Card 1: Overbook -->
+          <div class="p-8 rounded-3xl border border-red-100 bg-red-50/30 flex flex-col gap-4 relative overflow-hidden shadow-sm">
+            <div class="absolute top-5 right-5 text-xs font-bold font-mono text-red-600 bg-red-100 px-2 py-0.5 rounded uppercase">Problem 01</div>
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-slate-900">Overbook — Quá Tải Âm Thầm</h3>
+            </div>
+            <p class="text-sm leading-relaxed text-slate-600 flex-grow">
+              Một BA bị nhận quá **100% công suất** (vừa làm Fintech vừa hỗ trợ Logistics) nhưng chỉ được phát hiện khi dự án đã trễ tiến độ. Excel và chat tay không có cơ chế cảnh báo hoặc chặn cứng.
+            </p>
+            <div class="mt-2 p-4 bg-white border border-red-100 rounded-2xl shadow-sm">
+              <div class="flex justify-between items-center text-xs text-red-600 mb-1.5 font-mono">
+                <span class="font-bold">Hoàng Minh Châu (Senior BA)</span>
+                <span class="font-bold">120% Capacity</span>
+              </div>
+              <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-red-500 h-full rounded-full" style="width: 100%"></div>
+              </div>
+              <div class="w-full bg-slate-100 h-1.5 mt-1 rounded-full overflow-hidden opacity-60">
+                <div class="bg-red-500 h-full rounded-full" style="width: 20%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Bench -->
+          <div class="p-8 rounded-3xl border border-amber-100 bg-amber-50/20 flex flex-col gap-4 relative overflow-hidden shadow-sm">
+            <div class="absolute top-5 right-5 text-xs font-bold font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded uppercase">Problem 02</div>
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-slate-900">Bench Lãng Phí — Rảnh Rỗi Không Ai Biết</h3>
+            </div>
+            <p class="text-sm leading-relaxed text-slate-600 flex-grow">
+              Nhiều BA chất lượng cao đang ngồi không (**Bench 0%**) do thông tin không đồng bộ. PM các dự án mới vẫn tuyển ngoài hoặc đi mượn người vì tưởng cả đội đều đang bận rộn.
+            </p>
+            <div class="mt-2 p-4 bg-white border border-amber-100 rounded-2xl shadow-sm">
+              <div class="flex justify-between items-center text-xs text-amber-700 mb-1.5 font-mono">
+                <span class="font-bold">Phan Quốc Anh (Junior BA)</span>
+                <span class="font-bold">0% Capacity (Bench)</span>
+              </div>
+              <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-amber-500 h-full rounded-full" style="width: 0%"></div>
+              </div>
+              <span class="text-[10px] text-amber-600 block mt-2 font-mono">⚠️ 14 ngày không được phân công vào dự án nào</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 3: Nỗi đau 3 & 4 (Giao sai kỹ năng & Thiếu vết kiểm toán) -->
+      <div class="slide flex-col justify-center h-full">
+        <div class="flex flex-col gap-2 mb-8">
+          <p class="text-xs font-bold text-red-600 uppercase tracking-widest">0. Bài Toán Vận Hành — Phần 2</p>
+          <h2 class="text-4xl font-outfit font-extrabold tracking-tight text-slate-900">Rủi Ro Sai Lệch Kỹ Năng &amp; Mất Dấu Kiểm Toán</h2>
+        </div>
+        <div class="grid md:grid-cols-2 gap-8 items-stretch">
+          <!-- Card 3: Skill Mismatch -->
+          <div class="p-8 rounded-3xl border border-red-100 bg-red-50/30 flex flex-col gap-4 relative overflow-hidden shadow-sm">
+            <div class="absolute top-5 right-5 text-xs font-bold font-mono text-red-600 bg-red-100 px-2 py-0.5 rounded uppercase">Problem 03</div>
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-slate-900">Giao Sai Kỹ Năng (Mismatch)</h3>
+            </div>
+            <p class="text-sm leading-relaxed text-slate-600 flex-grow">
+              Không đánh giá đúng năng lực: Đẩy một BA chuyên ngành **Fintech** vào dự án **Logistics** phức tạp chỉ vì "đang trống lịch", làm giảm chất lượng bàn giao và tăng thời gian làm quen (ramp-up).
+            </p>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <span class="text-xs px-2.5 py-1 rounded bg-red-100 text-red-700 border border-red-200/50 font-mono">Dự án cần: Fintech</span>
+              <span class="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono">BA Giao: Logistics Expert</span>
+              <span class="text-xs text-red-600 font-bold block w-full mt-2">⚡ Rủi ro: Tốn 2-3 tuần để hiểu nghiệp vụ tài chính.</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Audit & Data -->
+          <div class="p-8 rounded-3xl border border-amber-100 bg-amber-50/20 flex flex-col gap-4 relative overflow-hidden shadow-sm">
+            <div class="absolute top-5 right-5 text-xs font-bold font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded uppercase">Problem 04</div>
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-bold text-slate-900">Thiếu Kiểm Toán &amp; Dữ Liệu Thật</h3>
+            </div>
+            <p class="text-sm leading-relaxed text-slate-600 flex-grow">
+              Mọi thứ được phê duyệt qua **Excel &amp; Chat tay**. Không thống kê được thực tế mỗi người làm bao nhiêu man-day để phục vụ tính lương, lập kế hoạch ngân sách và không biết ai duyệt những yêu cầu vượt tải.
+            </p>
+            <div class="mt-2 font-mono text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200 text-slate-500 flex flex-col gap-1.5 shadow-inner">
+              <div>[10:14:02] PM: "Giao hộ em Châu làm dự án mới nhé"</div>
+              <div>[10:15:30] Manager: "Ok em" <span class="text-red-500 font-semibold">(Trùng lịch, không lưu lý do, mất dấu)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 4: Giải pháp BA Bazaar -->
+      <div class="slide flex-col justify-center h-full">
+        <div class="flex flex-col gap-2 mb-8">
+          <p class="text-xs font-bold text-blue-600 uppercase tracking-widest">1. Giải Thế Trận BA Bazaar</p>
+          <h2 class="text-4xl font-outfit font-extrabold tracking-tight text-slate-900">Số Hóa &amp; Chuẩn Hóa Phân Bổ Nguồn Lực</h2>
+        </div>
+        <div class="grid md:grid-cols-3 gap-8 items-stretch">
+          <!-- Step 1 -->
+          <div class="p-6 rounded-3xl border border-slate-200 bg-white flex flex-col gap-4 shadow-sm hover:border-blue-500/25 transition">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-3 py-0.5 rounded-full">BƯỚC 01</span>
+              <span class="text-xs text-slate-400 font-mono">PM/PO</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-900">Trích Kỹ Năng Từ PRD</h3>
+            <p class="text-sm leading-relaxed text-slate-600">
+              PM chỉ cần **dán trực tiếp PRD** vào hệ thống. AI tự động trích xuất các kỹ năng cần thiết (Fintech, API, BPMN...) và đề xuất Level (Junior -> Lead) kèm giải thích chi tiết.
+            </p>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="p-6 rounded-3xl border border-slate-200 bg-white flex flex-col gap-4 shadow-sm hover:border-blue-500/25 transition">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-0.5 rounded-full">BƯỚC 02</span>
+              <span class="text-xs text-slate-400 font-mono">AI Engine</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-900">Gợi Ý BA Tối Ưu</h3>
+            <p class="text-sm leading-relaxed text-slate-600">
+              Hệ thống tự động xếp hạng các ứng viên BA tốt nhất dựa trên: **độ trùng khớp kỹ năng**, **khoảng công suất còn trống**, và cảnh báo rủi ro xung đột lịch biểu ngay tại chỗ.
+            </p>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="p-6 rounded-3xl border border-slate-200 bg-white flex flex-col gap-4 shadow-sm hover:border-blue-500/25 transition">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-0.5 rounded-full">BƯỚC 03</span>
+              <span class="text-xs text-slate-400 font-mono">BA Manager</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-900">Phê Duyệt &amp; Chốt Chặn</h3>
+            <p class="text-sm leading-relaxed text-slate-600">
+              Manager xem xét trên Timeline trực quan theo thời gian thực. Bấm duyệt với **hộp kiểm chống quá tải**, đảm bảo không có BA nào bị overbook ngoài tầm kiểm soát.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 5: Chốt chặn & Triết lý AI -->
+      <div class="slide flex-col justify-center h-full">
+        <div class="flex flex-col gap-2 mb-8">
+          <p class="text-xs font-bold text-indigo-600 uppercase tracking-widest">1. Sự Khác Biệt Cốt Lõi</p>
+          <h2 class="text-4xl font-outfit font-extrabold tracking-tight text-slate-900">Chốt Chặn Overbook Cứng &amp; Triết Lý AI</h2>
+        </div>
+        <div class="grid md:grid-cols-12 gap-10 items-center">
+          <div class="md:col-span-6 flex flex-col gap-6">
+            <div class="flex gap-4">
+              <div class="h-10 w-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Chốt Chặn 100% Khắc Nghiệt</h3>
+                <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+                  Hệ thống cho phép PM tạo yêu cầu xung đột, nhưng **chặn cứng API duyệt** nếu tổng lượng công việc được duyệt vượt 100%. Ép doanh nghiệp phải đưa ra giải pháp thay thế.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex gap-4">
+              <div class="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">AI Hỗ Trợ, Con Người Quyết Định</h3>
+                <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+                  AI không tự ý thay đổi dữ liệu hay tự động gán việc. AI chỉ tổng hợp dữ liệu, cung cấp các gợi ý xếp hạng **có trích dẫn nguồn cụ thể** (C1, C2...) để con người ra quyết định.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="md:col-span-6">
+            <div class="p-6 rounded-3xl border border-red-200 bg-red-50/20 flex flex-col gap-4 shadow-sm">
+              <div class="flex items-center gap-2 text-red-600 font-mono text-xs">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                <span>VALIDATION_ERROR: ACTION_DENIED</span>
+              </div>
+              <h4 class="text-sm font-bold text-slate-800">Cảnh báo hệ thống hiển thị:</h4>
+              <p class="text-xs text-slate-600 leading-relaxed font-mono bg-white p-4 rounded-xl border border-red-100 shadow-inner">
+                "Không thể phê duyệt yêu cầu. BA Hoàng Minh Châu sẽ bị vượt quá 100% công suất vào ngày 20/06/2026. Lịch hiện tại đã được duyệt: 70%. Yêu cầu mới: 50% (Tổng cộng 120%)."
+              </p>
+              <div class="flex gap-2.5 mt-1">
+                <div class="text-[10px] text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full font-medium">Giảm xuống còn ≤30%</div>
+                <div class="text-[10px] text-violet-700 bg-violet-50 border border-violet-100 px-2.5 py-1 rounded-full font-medium">Giao cho BA khác</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLIDE 6: Kết luận & Demo ready -->
+      <div class="slide flex-col justify-center h-full text-center">
+        <div class="max-w-3xl mx-auto flex flex-col gap-6 items-center">
+          <div class="h-16 w-16 rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-sm animate-bounce">
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-blue-600 uppercase tracking-widest font-mono">Vibe Engineers</p>
+            <h2 class="text-4xl md:text-5xl font-outfit font-black tracking-tight text-slate-900 mt-1">Sẵn Sàng Đi Vào Demo Thực Tế</h2>
+          </div>
+          <p class="text-slate-600 text-sm leading-relaxed max-w-2xl">
+            Chúng tôi đã thiết lập sẵn 4 phiên làm việc cho 4 vai trò độc lập trên môi trường phát triển cục bộ. Quy trình sau đây sẽ đi xuyên suốt từ khâu bóc tách yêu cầu đến khi kiểm tra nhật ký AI Observability.
+          </p>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full mt-4">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Tab 1</div>
+              <div class="text-base font-bold text-slate-700 mt-1">PM / PO</div>
+            </div>
+            <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Tab 2</div>
+              <div class="text-base font-bold text-slate-700 mt-1">BA Manager</div>
+            </div>
+            <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Tab 3</div>
+              <div class="text-base font-bold text-slate-700 mt-1">BA Employee</div>
+            </div>
+            <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Tab 4</div>
+              <div class="text-base font-bold text-slate-700 mt-1">IT Admin</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Navigation Control Footer (Dashboard Style) -->
+    <footer class="h-16 border-t border-slate-200 px-8 flex items-center justify-between shrink-0 bg-white z-20 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
+      <!-- Left side index -->
+      <div class="text-xs font-mono text-slate-500">
+        Slide <span id="slide-index" class="font-bold text-blue-600">1</span>/6
+      </div>
+      <!-- Center Indicators -->
+      <div class="flex items-center gap-2">
+        <button onclick="goToSlide(0)" class="indicator w-2.5 h-2.5 rounded-full bg-blue-600 transition-all duration-300"></button>
+        <button onclick="goToSlide(1)" class="indicator w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300"></button>
+        <button onclick="goToSlide(2)" class="indicator w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300"></button>
+        <button onclick="goToSlide(3)" class="indicator w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300"></button>
+        <button onclick="goToSlide(4)" class="indicator w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300"></button>
+        <button onclick="goToSlide(5)" class="indicator w-2.5 h-2.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-all duration-300"></button>
+      </div>
+      <!-- Right Side buttons -->
+      <div class="flex items-center gap-4">
+        <span class="text-[10px] text-slate-400 font-mono hidden md:inline">Sử dụng phím mũi tên &larr; &rarr; hoặc Phím cách</span>
+        <div class="flex items-center gap-1">
+          <button onclick="prevSlide()" class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition shadow-sm">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button onclick="nextSlide()" class="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition shadow-sm">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const indicators = document.querySelectorAll('.indicator');
+    const indexSpan = document.getElementById('slide-index');
+
+    function showSlide(index) {
+      if (index < 0 || index >= slides.length) return;
+      
+      slides[currentSlide].classList.remove('active');
+      indicators[currentSlide].classList.remove('bg-blue-600');
+      indicators[currentSlide].classList.add('bg-slate-300');
+      
+      currentSlide = index;
+      
+      slides[currentSlide].classList.add('active');
+      indicators[currentSlide].classList.remove('bg-slate-300');
+      indicators[currentSlide].classList.add('bg-blue-600');
+      
+      indexSpan.textContent = currentSlide + 1;
+    }
+
+    function goToSlide(index) {
+      showSlide(index);
+    }
+
+    function nextSlide() {
+      if (currentSlide < slides.length - 1) {
+        showSlide(currentSlide + 1);
+      } else {
+        showSlide(0);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        showSlide(currentSlide - 1);
+      } else {
+        showSlide(slides.length - 1);
+      }
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevSlide();
+      }
+    });
+  </script>
+</body>
+</html>
