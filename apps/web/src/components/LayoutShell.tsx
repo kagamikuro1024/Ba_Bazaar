@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode
 } from 'react';
 import {
@@ -21,6 +20,7 @@ import {
   ChevronsRight,
   Inbox,
   Search,
+  Sparkles,
   Users,
   Plus,
   X,
@@ -36,14 +36,14 @@ import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { BookingModal } from './BookingModal';
 import { CreateBAModal } from './CreateBAModal';
-import { ChatFab } from './chat/ChatFab';
 import { useGlobalFab } from '@/context/GlobalFabContext';
 import { useInboxDirty } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
 import {
   GlobalSearchModal,
   globalSearchStorage,
-  type PageItem
+  type PageItem,
+  type PaletteMode
 } from './GlobalSearchModal';
 
 type LayoutShellProps = {
@@ -231,6 +231,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
   const [pendingNavPath, setPendingNavPath] = useState('');
   const [navActionPending, setNavActionPending] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>('search');
   const [recentSearches, setRecentSearches] = useState<string[]>(() =>
     globalSearchStorage.load()
   );
@@ -380,6 +381,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
       const isMetaK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
       if (isMetaK) {
         event.preventDefault();
+        setPaletteMode('search');
         setSearchOpen(true);
         return;
       }
@@ -497,26 +499,34 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
     );
   }, []);
 
+  const openPalette = useCallback((mode: PaletteMode = 'search') => {
+    setPaletteMode(mode);
+    setSearchOpen(true);
+  }, []);
+
   return (
-    <div
-      className="isolate min-h-screen bg-slate-50 lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.22,1,0.36,1)]"
-      style={
-        { '--sidebar-width': sidebarCollapsed ? '72px' : '288px' } as CSSProperties
-      }
-    >
+    <div className="isolate min-h-screen bg-slate-50 lg:flex lg:flex-row">
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-2 px-3 py-2.5">
           <Link to="/dashboard" className="flex min-w-0 items-center justify-center">
             <img
               src="/logo-blue.png"
               alt="BA Bazaar"
-              className="h-12 w-auto shrink-0 object-contain"
+              className="h-9 w-auto shrink-0 object-contain"
             />
           </Link>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => openPalette('ai')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 transition hover:border-blue-300 hover:bg-blue-100"
+              aria-label="Ask AI"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => openPalette('search')}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white"
               aria-label="Open global search"
             >
@@ -567,63 +577,90 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </div>
       </header>
 
-      <aside className="relative sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex lg:transition-[width,padding] lg:duration-300 lg:ease-[cubic-bezier(0.22,1,0.36,1)]">
+      <aside
+        className="relative sticky top-0 z-40 hidden h-screen min-h-0 flex-col border-r border-slate-200 bg-white lg:flex lg:transition-all lg:duration-300 lg:ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{
+          width: sidebarCollapsed ? '72px' : '288px',
+          minWidth: sidebarCollapsed ? '72px' : '288px',
+          maxWidth: sidebarCollapsed ? '72px' : '288px'
+        }}
+      >
         <div
           className={[
-            'flex min-h-0 flex-1 flex-col gap-3 py-4 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+            'flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-x-hidden py-4 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
             sidebarCollapsed ? 'px-2' : 'px-3'
           ].join(' ')}
         >
-          {sidebarCollapsed ? (
-            <>
-              <div className="mb-3 flex flex-col items-center gap-2 px-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
-                <Link
-                  to="/dashboard"
-                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                  title="BA Bazaar"
-                >
-                  <img src="/favicon.png" alt="BA Bazaar" className="h-full w-full object-cover" />
-                </Link>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                className="flex h-10 w-10 self-center items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-0 py-0 text-left text-sm text-slate-500 transition hover:border-slate-300 hover:bg-white"
-                aria-label="Open global search"
-                title="Search"
-              >
-                <Search className="h-4 w-4 shrink-0 text-slate-400" />
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex justify-center px-2 pb-3 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
-                <Link to="/dashboard" className="flex min-w-0 items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
-                  <img
-                    src="/logo-blue.png"
-                    alt="BA Bazaar"
-                    className="h-16 w-auto object-contain"
-                  />
-                </Link>
-              </div>
-              <div className="relative px-2 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
-                <button
-                  type="button"
-                  onClick={() => setSearchOpen(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-slate-300 hover:bg-white"
-                  aria-label="Open global search"
-                >
-                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate">
+          <div className={cn("flex justify-center pb-3", sidebarCollapsed ? "mb-3 px-0" : "px-2")}>
+            <Link
+              to="/dashboard"
+              className={cn(
+                "flex min-w-0 items-center justify-center",
+                sidebarCollapsed ? "overflow-hidden rounded-lg" : ""
+              )}
+              title="BA Bazaar"
+              style={sidebarCollapsed ? { width: '40px', height: '40px' } : undefined}
+            >
+              <img
+                src={sidebarCollapsed ? "/favicon.png" : "/logo-blue.png"}
+                alt="BA Bazaar"
+                className={cn(
+                  "object-contain",
+                  sidebarCollapsed ? "h-full w-full object-cover" : "h-16 w-auto"
+                )}
+              />
+            </Link>
+          </div>
+
+          <div
+            className={cn(
+              "grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-2",
+              sidebarCollapsed ? "justify-items-center" : ""
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => openPalette('search')}
+              className={cn(
+                "box-border flex min-w-0 max-w-full items-center border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-slate-300 hover:bg-white",
+                sidebarCollapsed
+                  ? "h-10 w-10 justify-center rounded-2xl px-0 py-0"
+                  : "w-full justify-self-stretch gap-3 rounded-lg px-3 py-2 text-left text-sm"
+              )}
+              aria-label="Open global search"
+              title={sidebarCollapsed ? "Search" : undefined}
+            >
+              <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              {sidebarCollapsed ? null : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-left">
                     Search requests, BAs, pages...
                   </span>
-                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400">
+                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400 shrink-0">
                     Ctrl K
                   </span>
-                </button>
-              </div>
-            </>
-          )}
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openPalette('ai')}
+              className={cn(
+                "box-border flex min-w-0 max-w-full items-center border border-blue-200 text-blue-700 transition",
+                sidebarCollapsed
+                  ? "h-10 w-10 justify-center rounded-2xl bg-blue-50 px-0 py-0 hover:border-blue-300 hover:bg-blue-100"
+                  : "w-full justify-self-stretch gap-3 rounded-lg bg-gradient-to-r from-blue-50 to-white px-3 py-2 text-left text-sm font-semibold hover:border-blue-300 hover:from-blue-100"
+              )}
+              aria-label="Ask AI assistant"
+              title={sidebarCollapsed ? "Ask AI" : undefined}
+            >
+              <Sparkles className="h-4 w-4 shrink-0 text-blue-600" />
+              {sidebarCollapsed ? null : (
+                <span className="min-w-0 flex-1 truncate text-left">Ask AI</span>
+              )}
+            </button>
+          </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {sidebarCollapsed ? null : (
@@ -839,7 +876,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         </button>
       </aside>
 
-      <div className="min-w-0 px-3 pb-28 pt-4 sm:px-6 lg:pb-5 lg:pt-5 xl:px-6 2xl:px-8">
+      <div className="min-w-0 flex-1 px-3 pb-36 pt-4 sm:px-6 lg:pb-5 lg:pt-5 xl:px-6 2xl:px-8">
         <main className="mx-auto grid min-w-0 w-full max-w-[1560px] gap-4 sm:gap-5">
           {/*
             Page-level header is owned by each page via <PageHeader />
@@ -859,7 +896,7 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
 
       <nav
         className={[
-          'fixed bottom-4 left-4 right-[5.5rem] z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
+          'fixed bottom-4 left-4 right-4 z-40 border border-slate-200/90 bg-white/95 p-1 shadow-2xl shadow-slate-900/15 backdrop-blur lg:hidden',
           'rounded-full'
         ].join(' ')}
         aria-label="Mobile navigation"
@@ -960,13 +997,6 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         />
       )}
 
-      <ChatFab
-        accessToken={accessToken}
-        userRole={role}
-        userId={user?.id}
-      />
-
-
       <GlobalSearchModal
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
@@ -976,6 +1006,9 @@ export function LayoutShell({ children, suppressPageHeader = false }: LayoutShel
         onCommitRecent={commitRecentSearch}
         onClearRecent={() => setRecentSearches([])}
         onTriggerCreateBooking={() => setBookingModalOpen(true)}
+        accessToken={accessToken}
+        userId={user?.id}
+        initialMode={paletteMode}
       />
 
       {pendingNavPath ? (

@@ -6,10 +6,13 @@ import {
   useState,
   type ReactNode
 } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch, type BAProfile, type Booking, type UserRole } from '@/lib/api';
+import { ChatConversation } from './chat/ChatConversation';
+
+type PaletteMode = 'search' | 'ai';
 
 export type SearchResultItem = {
   id: string;
@@ -37,6 +40,11 @@ type GlobalSearchModalProps = {
   onCommitRecent: (term: string) => void;
   onClearRecent: () => void;
   onTriggerCreateBooking: () => void;
+  // Command-palette "Ask AI" mode. The chat reuses the same SSE pipeline as the
+  // standalone panel — these props are forwarded to ChatConversation as-is.
+  accessToken?: string | null;
+  userId?: string;
+  initialMode?: PaletteMode;
 };
 
 const SEARCH_DEBOUNCE_MS = 220;
@@ -124,11 +132,21 @@ export function GlobalSearchModal({
   recentSearches,
   onCommitRecent,
   onClearRecent,
-  onTriggerCreateBooking
+  onTriggerCreateBooking,
+  accessToken = null,
+  userId,
+  initialMode = 'search'
 }: GlobalSearchModalProps) {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<PaletteMode>(initialMode);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // Sync the mode to the requested initialMode each time the palette opens
+  // (e.g. the header "Ask AI" pill opens straight into chat).
+  useEffect(() => {
+    if (open) setMode(initialMode);
+  }, [open, initialMode]);
   const inputRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -397,63 +415,101 @@ export function GlobalSearchModal({
       onClick={onClose}
     >
       <div
-        className="mx-auto mt-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="mx-auto mt-8 flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4">
-          <Search className="h-4 w-4 text-slate-400" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search requests, BAs, pages..."
-            className="h-10 flex-1 border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-            aria-label="Search requests, BAs, pages"
-          />
-          {query ? (
+        {/* Mode switcher — Search vs Ask AI (command-palette style) */}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
             <button
               type="button"
-              onClick={() => setQuery('')}
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Clear search input"
+              onClick={() => setMode('search')}
+              className={[
+                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                mode === 'search'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              ].join(' ')}
             >
-              <X className="h-4 w-4" />
+              <Search className="h-3.5 w-3.5" /> Search
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={() => setMode('ai')}
+              className={[
+                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                mode === 'ai'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              ].join(' ')}
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Ask AI
+            </button>
+          </div>
           <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-400">
             Esc
           </span>
         </div>
-        <div ref={bodyRef} className="max-h-[28rem] overflow-y-auto">
-          {!hasQuery ? (
-            <EmptyState
-              recentSearches={recentSearches}
-              suggestionItems={suggestionItems}
-              activeIndex={activeIndex}
-              highlightPattern={highlightPattern}
-              onSelect={runItem}
-              onClearRecent={onClearRecent}
-            />
-          ) : resultItems.length > 0 ? (
-            <ResultList
-              items={resultItems}
-              activeIndex={activeIndex}
-              highlightPattern={highlightPattern}
-              onSelect={(item) => runItem(item)}
-            />
-          ) : (
-            <div className="px-6 py-12 text-center text-sm text-slate-500">
-              No results for{' '}
-              <span className="font-semibold text-slate-900">“{query.trim()}”</span>.
+
+        {mode === 'ai' ? (
+          <div className="h-[min(32rem,calc(100vh-12rem))]">
+            <ChatConversation accessToken={accessToken} userRole={role} userId={userId} />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search requests, BAs, pages..."
+                className="h-10 flex-1 border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                aria-label="Search requests, BAs, pages"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Clear search input"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-4 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-          <span>↑ ↓ move</span>
-          <span>Enter open</span>
-          <span>Esc close</span>
-        </div>
+            <div ref={bodyRef} className="max-h-[28rem] overflow-y-auto">
+              {!hasQuery ? (
+                <EmptyState
+                  recentSearches={recentSearches}
+                  suggestionItems={suggestionItems}
+                  activeIndex={activeIndex}
+                  highlightPattern={highlightPattern}
+                  onSelect={runItem}
+                  onClearRecent={onClearRecent}
+                />
+              ) : resultItems.length > 0 ? (
+                <ResultList
+                  items={resultItems}
+                  activeIndex={activeIndex}
+                  highlightPattern={highlightPattern}
+                  onSelect={(item) => runItem(item)}
+                />
+              ) : (
+                <div className="px-6 py-12 text-center text-sm text-slate-500">
+                  No results for{' '}
+                  <span className="font-semibold text-slate-900">“{query.trim()}”</span>.
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-4 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              <span>↑ ↓ move</span>
+              <span>Enter open</span>
+              <span>Esc close</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -618,5 +674,5 @@ export const globalSearchStorage = {
   limit: RECENT_LIMIT
 };
 
-export type { PageItem };
+export type { PageItem, PaletteMode };
 export type CombinedItem = ReactNode;

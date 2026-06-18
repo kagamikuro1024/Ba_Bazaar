@@ -73,6 +73,35 @@
 
 ---
 
+## 📐 CÔNG THỨC NGHIỆP VỤ
+
+**Q: Man-day được tính như thế nào?**
+> Công thức theo code Go (`capacity.go`): **man-day của 1 booking = số ngày làm việc overlap × capacity_percent / 100**.
+> - `overlap_start = max(booking.start_date, report.start_date)`
+> - `overlap_end = min(booking.end_date, report.end_date)`
+> - Nếu không overlap thì man-day = `0`.
+> - Ngày làm việc hiện tại là **thứ 2 → thứ 6**, loại **thứ 7/CN** (`workingDaysInRange`), chưa có lịch holiday riêng.
+> Ví dụ: booking 5 ngày làm việc ở 50% = `5 × 0.5 = 2.5` man-days; 10 ngày làm việc ở 100% = `10` man-days.
+
+**Q: Utilization được tính ra sao?**
+> **Utilization % = round1(booked_man_days / available_man_days × 100)**. Nếu mẫu số `available_man_days <= 0` thì trả `0`.
+> - Với 1 BA: `available_man_days = số working days trong kỳ`; `booked_man_days` là tổng man-day các booking overlap kỳ đó.
+> - Với team: `team_utilization = total_man_days / total_available_man_days × 100`, trong đó `total_available_man_days = tổng available_man_days của các ACTIVE BA`.
+> - Status tính utilization hiện tại: **APPROVED + IN_PROGRESS**. Báo cáo/dashboard lịch sử tính thêm **COMPLETED**. **PENDING không tính vào utilization**, chỉ tính vào risk/capacity warning.
+> - Capacity theo ngày để chặn overbook: `approved_capacity = sum(APPROVED/IN_PROGRESS)`, `pending_capacity = sum(PENDING)`, `risk_capacity = approved + pending`; approve/direct-book bị chặn nếu `approved_capacity + request_capacity > 100%` ở bất kỳ ngày nào.
+
+**Q: Thuật toán Suggest BA chấm điểm thế nào?**
+> `GET /api/ba/recommendations` là **heuristic deterministic**, không để LLM tự bịa BA. Handler load BA + skill tags + booking overlap, rồi gọi `RankCandidates`.
+> **Hard filter:** chỉ BA `ACTIVE`, tôn trọng RBAC, `exclude_ba_ids`, BA user chỉ thấy chính mình; feature bị gate bởi `ai_suggest_ba_enabled`.
+> **Fit score 0–100** là weighted sum của 4 signal:
+> - **Skill match (40%)**: Jaccard `|candidate_skills ∩ required_skills| / |candidate_skills ∪ required_skills|`; nếu không truyền skill thì signal = `1.0`.
+> - **Level fit (15%)**: `1 - clamp(abs(level_rank(BA) - level_rank(requested)) / 3, 0, 1)`, rank: `JUNIOR=0`, `MIDDLE=1`, `SENIOR=2`, `LEAD=3`; nếu không truyền level thì `1.0`.
+> - **Capacity headroom (35%)**: `1 - clamp((max_risk_capacity_over_range + requested_capacity_percent) / 200, 0, 1)`. BA càng rảnh càng cao; nếu sau khi thêm request chạm vùng over-capacity thì điểm capacity giảm mạnh.
+> - **Project affinity (10%)**: nếu có `project_id` thì `bookings_của_BA_trong_project / total_bookings_của_BA`; nếu không có project thì signal trung lập `0.5`.
+> Công thức cuối: **`fit_score = round(100 × (0.40×skill + 0.15×level + 0.35×capacity + 0.10×affinity))`**, clamp về `0..100`. Sort theo `fit_score` giảm dần; nếu hoà điểm thì BA có `max_risk_capacity_after` thấp hơn (nhiều headroom hơn) đứng trước. Mặc định trả top 5, tối đa 25.
+
+---
+
 ## 🏗️ KIẾN TRÚC & BẢO MẬT CHUNG
 
 **Q: Stack tổng thể?**
