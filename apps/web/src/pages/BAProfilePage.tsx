@@ -316,7 +316,7 @@ export function BAProfilePage() {
             <CardHeader><CardTitle>Skill / Domain Tags</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
               <div className="flex flex-wrap gap-2">
-                {ba.data.skill_tags.map((item) => {
+                {(ba.data.skill_tags ?? []).map((item) => {
                   const tag = 'tag' in item ? item.tag : item;
                   return <Badge key={tag.id} tone="info">{tag.name}</Badge>;
                 })}
